@@ -1,73 +1,111 @@
-# React + TypeScript + Vite
+# ⚡ Denki (電気) — The Ultimate Spaced Repetition Flashcard Studio
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Built with React](https://img.shields.io/badge/Built%20with-React%2019-blue?logo=react)](https://react.dev)
+[![Vite](https://img.shields.io/badge/Bundled%20with-Vite%208-646CFF?logo=vite)](https://vite.dev)
+[![Local-First](https://img.shields.io/badge/Database-IndexedDB%20(Dexie)-green)](https://dexie.org)
 
-Currently, two official plugins are available:
+**Denki** (Japanese for *electricity*) is a premium, local-first flashcard studio engineered for learners who demand both scientific precision and breathtaking aesthetics. 
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Powered by the state-of-the-art **FSRS 4.5** memory scheduler, Denki eliminates the friction of studying, replacing cluttered legacy interfaces with a gorgeous glassmorphic, immersive canvas designed to boost retention and keep you in the flow state.
 
-## React Compiler
+---
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## ✨ Key Features
 
-## Expanding the ESLint configuration
+### 🧠 1. State-of-the-Art Spaced Repetition (FSRS 4.5)
+Legacy flashcard apps rely on decades-old SM-2 algorithms. Denki implements the **Free Spaced Repetition Scheduler (FSRS) v4.5**, the modern standard in cognitive science.
+- **Dynamic Stability & Difficulty Tracking**: Learns how *you* learn.
+- **Targeted Retention**: Schedules reviews to optimize a customizable probability of recall (default: 90%).
+- **Dual Review Systems**: Choose between classic Anki-style review scores or Brainscape-style 1-to-5 confidence ratings.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### 🎨 2. Immersive, Glowing Interface
+- **Premium Glassmorphic Panel Design**: Sleek dark mode with glowing mesh gradient backgrounds.
+- **Smooth 3D Card Flipping**: Tactile micro-animations that feel physical and responsive.
+- **Gamified Rewards**: Celebratory canvas confetti transitions to keep dopamine high.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### ✍️ 3. Integrated Interactive Canvas & Scratchpad
+- Never search for scrap paper again. Sketch kanji, draw diagrams, write mathematical formulas, or trace chemical structures directly on top of your flashcard using the interactive digital scratchpad.
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+### 📝 4. Rich Markdown & Syntax Highlighting
+- Create cards with headings, lists, bold text, code blocks (powered by PrismJS), blockquotes, and **Interactive Cloze Deletions** (fill-in-the-blanks) that reveal themselves with a click.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+### 🕹️ 5. Speed Match Game
+- Break up long study sessions with a fast-paced, interactive card-matching game. Test your instant recall and beat your high scores!
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### 📥 6. Universal Import Suite
+- **Anki Importer (`.apkg`)**: Instantly migrate your Anki decks, images, and card formats.
+- **CSV Importer**: Drag and drop spreadsheets to batch-generate hundreds of cards in seconds.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### 🔒 7. Local-First & Lightning Fast
+- All decks, review history, and cards are stored in your browser using **Dexie.js (IndexedDB)**.
+- 100% offline functionality. Your data never leaves your device.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+---
+
+## 🛠️ The Tech Stack
+
+Denki is built using modern, lightweight, and high-performance technologies:
+- **Frontend Framework**: [React 19](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/)
+- **Bundler & Build Tool**: [Vite 8](https://vite.dev/)
+- **State Management**: [Zustand](https://zustand.docs.pmnd.rs/) (for ultra-fast, reactive atomic state)
+- **Local Database**: [Dexie.js](https://dexie.org/) (robust wrapper for IndexedDB)
+- **Styling**: Vanilla CSS custom variables (designed for custom glowing themes & GPU-accelerated micro-animations)
+- **Utilities**: `marked` + `prismjs` + `canvas-confetti` + `lucide-react`
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+Make sure you have [Node.js](https://nodejs.org/) installed (v18 or higher recommended).
+
+### Installation
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/Dingding-leo/Denki.git
+   cd Denki
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+3. **Start the local development server:**
+   ```bash
+   npm run dev
+   ```
+   Open your browser and navigate to `http://localhost:5173`.
+
+---
+
+## 📐 How FSRS 4.5 Works in Denki
+
+Our scheduler updates memory parameters dynamically using mathematical equations:
+- **Stability ($S$)**: The number of days it takes for probability of recall to drop to 90%.
+- **Difficulty ($D$)**: A rating from 1 to 10 representing the complexity of the card.
+- **Retrievability ($R$)**: The probability that you successfully recall a card.
+
+Every time you review a card, Denki recalculates stability:
+$$R = 0.9^{\frac{t}{S}}$$
+
+Where $t$ is the elapsed days since the last review. This guarantees that you are tested at the precise point of forgetting, drastically shortening your overall study time.
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please follow these steps:
+1. Fork the Project.
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`).
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`).
+4. Push to the Branch (`git push origin feature/AmazingFeature`).
+5. Open a Pull Request.
+
+---
+
+## 📄 License
+
+Distributed under the MIT License. See `LICENSE` for more information.
