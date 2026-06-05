@@ -24,7 +24,7 @@
   --color-easy: #30d158;  /* System Green */
   
   /* Fonts */
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "SF Pro", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "SF Pro", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: SFMono-Regular, Consolas, "Liberation Mono", Menlo, Courier, monospace;
   
   /* Blurs & Shadows */
@@ -152,7 +152,8 @@ body {
 }
 
 .glass-panel:hover {
-  border-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 16px 45px rgba(0, 0, 0, 0.65), 0 0 15px rgba(99, 102, 241, 0.08), 0 0 1px rgba(255, 255, 255, 0.2) inset;
 }
 
 /* 3D Card Flipping Core CSS */
