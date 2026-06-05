@@ -16,6 +16,32 @@ interface FlashcardProps {
 export const Flashcard: React.FC<FlashcardProps> = ({ card, isFlipped, onFlip, autoSpeak = false }) => {
   const [showScratchpad, setShowScratchpad] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [selectedVoice, setSelectedVoice] = useState<SpeechSynthesisVoice | null>(null);
+
+  // Setup speech synthesis voices once on mount and handle cleanup
+  useEffect(() => {
+    if (!('speechSynthesis' in window)) return;
+
+    const loadVoice = () => {
+      const voices = window.speechSynthesis.getVoices();
+      const engVoice = voices.find(v => v.lang.startsWith('en') && v.name.includes('Google')) ||
+                       voices.find(v => v.lang.startsWith('en'));
+      if (engVoice) {
+        setSelectedVoice(engVoice);
+      }
+    };
+
+    loadVoice();
+    if ('onvoiceschanged' in window.speechSynthesis) {
+      window.speechSynthesis.onvoiceschanged = loadVoice;
+    }
+
+    return () => {
+      if ('onvoiceschanged' in window.speechSynthesis) {
+        window.speechSynthesis.onvoiceschanged = null;
+      }
+    };
+  }, []);
 
   // Reset scratchpad state during render when card changes to avoid cascading renders
   const [prevCardId, setPrevCardId] = useState(card.id);
@@ -43,16 +69,13 @@ export const Flashcard: React.FC<FlashcardProps> = ({ card, isFlipped, onFlip, a
       const utterance = new SpeechSynthesisUtterance(cleanText);
       utterance.lang = 'en-US';
       
-      const setVoice = () => {
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+      } else {
         const voices = window.speechSynthesis.getVoices();
         const engVoice = voices.find(v => v.lang.startsWith('en') && v.name.includes('Google')) ||
                          voices.find(v => v.lang.startsWith('en'));
         if (engVoice) utterance.voice = engVoice;
-      };
-      
-      setVoice();
-      if ('onvoiceschanged' in window.speechSynthesis) {
-        window.speechSynthesis.onvoiceschanged = setVoice;
       }
       
       window.speechSynthesis.speak(utterance);
@@ -121,6 +144,15 @@ export const Flashcard: React.FC<FlashcardProps> = ({ card, isFlipped, onFlip, a
       <div
         ref={containerRef}
         onClick={onFlip}
+        onKeyDown={(e: React.KeyboardEvent) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onFlip();
+          }
+        }}
+        tabIndex={0}
+        role="button"
+        aria-label="Flip flashcard"
         className={`perspective-container ${isFlipped ? 'flipped' : ''}`}
       >
         <div className="card-glowing-glow" />

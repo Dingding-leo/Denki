@@ -2,7 +2,19 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Timer, Star, RotateCcw, Award, Play } from 'lucide-react';
 import { useFlashcardStore } from '../store/useFlashcardStore';
 import { renderContent } from '../services/markdown';
+import { db } from '../db';
+import type { Card } from '../db/schema';
 import confetti from 'canvas-confetti';
+
+/** Fisher-Yates (Knuth) shuffle — unbiased O(n) in-place shuffle */
+function shuffleArray<T>(array: T[]): T[] {
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
 
 interface MatchGameProps {
   deckId: number;
@@ -20,10 +32,10 @@ interface MatchItem {
 
 export const MatchGame: React.FC<MatchGameProps> = ({ deckId, onExit }) => {
   const store = useFlashcardStore();
-  
-  // Get cards for the active deck
-  const deckCards = store.cards.filter(c => c.deckId === deckId);
   const deckName = store.decks.find(d => d.id === deckId)?.name || 'Deck';
+
+  // Keep a ref to the latest deck cards loaded from the database
+  const deckCardsRef = useRef<Card[]>([]);
 
   const [items, setItems] = useState<MatchItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -32,25 +44,37 @@ export const MatchGame: React.FC<MatchGameProps> = ({ deckId, onExit }) => {
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
   const [highScore, setHighScore] = useState<number | null>(null);
   const [newHighScoreBadge, setNewHighScoreBadge] = useState<boolean>(false);
+  const [gameSize, setGameSize] = useState<number>(6);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startTimeRef = useRef<number>(0);
+  const penaltyRef = useRef<number>(0);
 
-  // Load high score from localStorage
+  // Load high score and cards from the database when deckId changes
   useEffect(() => {
     const stored = localStorage.getItem(`denki-match-highscore-${deckId}`);
     if (stored) {
       setHighScore(parseFloat(stored));
     }
-    initializeGame();
-    return () => stopTimer();
-  }, [deckId, store.cards]);
+    let cancelled = false;
+    db.cards.where('deckId').equals(deckId).toArray().then(cards => {
+      if (cancelled) return;
+      deckCardsRef.current = cards;
+      initializeGame();
+    });
+    return () => {
+      cancelled = true;
+      stopTimer();
+    };
+  }, [deckId]);
 
   // Start the timer when game is active
   useEffect(() => {
     if (isActive) {
-      const startTime = Date.now();
+      startTimeRef.current = Date.now();
+      penaltyRef.current = 0;
       timerRef.current = setInterval(() => {
-        const elapsed = (Date.now() - startTime) / 1000;
+        const elapsed = (Date.now() - startTimeRef.current) / 1000 + penaltyRef.current;
         setTime(parseFloat(elapsed.toFixed(1)));
       }, 100);
     } else {
@@ -74,13 +98,14 @@ export const MatchGame: React.FC<MatchGameProps> = ({ deckId, onExit }) => {
     setSelectedId(null);
     setNewHighScoreBadge(false);
 
-    if (deckCards.length === 0) return;
+    const currentCards = deckCardsRef.current;
+    if (currentCards.length === 0) return;
 
-    // 1. Select up to 6 random cards
-    const shuffledCards = [...deckCards].sort(() => 0.5 - Math.random());
-    const selectedCards = shuffledCards.slice(0, Math.min(deckCards.length, 6));
+    // 1. Select up to gameSize random cards
+    const shuffledCards = shuffleArray(currentCards);
+    const selectedCards = shuffledCards.slice(0, Math.min(currentCards.length, gameSize));
 
-    // 2. Create Match Items (6 Fronts, 6 Backs)
+    // 2. Create Match Items (Fronts and Backs)
     const matchItems: MatchItem[] = [];
     selectedCards.forEach(card => {
       if (!card.id) return;
@@ -105,8 +130,7 @@ export const MatchGame: React.FC<MatchGameProps> = ({ deckId, onExit }) => {
     });
 
     // 3. Shuffle the 12 items
-    const shuffledItems = matchItems.sort(() => 0.5 - Math.random());
-    setItems(shuffledItems);
+    setItems(shuffleArray(matchItems));
   };
 
   const startGame = () => {
@@ -152,54 +176,6 @@ export const MatchGame: React.FC<MatchGameProps> = ({ deckId, onExit }) => {
           : item
       ));
       setSelectedId(null);
-
-      // Check win condition
-      const checkWin = () => {
-        const remaining = items.filter(item => item.id !== clickedId && item.id !== selectedId && item.state !== 'matched');
-        if (remaining.length === 0) {
-          setIsCompleted(true);
-          setIsActive(false);
-          stopTimer();
-          
-          // Trigger confetti!
-          confetti({
-            particleCount: 150,
-            spread: 80,
-            origin: { y: 0.65 },
-            colors: ['#818cf8', '#6366f1', '#eab308', '#10b981'],
-          });
-
-          // Compute high score
-          const finalTime = time;
-          const stored = localStorage.getItem(`denki-match-highscore-${deckId}`);
-          if (!stored || finalTime < parseFloat(stored)) {
-            localStorage.setItem(`denki-match-highscore-${deckId}`, String(finalTime));
-            setHighScore(finalTime);
-            setNewHighScoreBadge(true);
-            
-            // Extra celebratory confetti shower for high score!
-            setTimeout(() => {
-              confetti({
-                particleCount: 100,
-                angle: 60,
-                spread: 55,
-                origin: { x: 0 },
-                colors: ['#eab308', '#6366f1']
-              });
-              confetti({
-                particleCount: 100,
-                angle: 120,
-                spread: 55,
-                origin: { x: 1 },
-                colors: ['#eab308', '#6366f1']
-              });
-            }, 500);
-          }
-        }
-      };
-      // Let states synchronize before verifying victory
-      setTimeout(checkWin, 10);
-
     } else {
       // 2. Play mismatch shake
       setItems(prev => prev.map(item => 
@@ -208,6 +184,10 @@ export const MatchGame: React.FC<MatchGameProps> = ({ deckId, onExit }) => {
           : item
       ));
       setSelectedId(null);
+
+      // Mismatch penalty of +1.5 seconds
+      penaltyRef.current += 1.5;
+      setTime(prev => parseFloat((prev + 1.5).toFixed(1)));
 
       // Reset cards to idle after 500ms
       setTimeout(() => {
@@ -220,7 +200,57 @@ export const MatchGame: React.FC<MatchGameProps> = ({ deckId, onExit }) => {
     }
   };
 
-  if (deckCards.length < 3) {
+  // Win detection monitor
+  useEffect(() => {
+    if (!isActive || items.length === 0 || isCompleted) return;
+
+    const allMatched = items.every(item => item.state === 'matched');
+    if (allMatched) {
+      setIsCompleted(true);
+      setIsActive(false);
+      stopTimer();
+
+      // Compute final time with penalty
+      const finalTime = parseFloat(((Date.now() - startTimeRef.current) / 1000 + penaltyRef.current).toFixed(1));
+      setTime(finalTime);
+
+      // Trigger confetti!
+      confetti({
+        particleCount: 150,
+        spread: 80,
+        origin: { y: 0.65 },
+        colors: ['#818cf8', '#6366f1', '#eab308', '#10b981'],
+      });
+
+      // Compute high score
+      const stored = localStorage.getItem(`denki-match-highscore-${deckId}`);
+      if (!stored || finalTime < parseFloat(stored)) {
+        localStorage.setItem(`denki-match-highscore-${deckId}`, String(finalTime));
+        setHighScore(finalTime);
+        setNewHighScoreBadge(true);
+        
+        // Extra celebratory confetti shower
+        setTimeout(() => {
+          confetti({
+            particleCount: 100,
+            angle: 60,
+            spread: 55,
+            origin: { x: 0 },
+            colors: ['#eab308', '#6366f1']
+          });
+          confetti({
+            particleCount: 100,
+            angle: 120,
+            spread: 55,
+            origin: { x: 1 },
+            colors: ['#eab308', '#6366f1']
+          });
+        }, 500);
+      }
+    }
+  }, [items, isActive, isCompleted, deckId]);
+
+  if (deckCardsRef.current.length < 3 && items.length === 0) {
     return (
       <div style={{
         display: 'flex',
@@ -335,9 +365,41 @@ export const MatchGame: React.FC<MatchGameProps> = ({ deckId, onExit }) => {
           <h2 className="gradient-text" style={{ fontSize: '26px', fontWeight: 800, marginBottom: '8px' }}>
             Ready to Match? ⚡
           </h2>
-          <p style={{ color: '#9ca3af', fontSize: '14px', maxWidth: '420px', lineHeight: 1.5, marginBottom: '28px' }}>
-            Clear the grid by clicking matching fronts and backs as fast as possible. Be quick—incorrect matches incur a time penalty!
+          <p style={{ color: '#9ca3af', fontSize: '14px', maxWidth: '420px', lineHeight: 1.5, marginBottom: '20px' }}>
+            Clear the grid by clicking matching fronts and backs as fast as possible. Be quick—incorrect matches incur a +1.5s time penalty!
           </p>
+
+          <div style={{ marginBottom: '24px' }}>
+            <span style={{ fontSize: '11px', color: '#6b7280', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.8px', display: 'block', marginBottom: '8px' }}>
+              Grid Size / Cards
+            </span>
+            <div className="segmented-control">
+              <button
+                onClick={() => setGameSize(4)}
+                className={`segmented-control-item ${gameSize === 4 ? 'active' : ''}`}
+              >
+                4 Cards
+              </button>
+              <button
+                onClick={() => setGameSize(6)}
+                className={`segmented-control-item ${gameSize === 6 ? 'active' : ''}`}
+              >
+                6 Cards
+              </button>
+              <button
+                onClick={() => setGameSize(8)}
+                className={`segmented-control-item ${gameSize === 8 ? 'active' : ''}`}
+              >
+                8 Cards
+              </button>
+              <button
+                onClick={() => setGameSize(12)}
+                className={`segmented-control-item ${gameSize === 12 ? 'active' : ''}`}
+              >
+                12 Cards
+              </button>
+            </div>
+          </div>
 
           <div style={{ display: 'flex', gap: '12px' }}>
             <button className="btn-primary" onClick={startGame} style={{ padding: '12px 32px', fontSize: '15px' }}>

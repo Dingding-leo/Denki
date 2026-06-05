@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { reviewCard, STATES } from '../scheduler';
 import type { Card } from '../../db/schema';
 
-describe('Denki Spaced Repetition Scheduler (FSRS)', () => {
+describe('Denki Scheduler (FSRS)', () => {
   const createMockCard = (overrides?: Partial<Card>): Card => ({
     classId: 1,
     deckId: 1,
@@ -92,8 +92,24 @@ describe('Denki Spaced Repetition Scheduler (FSRS)', () => {
       const { updatedCard } = reviewCard(card, 1);
 
       expect(updatedCard.state).toBe(STATES.Relearning);
-      expect(updatedCard.stability).toBeLessThan(1.0);
+      expect(updatedCard.stability).toBe(1.5); // 10.0 * 0.15 = 1.5 days (no longer clamped to 0.003)
       expect(updatedCard.difficulty).toBe(4.5); // Difficulty increases by 1.5 from 3.0
+    });
+
+    it('should scale stability by exactly 1.02 when rated Slightly (2) without being overridden by 1.05 floor', () => {
+      const lastReviewed = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
+      const card = createMockCard({
+        state: STATES.Review,
+        stability: 10.0,
+        difficulty: 4.5,
+        lastReviewed,
+      });
+
+      const { updatedCard } = reviewCard(card, 2);
+
+      expect(updatedCard.state).toBe(STATES.Review);
+      expect(updatedCard.stability).toBe(10.2); // 10.0 * 1.02 = 10.2 (no longer clamped to 10.5)
+      expect(updatedCard.difficulty).toBe(5.1); // 4.5 + 0.6 = 5.1
     });
   });
 });

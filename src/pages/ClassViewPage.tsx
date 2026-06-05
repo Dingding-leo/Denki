@@ -146,44 +146,21 @@ export const ClassViewPage: React.FC = () => {
         </div>
 
         {/* Segmented Class Workspace tabs */}
-        <div style={{
-          display: 'flex',
-          borderBottom: '1px solid rgba(255,255,255,0.04)',
-          gap: '24px',
-          paddingBottom: '2px',
-        }}>
-          <button
-            onClick={() => setClassTab('decks')}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              borderBottom: classTab === 'decks' ? '2px solid #6366f1' : '2px solid transparent',
-              color: classTab === 'decks' ? '#f3f4f6' : '#6b7280',
-              padding: '8px 12px',
-              fontSize: '14px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-            }}
-          >
-            Decks ({activeClassDecks.length})
-          </button>
-          <button
-            onClick={() => setClassTab('analytics')}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              borderBottom: classTab === 'analytics' ? '2px solid #6366f1' : '2px solid transparent',
-              color: classTab === 'analytics' ? '#f3f4f6' : '#6b7280',
-              padding: '8px 12px',
-              fontSize: '14px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-            }}
-          >
-            Class Statistics
-          </button>
+        <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+          <div className="segmented-control">
+            <button
+              onClick={() => setClassTab('decks')}
+              className={`segmented-control-item ${classTab === 'decks' ? 'active' : ''}`}
+            >
+              Decks ({activeClassDecks.length})
+            </button>
+            <button
+              onClick={() => setClassTab('analytics')}
+              className={`segmented-control-item ${classTab === 'analytics' ? 'active' : ''}`}
+            >
+              Class Statistics
+            </button>
+          </div>
         </div>
 
         {/* DECKS LIST */}
@@ -194,7 +171,7 @@ export const ClassViewPage: React.FC = () => {
                 <button
                   onClick={() => handleStartClassStudy(activeClass.id || 0)}
                   style={{
-                    background: 'linear-gradient(135deg, #10b981, #059669)',
+                    background: '#30d158',
                     color: 'white',
                     border: 'none',
                     borderRadius: '8px',
@@ -205,55 +182,57 @@ export const ClassViewPage: React.FC = () => {
                     display: 'flex',
                     alignItems: 'center',
                     gap: '8px',
-                    boxShadow: '0 4px 15px rgba(16, 185, 129, 0.25)',
+                    boxShadow: '0 4px 12px rgba(48, 209, 88, 0.2)',
                   }}
                   className="hover-lift"
                 >
                   <Play size={16} /> Study All Due in Class ({classDueCount})
                 </button>
               ) : (
-                <span style={{ fontSize: '13px', color: '#10b981', fontWeight: 600 }}>
+                <span style={{ fontSize: '13px', color: '#30d158', fontWeight: 600 }}>
                   ✓ All caught up with this class!
                 </span>
               )}
             </div>
 
             {/* Inline Quick Add Deck form */}
-            <form onSubmit={handleCreateDeckSubmit} className="glass-panel" style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <form onSubmit={handleCreateDeckSubmit} className="glass-panel" style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'flex-end', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
               <div style={{ flex: 1, minWidth: '180px' }}>
-                <label style={{ display: 'block', fontSize: '11px', color: '#9ca3af', marginBottom: '6px', fontWeight: 500 }}>Create New Deck</label>
+                <label style={{ display: 'block', fontSize: '11px', color: '#8e8e93', marginBottom: '6px', fontWeight: 500 }}>Create New Deck</label>
                 <input
                   type="text"
                   placeholder="e.g. Unit testing mockups..."
                   value={newDeckName}
                   onChange={e => setNewDeckName(e.target.value)}
-                  style={{ width: '100%', background: '#0a0e17', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '6px', padding: '8px 12px', color: '#f3f4f6', fontSize: '13px' }}
+                  style={{ width: '100%', background: 'rgba(0,0,0,0.15)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', padding: '8px 12px', color: '#ffffff', fontSize: '13px', outline: 'none' }}
                   required
                 />
               </div>
               <div style={{ flex: 2, minWidth: '260px' }}>
-                <label style={{ display: 'block', fontSize: '11px', color: '#9ca3af', marginBottom: '6px', fontWeight: 500 }}>Deck Description</label>
+                <label style={{ display: 'block', fontSize: '11px', color: '#8e8e93', marginBottom: '6px', fontWeight: 500 }}>Deck Description</label>
                 <input
                   type="text"
                   placeholder="Briefly state the card categories..."
                   value={newDeckDesc}
                   onChange={e => setNewDeckDesc(e.target.value)}
-                  style={{ width: '100%', background: '#0a0e17', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '6px', padding: '8px 12px', color: '#f3f4f6', fontSize: '13px' }}
+                  style={{ width: '100%', background: 'rgba(0,0,0,0.15)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', padding: '8px 12px', color: '#ffffff', fontSize: '13px', outline: 'none' }}
                 />
               </div>
               <button
                 type="submit"
                 style={{
-                  background: '#6366f1',
+                  background: '#0a84ff',
                   color: 'white',
                   border: 'none',
-                  borderRadius: '6px',
+                  borderRadius: '8px',
                   padding: '8px 16px',
                   fontWeight: 600,
                   fontSize: '13px',
                   cursor: 'pointer',
+                  transition: 'background 0.2s',
                 }}
-                className="hover-lift"
+                onMouseEnter={e => e.currentTarget.style.background = '#0070e3'}
+                onMouseLeave={e => e.currentTarget.style.background = '#0a84ff'}
               >
                 Add Deck
               </button>
@@ -312,118 +291,161 @@ export const ClassViewPage: React.FC = () => {
                     </div>
 
                     {/* Deck progress footer */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '12px' }}>
-                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                        {/* Small Mastery Indicator */}
-                        <div style={{ position: 'relative', width: '18px', height: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <svg width="18" height="18" viewBox="0 0 18 18">
-                            <circle cx="9" cy="9" r="7.5" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="1.8" />
-                            <circle
-                              cx="9" cy="9" r="7.5"
-                              fill="none"
-                              stroke="url(#deckMasterGrad)"
-                              strokeWidth="1.8"
-                              strokeDasharray={47.1}
-                              strokeDashoffset={47.1 - (47.1 * deck.masteryPct) / 100}
-                              transform="rotate(-90 9 9)"
-                            />
-                            <defs>
-                              <linearGradient id="deckMasterGrad" x1="0" y1="0" x2="1" y2="1">
-                                <stop offset="0%" stopColor="#6366f1" />
-                                <stop offset="100%" stopColor="#10b981" />
-                              </linearGradient>
-                            </defs>
-                          </svg>
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '12px',
+                      borderTop: '1px solid rgba(255,255,255,0.06)',
+                      paddingTop: '12px',
+                      marginTop: 'auto'
+                    }}>
+                      {/* Top stats row */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          {/* Small Mastery Indicator */}
+                          <div style={{ position: 'relative', width: '18px', height: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <svg width="18" height="18" viewBox="0 0 18 18">
+                              <circle cx="9" cy="9" r="7.5" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="1.8" />
+                              <circle
+                                cx="9" cy="9" r="7.5"
+                                fill="none"
+                                stroke="url(#deckMasterGrad)"
+                                strokeWidth="1.8"
+                                strokeDasharray={47.1}
+                                strokeDashoffset={47.1 - (47.1 * deck.masteryPct) / 100}
+                                transform="rotate(-90 9 9)"
+                              />
+                              <defs>
+                                <linearGradient id="deckMasterGrad" x1="0" y1="0" x2="1" y2="1">
+                                  <stop offset="0%" stopColor="#6366f1" />
+                                  <stop offset="100%" stopColor="#10b981" />
+                                </linearGradient>
+                              </defs>
+                            </svg>
+                          </div>
+                          
+                          <span style={{ fontSize: '11px', color: '#d1d5db', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                            {deck.total} cards
+                            {deck.dueCount > 0 && (
+                              <span style={{
+                                background: 'rgba(99, 102, 241, 0.15)',
+                                color: '#a5b4fc',
+                                padding: '1px 5px',
+                                borderRadius: '4px',
+                                fontSize: '10px',
+                                fontWeight: 600,
+                                border: '1px solid rgba(99, 102, 241, 0.25)',
+                              }}>
+                                {deck.dueCount} due
+                              </span>
+                            )}
+                          </span>
                         </div>
-                        
-                        <span style={{ fontSize: '11px', color: '#d1d5db' }}>
-                          {deck.total} cards {deck.dueCount > 0 && <strong style={{ color: '#a5b4fc' }}>({deck.dueCount} due)</strong>}
+
+                        <span style={{ fontSize: '11px', color: '#8e8e93', fontWeight: 500 }}>
+                          {Math.round(deck.masteryPct)}% mastered
                         </span>
                       </div>
 
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        <button
-                          onClick={() => deck.id && setImportingDeckId(deck.id)}
-                          style={{
-                            background: 'rgba(255,255,255,0.02)',
-                            border: '1px solid rgba(255,255,255,0.06)',
-                            color: '#9ca3af',
-                            borderRadius: '4px',
-                            padding: '4px 8px',
-                            fontSize: '11px',
-                            cursor: 'pointer',
-                          }}
-                          className="hover-glow"
-                          title="Import Cards via CSV"
-                        >
-                          <Upload size={12} />
-                        </button>
+                      {/* Bottom action row */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                        {/* Secondary utility actions (Import, Reset) */}
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button
+                            onClick={() => deck.id && setImportingDeckId(deck.id)}
+                            style={{
+                              background: 'rgba(255,255,255,0.02)',
+                              border: '1px solid rgba(255,255,255,0.06)',
+                              color: '#9ca3af',
+                              borderRadius: '6px',
+                              width: '28px',
+                              height: '28px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s',
+                            }}
+                            className="hover-glow"
+                            title="Import Cards via CSV"
+                          >
+                            <Upload size={12} />
+                          </button>
 
-                        <button
-                          onClick={() => deck.id && setManagingDeckId(deck.id)}
-                          style={{
-                            background: 'rgba(255,255,255,0.02)',
-                            border: '1px solid rgba(255,255,255,0.06)',
-                            color: '#a5b4fc',
-                            borderRadius: '4px',
-                            padding: '4px 10px',
-                            fontSize: '11px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                          }}
-                          className="hover-glow"
-                        >
-                          <Edit2 size={11} /> Cards
-                        </button>
+                          <button
+                            onClick={async () => {
+                              if (deck.id && window.confirm("Are you sure you want to reset all learning history and progress for this deck? This action cannot be undone.")) {
+                                await store.resetDeckProgress(deck.id);
+                              }
+                            }}
+                            style={{
+                              background: 'rgba(239, 68, 68, 0.05)',
+                              border: '1px solid rgba(239, 68, 68, 0.15)',
+                              color: '#f87171',
+                              borderRadius: '6px',
+                              width: '28px',
+                              height: '28px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s',
+                            }}
+                            className="hover-glow"
+                            title="Reset all learning history and progress for this deck"
+                          >
+                            <RotateCcw size={12} />
+                          </button>
+                        </div>
 
-                        <button
-                          onClick={async () => {
-                            if (deck.id && window.confirm("Are you sure you want to reset all learning history and progress for this deck? This action cannot be undone.")) {
-                              await store.resetDeckProgress(deck.id);
-                            }
-                          }}
-                          style={{
-                            background: 'rgba(239, 68, 68, 0.05)',
-                            border: '1px solid rgba(239, 68, 68, 0.15)',
-                            color: '#f87171',
-                            borderRadius: '4px',
-                            padding: '4px 8px',
-                            fontSize: '11px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                          }}
-                          className="hover-glow"
-                          title="Reset all learning history and progress for this deck"
-                        >
-                          <RotateCcw size={11} /> Reset
-                        </button>
+                        {/* Primary actions (Manage Cards, Study) */}
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button
+                            onClick={() => deck.id && setManagingDeckId(deck.id)}
+                            style={{
+                              background: 'rgba(255,255,255,0.02)',
+                              border: '1px solid rgba(255,255,255,0.06)',
+                              color: '#a5b4fc',
+                              borderRadius: '6px',
+                              padding: '4px 10px',
+                              height: '28px',
+                              fontSize: '11px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              transition: 'all 0.2s',
+                            }}
+                            className="hover-glow"
+                          >
+                            <Edit2 size={11} /> Cards
+                          </button>
 
-                        <button
-                          onClick={() => deck.id && deck.total > 0 && handleStartDeckStudy(deck.id)}
-                          disabled={deck.total === 0}
-                          style={{
-                            background: deck.dueCount > 0 ? '#6366f1' : 'rgba(255,255,255,0.05)',
-                            color: deck.dueCount > 0 ? 'white' : '#9ca3af',
-                            border: 'none',
-                            borderRadius: '4px',
-                            padding: '4px 12px',
-                            fontSize: '11px',
-                            fontWeight: 700,
-                            cursor: deck.total === 0 ? 'not-allowed' : 'pointer',
-                            opacity: deck.total === 0 ? 0.35 : 1,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '2px',
-                          }}
-                          className={deck.total > 0 ? "hover-lift" : ""}
-                          title={deck.total === 0 ? "Add cards before studying" : undefined}
-                        >
-                          Study <ChevronRight size={11} />
-                        </button>
+                          <button
+                            onClick={() => deck.id && deck.total > 0 && handleStartDeckStudy(deck.id)}
+                            disabled={deck.total === 0}
+                            style={{
+                              background: deck.dueCount > 0 ? '#6366f1' : 'rgba(255,255,255,0.05)',
+                              color: deck.dueCount > 0 ? 'white' : '#9ca3af',
+                              border: 'none',
+                              borderRadius: '6px',
+                              padding: '4px 12px',
+                              height: '28px',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              cursor: deck.total === 0 ? 'not-allowed' : 'pointer',
+                              opacity: deck.total === 0 ? 0.35 : 1,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '2px',
+                              transition: 'all 0.2s',
+                            }}
+                            className={deck.total > 0 ? "hover-lift" : ""}
+                            title={deck.total === 0 ? "Add cards before studying" : undefined}
+                          >
+                            Study <ChevronRight size={11} />
+                          </button>
+                        </div>
                       </div>
                     </div>
 

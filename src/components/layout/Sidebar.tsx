@@ -37,8 +37,10 @@ export const Sidebar: React.FC = () => {
     <>
       <aside style={{
         width: sidebarCollapsed ? '72px' : '280px',
-        background: 'rgba(12, 17, 29, 0.98)',
-        borderRight: '1px solid rgba(255, 255, 255, 0.06)',
+        background: 'rgba(28, 28, 30, 0.8)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        borderRight: '1px solid rgba(255, 255, 255, 0.08)',
         display: 'flex',
         flexDirection: 'column',
         zIndex: 10,
@@ -56,15 +58,15 @@ export const Sidebar: React.FC = () => {
             width: '24px',
             height: '24px',
             borderRadius: '50%',
-            background: '#121824',
-            border: '1px solid rgba(255,255,255,0.1)',
+            background: '#2c2c2e',
+            border: '1px solid rgba(255, 255, 255, 0.12)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: '#9ca3af',
+            color: '#8e8e93',
             cursor: 'pointer',
             zIndex: 100,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.4)',
           }}
           title={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
         >
@@ -78,19 +80,19 @@ export const Sidebar: React.FC = () => {
           alignItems: 'center',
           padding: sidebarCollapsed ? '0' : '0 20px',
           justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
-          borderBottom: '1px solid rgba(255,255,255,0.04)',
+          borderBottom: '1px solid rgba(255,255,255,0.06)',
           gap: '12px',
         }}>
           <div style={{
             width: '32px',
             height: '32px',
             borderRadius: '8px',
-            background: 'linear-gradient(135deg, #6366f1, #10b981)',
+            background: 'linear-gradient(135deg, #0a84ff, #5e5ce6)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             color: 'white',
-            boxShadow: '0 0 12px rgba(99, 102, 241, 0.3)',
+            boxShadow: '0 0 12px rgba(10, 132, 255, 0.2)',
             flexShrink: 0,
           }}>
             <Sparkles size={16} />
@@ -101,7 +103,7 @@ export const Sidebar: React.FC = () => {
                 DENKI
               </span>
               {currentStreak > 0 && (
-                <span style={{ fontSize: '10px', color: '#f59e0b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '3px' }} title="Daily Study Streak!">
+                <span style={{ fontSize: '10px', color: '#ff9f0a', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '3px' }} title="Daily Study Streak!">
                   🔥 {currentStreak} day streak
                 </span>
               )}
@@ -110,7 +112,7 @@ export const Sidebar: React.FC = () => {
         </div>
 
         {/* Home Link */}
-        <div style={{ padding: sidebarCollapsed ? '12px 6px' : '16px 12px', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+        <div style={{ padding: sidebarCollapsed ? '12px 6px' : '16px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
           <NavLink
             to="/"
             style={({ isActive }) => ({
@@ -121,8 +123,8 @@ export const Sidebar: React.FC = () => {
               padding: '10px 12px',
               borderRadius: '8px',
               border: 'none',
-              background: isActive && !activeClassId ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
-              color: isActive && !activeClassId ? '#a5b4fc' : '#9ca3af',
+              background: isActive && !activeClassId ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
+              color: isActive && !activeClassId ? '#ffffff' : '#8e8e93',
               fontSize: '13px',
               fontWeight: 600,
               cursor: 'pointer',
@@ -134,7 +136,7 @@ export const Sidebar: React.FC = () => {
           >
             {({ isActive }) => (
               <>
-                <LayoutDashboard size={16} style={{ color: isActive && !activeClassId ? '#6366f1' : '#9ca3af', flexShrink: 0 }} />
+                <LayoutDashboard size={16} style={{ color: isActive && !activeClassId ? '#0a84ff' : '#8e8e93', flexShrink: 0 }} />
                 {!sidebarCollapsed && <span>Dashboard Home</span>}
               </>
             )}
@@ -192,12 +194,12 @@ export const Sidebar: React.FC = () => {
                     padding: sidebarCollapsed ? '10px 0' : '10px 12px',
                     borderRadius: '8px',
                     border: 'none',
-                    background: isSelected ? 'rgba(255,255,255,0.04)' : 'transparent',
-                    color: isSelected ? '#f3f4f6' : '#9ca3af',
+                    background: isSelected ? 'rgba(255,255,255,0.08)' : 'transparent',
+                    color: isSelected ? '#ffffff' : '#8e8e93',
                     cursor: 'pointer',
                     transition: 'all 0.15s ease',
                     justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
-                    borderLeft: isSelected ? '3px solid #6366f1' : '3px solid transparent',
+                    borderLeft: isSelected ? '3px solid #0a84ff' : '3px solid transparent',
                     textDecoration: 'none'
                   }}
                   className="hover-glow"
@@ -207,19 +209,19 @@ export const Sidebar: React.FC = () => {
                     <svg width="22" height="22" viewBox="0 0 22 22">
                       <circle cx="11" cy="11" r="9" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="2.5" />
                       <circle
-                        cx="11" cy="11" r="9"
-                        fill="none"
-                        stroke={cls.total > 0 ? "url(#classMasterGrad)" : "rgba(255,255,255,0.1)"}
-                        strokeWidth="2.5"
-                        strokeDasharray={56.5}
-                        strokeDashoffset={56.5 - (56.5 * cls.masteryPct) / 100}
-                        strokeLinecap="round"
-                        transform="rotate(-90 11 11)"
+                          cx="11" cy="11" r="9"
+                          fill="none"
+                          stroke={cls.total > 0 ? `url(#classMasterGrad-${cls.id})` : "rgba(255,255,255,0.1)"}
+                          strokeWidth="2.5"
+                          strokeDasharray={56.5}
+                          strokeDashoffset={56.5 - (56.5 * cls.masteryPct) / 100}
+                          strokeLinecap="round"
+                          transform="rotate(-90 11 11)"
                       />
                       <defs>
-                        <linearGradient id="classMasterGrad" x1="0" y1="0" x2="1" y2="1">
-                          <stop offset="0%" stopColor="#6366f1" />
-                          <stop offset="100%" stopColor="#10b981" />
+                        <linearGradient id={`classMasterGrad-${cls.id}`} x1="0" y1="0" x2="1" y2="1">
+                          <stop offset="0%" stopColor="#0a84ff" />
+                          <stop offset="100%" stopColor="#30d158" />
                         </linearGradient>
                       </defs>
                     </svg>
@@ -229,21 +231,21 @@ export const Sidebar: React.FC = () => {
                       </span>
                     )}
                   </div>
-
+ 
                   {!sidebarCollapsed && (
                     <div style={{ flex: 1, textAlign: 'left', overflow: 'hidden' }}>
                       <p style={{ fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {cls.name}
                       </p>
-                      <p style={{ fontSize: '10px', color: '#6b7280' }}>{cls.decksCount} decks • {cls.total} cards</p>
+                      <p style={{ fontSize: '10px', color: '#636366' }}>{cls.decksCount} decks • {cls.total} cards</p>
                     </div>
                   )}
-
+ 
                   {!sidebarCollapsed && cls.dueCount > 0 && (
                     <span style={{
-                      background: 'rgba(99, 102, 241, 0.15)',
-                      border: '1px solid rgba(99, 102, 241, 0.3)',
-                      color: '#a5b4fc',
+                      background: 'rgba(10, 132, 255, 0.15)',
+                      border: '1px solid rgba(10, 132, 255, 0.3)',
+                      color: '#0a84ff',
                       fontSize: '9px',
                       fontWeight: 700,
                       padding: '2px 6px',

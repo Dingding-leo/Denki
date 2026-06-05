@@ -4,12 +4,14 @@ import { Sidebar } from './Sidebar';
 
 export const MainLayout: React.FC = () => {
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', width: '100vw', background: '#0a0e17' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', width: '100vw', background: '#000000' }}>
       
       {/* Background Glowing meshes */}
       <div className="bg-glow-container">
         <div className="bg-glow-1" />
         <div className="bg-glow-2" />
+        <div className="bg-glow-3" />
+        <div className="bg-glow-4" />
       </div>
 
       <Sidebar />

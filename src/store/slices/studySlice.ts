@@ -13,13 +13,26 @@ export const createStudySlice: StateCreator<
 > = (set, get) => ({
   session: null,
 
-  startStudySession: async (deckId) => {
+  startStudySession: async (deckId, forceCram = false) => {
     const deckCards = await db.cards.where('deckId').equals(deckId).toArray();
+    const now = new Date();
+
+    // Spaced repetition due card filter (due <= now)
+    let filteredCards = deckCards;
+    const isCram = forceCram || deckCards.length > 0 && deckCards.every(c => c.due === undefined);
     
+    if (!forceCram) {
+      filteredCards = deckCards.filter(card => {
+        // If it's a new card (no lastReviewed or state is 0), it's due
+        if (!card.lastReviewed || card.state === 0) return true;
+        // Otherwise, check if due date is in the past
+        return new Date(card.due).getTime() <= now.getTime();
+      });
+    }
+
     // Build weighted queue using FSRS parameters and lastRating directly from the card
-    // Lower confidence = more copies in the learning session
     const weightedQueue: Card[] = [];
-    for (const card of deckCards) {
+    for (const card of filteredCards) {
       const rating = card.lastRating ?? 0; // 0 = unseen / new
       let copies: number;
       if (rating <= 1) copies = 5;       // Unseen or Rating 1 (Again)
@@ -46,16 +59,29 @@ export const createStudySlice: StateCreator<
         currentIndex: 0,
         completedCount: 0,
         initialQueueSize: weightedQueue.length,
+        isCram,
+        history: [],
       },
     });
   },
 
-  startClassStudySession: async (classId) => {
+  startClassStudySession: async (classId, forceCram = false) => {
     const classCards = await db.cards.where('classId').equals(classId).toArray();
-    
+    const now = new Date();
+
+    let filteredCards = classCards;
+    const isCram = forceCram;
+
+    if (!forceCram) {
+      filteredCards = classCards.filter(card => {
+        if (!card.lastReviewed || card.state === 0) return true;
+        return new Date(card.due).getTime() <= now.getTime();
+      });
+    }
+
     // Build weighted queue using card.lastRating directly
     const weightedQueue: Card[] = [];
-    for (const card of classCards) {
+    for (const card of filteredCards) {
       const rating = card.lastRating ?? 0;
       let copies: number;
       if (rating <= 1) copies = 5;
@@ -82,6 +108,8 @@ export const createStudySlice: StateCreator<
         currentIndex: 0,
         completedCount: 0,
         initialQueueSize: weightedQueue.length,
+        isCram,
+        history: [],
       },
     });
   },
@@ -90,7 +118,7 @@ export const createStudySlice: StateCreator<
     const state = get();
     if (!state.session) return;
 
-    const { queue, currentIndex, completedCount } = state.session;
+    const { queue, currentIndex, completedCount, history } = state.session;
     const currentCard = queue[currentIndex];
     if (!currentCard) return;
 
@@ -101,16 +129,21 @@ export const createStudySlice: StateCreator<
     updatedCard.lastRating = rating;
 
     // Save to IndexedDB within transaction
-    await db.transaction('rw', [db.cards, db.reviews], async () => {
-      if (currentCard.id) {
-        await db.cards.put(updatedCard);
-        await db.reviews.add({
-          ...log,
-          cardId: currentCard.id,
-          classId: currentCard.classId,
-        });
-      }
-    });
+    let logId: number | undefined;
+    try {
+      await db.transaction('rw', [db.cards, db.reviews], async () => {
+        if (currentCard.id) {
+          await db.cards.put(updatedCard);
+          logId = await db.reviews.add({
+            ...log,
+            cardId: currentCard.id,
+            classId: currentCard.classId,
+          });
+        }
+      });
+    } catch (err) {
+      console.error('Failed to save card review:', err);
+    }
 
     // Refresh database buffers for 'cards' in memory (if managing card view is active)
     const activeDeckId = get().activeDeckId;
@@ -118,21 +151,31 @@ export const createStudySlice: StateCreator<
       await get().loadCards(activeDeckId);
     }
 
-    // Re-insert card back into the queue at a distance based on confidence rating
+    // Re-insert card back into the queue ONLY for low-confidence ratings.
+    // Cards rated 3+ are handled by the FSRS scheduler for future sessions.
     const newQueue = [...queue];
     const nextIndex = currentIndex + 1;
     const nextCompleted = completedCount + 1;
 
-    const remaining = newQueue.length - nextIndex;
-    let insertDistance: number;
-    if (rating === 1) insertDistance = 3;                                              // 3 cards later
-    else if (rating === 2) insertDistance = Math.max(5, Math.floor(remaining * 0.15)); // ~15% into remaining
-    else if (rating === 3) insertDistance = Math.max(8, Math.floor(remaining * 0.35)); // ~35% into remaining
-    else if (rating === 4) insertDistance = Math.max(12, Math.floor(remaining * 0.6)); // ~60% into remaining
-    else insertDistance = Math.max(15, Math.floor(remaining * 0.85));                  // ~85% into remaining
+    let insertedIdx: number | undefined;
+    if (rating <= 2) {
+      const remaining = newQueue.length - nextIndex;
+      let insertDistance: number;
+      if (rating === 1) insertDistance = 3;                                              // 3 cards later
+      else insertDistance = Math.max(5, Math.floor(remaining * 0.15));                   // ~15% into remaining
 
-    const insertIdx = Math.min(newQueue.length, nextIndex + insertDistance);
-    newQueue.splice(insertIdx, 0, updatedCard);
+      const insertIdx = Math.min(newQueue.length, nextIndex + insertDistance);
+      newQueue.splice(insertIdx, 0, updatedCard);
+      insertedIdx = insertIdx;
+    }
+
+    // Record this rating action to history for undo capabilities
+    const historyEntry = {
+      card: { ...currentCard }, // Shallow copy to preserve state
+      rating,
+      reviewLogId: logId,
+      insertedIdx,
+    };
 
     set({
       session: {
@@ -140,13 +183,77 @@ export const createStudySlice: StateCreator<
         queue: newQueue,
         currentIndex: nextIndex,
         completedCount: nextCompleted,
+        history: [...history, historyEntry],
       },
     });
 
-    // Update statistics asynchronously (non-blocking)
-    await get().loadClassStats(currentCard.classId);
-    await get().loadDeckStats(currentCard.classId);
-    await get().loadStats(get().activeClassId);
+    // Update statistics asynchronously (fire-and-forget to avoid blocking the UI)
+    Promise.all([
+      get().loadClassStats(currentCard.classId),
+      get().loadDeckStats(currentCard.classId),
+      get().loadStats(get().activeClassId),
+    ]).catch(console.warn);
+
+    triggerAutoSave();
+  },
+
+  undoLastRate: async () => {
+    const state = get();
+    if (!state.session) return;
+    
+    const { history, queue, currentIndex, completedCount } = state.session;
+    if (!history || history.length === 0) return;
+
+    // Pop the last history entry
+    const lastEntry = history[history.length - 1];
+    const newHistory = history.slice(0, -1);
+
+    // Rollback the card database record and delete the review log
+    try {
+      await db.transaction('rw', [db.cards, db.reviews], async () => {
+        // Restore card to its previous state
+        await db.cards.put(lastEntry.card);
+        // Delete review log
+        if (lastEntry.reviewLogId) {
+          await db.reviews.delete(lastEntry.reviewLogId);
+        }
+      });
+    } catch (err) {
+      console.error('Failed to undo last rating in DB:', err);
+    }
+
+    // Refresh database buffers for 'cards' in memory (if managing card view is active)
+    const activeDeckId = get().activeDeckId;
+    if (activeDeckId) {
+      await get().loadCards(activeDeckId);
+    }
+
+    // Remove the reinserted card from the queue if it was inserted
+    const newQueue = [...queue];
+    if (lastEntry.insertedIdx !== undefined) {
+      newQueue.splice(lastEntry.insertedIdx, 1);
+    }
+
+    // Restore the card at the previous index to its original state
+    const prevIndex = currentIndex - 1;
+    newQueue[prevIndex] = lastEntry.card;
+
+    set({
+      session: {
+        ...state.session,
+        queue: newQueue,
+        currentIndex: prevIndex,
+        completedCount: Math.max(0, completedCount - 1),
+        history: newHistory,
+      },
+    });
+
+    // Update stats asynchronously (fire-and-forget)
+    Promise.all([
+      get().loadClassStats(lastEntry.card.classId),
+      get().loadDeckStats(lastEntry.card.classId),
+      get().loadStats(get().activeClassId),
+    ]).catch(console.warn);
 
     triggerAutoSave();
   },

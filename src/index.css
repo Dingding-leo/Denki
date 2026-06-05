@@ -1,35 +1,36 @@
 /* Denki Core Design System */
 
 :root {
-  --bg-primary: #0a0e17;
-  --bg-secondary: #121824;
-  --bg-card: rgba(22, 30, 49, 0.65);
-  --bg-glass: rgba(18, 24, 38, 0.45);
+  --bg-primary: #000000; /* Apple true black background */
+  --bg-secondary: #1c1c1e; /* Apple system secondary background */
+  --bg-tertiary: #2c2c2e; /* Apple system tertiary background */
+  --bg-card: rgba(28, 28, 30, 0.65); /* Semi-translucent card style */
+  --bg-glass: rgba(20, 20, 25, 0.5); /* True translucent liquid glass */
   
-  --border-glass: rgba(255, 255, 255, 0.08);
-  --border-active: rgba(99, 102, 241, 0.5);
+  --border-glass: rgba(255, 255, 255, 0.12); /* Glossy glass border highlight */
+  --border-active: #0a84ff; /* System Blue */
   
-  --text-primary: #f3f4f6;
-  --text-secondary: #9ca3af;
-  --text-muted: #6b7280;
+  --text-primary: #ffffff;
+  --text-secondary: #8e8e93; /* System Gray */
+  --text-muted: #636366; /* Muted Dark Gray */
   
-  --accent-color: #6366f1; /* Indigo */
-  --accent-glowing: rgba(99, 102, 241, 0.35);
+  --accent-color: #0a84ff; /* System Blue */
+  --accent-glowing: rgba(10, 132, 255, 0.2);
   
-  /* Study Ratings colors */
-  --color-again: #ef4444; /* Red */
-  --color-hard: #f97316;  /* Orange */
-  --color-good: #3b82f6;  /* Blue */
-  --color-easy: #10b981;  /* Emerald */
+  /* Study Ratings colors (Apple System Colors) */
+  --color-again: #ff453a; /* System Red */
+  --color-hard: #ff9f0a;  /* System Orange */
+  --color-good: #0a84ff;  /* System Blue */
+  --color-easy: #30d158;  /* System Green */
   
   /* Fonts */
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-mono: 'Fira Code', 'Courier New', monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "SF Pro", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: SFMono-Regular, Consolas, "Liberation Mono", Menlo, Courier, monospace;
   
   /* Blurs & Shadows */
-  --blur-glass: 16px;
-  --shadow-premium: 0 10px 30px -10px rgba(0, 0, 0, 0.5), 0 1px 1px rgba(255, 255, 255, 0.05) inset;
-  --shadow-neon: 0 0 20px rgba(99, 102, 241, 0.15);
+  --blur-glass: 28px;
+  --shadow-premium: 0 12px 40px rgba(0, 0, 0, 0.55), 0 0 1px rgba(255, 255, 255, 0.15) inset;
+  --shadow-neon: 0 0 12px rgba(10, 132, 255, 0.25);
 }
 
 * {
@@ -49,7 +50,7 @@ body {
   width: 100vw;
 }
 
-/* Background glowing meshes */
+/* Background glowing meshes (Liquid Glass UI) */
 .bg-glow-container {
   position: fixed;
   top: 0;
@@ -58,6 +59,7 @@ body {
   bottom: 0;
   z-index: -1;
   overflow: hidden;
+  background: #000000;
   pointer-events: none;
 }
 
@@ -65,29 +67,60 @@ body {
   position: absolute;
   top: -10%;
   right: -10%;
-  width: 50vw;
-  height: 50vw;
+  width: 55vw;
+  height: 55vw;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.12) 0%, rgba(99, 102, 241, 0) 70%);
-  filter: blur(80px);
-  animation: float-slow 20s infinite alternate;
+  background: radial-gradient(circle, rgba(10, 132, 255, 0.28) 0%, rgba(10, 132, 255, 0) 70%);
+  filter: blur(120px);
+  animation: float-slow 28s infinite alternate;
 }
 
 .bg-glow-2 {
   position: absolute;
-  bottom: -10%;
-  left: -10%;
-  width: 60vw;
-  height: 60vw;
+  bottom: -15%;
+  left: -15%;
+  width: 65vw;
+  height: 65vw;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(16, 185, 129, 0.07) 0%, rgba(16, 185, 129, 0) 70%);
-  filter: blur(100px);
-  animation: float-slow 25s infinite alternate-reverse;
+  background: radial-gradient(circle, rgba(191, 90, 242, 0.24) 0%, rgba(191, 90, 242, 0) 70%);
+  filter: blur(140px);
+  animation: float-slow 34s infinite alternate-reverse;
+}
+
+.bg-glow-3 {
+  position: absolute;
+  top: 35%;
+  left: 20%;
+  width: 40vw;
+  height: 40vw;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 55, 95, 0.18) 0%, rgba(255, 55, 95, 0) 70%);
+  filter: blur(110px);
+  animation: float-mid 22s infinite alternate;
+}
+
+.bg-glow-4 {
+  position: absolute;
+  bottom: 25%;
+  right: 10%;
+  width: 50vw;
+  height: 50vw;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(48, 209, 88, 0.15) 0%, rgba(48, 209, 88, 0) 70%);
+  filter: blur(130px);
+  animation: float-mid 26s infinite alternate-reverse;
 }
 
 @keyframes float-slow {
   0% { transform: translate(0, 0) scale(1); }
-  100% { transform: translate(50px, 30px) scale(1.1); }
+  50% { transform: translate(80px, 40px) scale(1.15); }
+  100% { transform: translate(-40px, 60px) scale(0.9); }
+}
+
+@keyframes float-mid {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-60px, 80px) scale(0.85); }
+  100% { transform: translate(50px, -30px) scale(1.1); }
 }
 
 /* Premium Scrollbars */
@@ -126,8 +159,8 @@ body {
 .perspective-container {
   perspective: 1500px;
   width: 100%;
-  height: calc(100vh - 220px);
-  min-height: 400px;
+  height: calc(100vh - 300px);
+  min-height: 360px;
   position: relative;
   cursor: pointer;
 }
@@ -216,13 +249,13 @@ body {
 
 /* Typography styles */
 .gradient-text {
-  background: linear-gradient(135deg, #a5b4fc 0%, #6366f1 50%, #4f46e5 100%);
+  background: linear-gradient(135deg, #0a84ff 0%, #5e5ce6 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
 .green-gradient-text {
-  background: linear-gradient(135deg, #a7f3d0 0%, #10b981 50%, #059669 100%);
+  background: linear-gradient(135deg, #30d158 0%, #34c759 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -366,3 +399,135 @@ body {
   border-color: rgba(255, 255, 255, 0.08);
 }
 
+/* Segmented Control (Apple HIG style) */
+.segmented-control {
+  display: inline-flex;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.segmented-control-item {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  outline: none;
+}
+
+.segmented-control-item:hover {
+  color: var(--text-primary);
+}
+
+.segmented-control-item.active {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* Keyboard Focus Visibility */
+*:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+}
+
+*:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Mobile Responsiveness & Adaptive Styling */
+@media (max-width: 768px) {
+  body {
+    overflow-x: hidden;
+  }
+  
+  /* Flex containers wrap and stack on small screens */
+  div[style*="display: flex"][style*="maxWidth"],
+  div[style*="display: flex"][style*="max-width"] {
+    flex-direction: column !important;
+    gap: 16px !important;
+  }
+  
+  /* Sidebars and side panels take full width when stacked */
+  div[style*="flex: 0.8"],
+  div[style*="flex: 1"] {
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+  
+  /* Study session page content spacing */
+  div[style*="padding: 0 24px"] {
+    padding: 0 12px !important;
+  }
+  
+  /* Flashcard size adaptive scaling */
+  .perspective-container {
+    height: calc(100vh - 280px) !important;
+    min-height: 340px !important;
+  }
+  
+  .flip-card-front, .flip-card-back {
+    padding: 24px 16px !important;
+  }
+  
+  .markdown-content {
+    font-size: 1.25rem !important;
+  }
+
+  /* Score rating buttons wrapping and size optimizations */
+  div[style*="display: flex"][style*="gap: 10px"] {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .btn-score-1, .btn-score-2, .btn-score-3, .btn-score-4, .btn-score-5 {
+    flex: unset !important;
+    width: calc(33% - 8px) !important;
+    padding: 10px 4px !important;
+    font-size: 11px !important;
+  }
+  
+  /* Main Dashboard and Sidebar layout shifts */
+  div[style*="display: flex"][style*="width: 100vw"] {
+    flex-direction: column !important;
+  }
+
+  aside {
+    width: 100% !important;
+    height: auto !important;
+    border-right: none !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    flex-direction: row !important;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    padding: 8px 16px;
+  }
+  
+  aside > button {
+    display: none !important; /* Hide collapse trigger on mobile */
+  }
+
+  aside > div {
+    border-bottom: none !important;
+    padding: 0 !important;
+    height: auto !important;
+  }
+
+  aside > div:last-of-type {
+    width: 100%;
+    margin-top: 12px;
+  }
+
+  main {
+    padding: 20px 16px !important;
+    height: auto !important;
+    overflow-y: visible !important;
+  }
+}

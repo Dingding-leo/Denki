@@ -1,6 +1,13 @@
 import type { Class, Deck, Card, CardType } from '../db/schema';
 import type { Rating } from '../services/scheduler';
 
+export interface StudySessionHistoryEntry {
+  card: Card;            // Stored state of the card BEFORE it was rated
+  rating: Rating;        // Rating given
+  reviewLogId?: number;  // IndexedDB review log id to delete on rollback
+  insertedIdx?: number;  // Index in queue where it was reinserted (if rated 1 or 2)
+}
+
 export interface StudySession {
   deckId?: number;        // Selected deck ID (if studying specific deck)
   classId?: number;       // Selected class ID (if studying entire class)
@@ -8,6 +15,8 @@ export interface StudySession {
   currentIndex: number;
   completedCount: number;
   initialQueueSize: number;
+  isCram?: boolean;       // If studying all cards instead of strictly due ones
+  history: StudySessionHistoryEntry[];
 }
 
 export interface ClassStats {
@@ -62,6 +71,7 @@ export interface CardSlice {
   cards: Card[]; // Stores the cards of the currently loaded deck (if any)
   loadCards: (deckId?: number) => Promise<void>;
   createCard: (classId: number, deckId: number, front: string, back: string, cardType: CardType) => Promise<number>;
+  updateCard: (cardId: number, front: string, back: string, cardType: CardType) => Promise<void>;
   deleteCard: (cardId: number) => Promise<void>;
   bulkCreateCards: (cards: { classId: number; deckId: number; front: string; back: string; cardType: CardType }[]) => Promise<void>;
   manuallySetCardConfidence: (cardId: number, rating: number) => Promise<void>;
@@ -70,9 +80,10 @@ export interface CardSlice {
 
 export interface StudySlice {
   session: StudySession | null;
-  startStudySession: (deckId: number) => Promise<void>;
-  startClassStudySession: (classId: number) => Promise<void>;
+  startStudySession: (deckId: number, forceCram?: boolean) => Promise<void>;
+  startClassStudySession: (classId: number, forceCram?: boolean) => Promise<void>;
   rateCard: (rating: Rating) => Promise<void>;
+  undoLastRate: () => Promise<void>;
   previousCard: () => void;
   nextCard: () => void;
   endStudySession: () => void;

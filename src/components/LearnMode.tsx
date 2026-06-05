@@ -79,19 +79,18 @@ export const LearnMode: React.FC<LearnModeProps> = ({ onExit }) => {
   };
 
   const handleCheckAnswer = () => {
-    if (!inputVal.trim()) return;
-
     let correct = false;
 
-    if (currentCard.cardType === 'cloze') {
-      const answers = getClozeAnswers(currentCard.front);
-      const normalizedInput = normalize(inputVal);
-      // Check if user matched any of the cloze answers
-      correct = answers.some(ans => normalize(ans) === normalizedInput);
-    } else {
-      const normalizedInput = normalize(inputVal);
-      const normalizedBack = normalize(currentCard.back);
-      correct = normalizedInput === normalizedBack;
+    if (inputVal.trim()) {
+      if (currentCard.cardType === 'cloze') {
+        const answers = getClozeAnswers(currentCard.front);
+        const normalizedInput = normalize(inputVal);
+        correct = answers.some(ans => normalize(ans) === normalizedInput);
+      } else {
+        const normalizedInput = normalize(inputVal);
+        const normalizedBack = normalize(currentCard.back);
+        correct = normalizedInput === normalizedBack;
+      }
     }
 
     setIsCorrect(correct);
@@ -139,6 +138,59 @@ export const LearnMode: React.FC<LearnModeProps> = ({ onExit }) => {
       }
     }
   };
+
+  // Use refs for stable references in the global keydown listener,
+  // avoiding stale closure bugs where the effect captures old state.
+  const checkedRef = useRef(checked);
+  checkedRef.current = checked;
+  const isCorrectRef = useRef(isCorrect);
+  isCorrectRef.current = isCorrect;
+  const overrideAllowedRef = useRef(overrideAllowed);
+  overrideAllowedRef.current = overrideAllowed;
+
+  const handleCheckAnswerRef = useRef(handleCheckAnswer);
+  handleCheckAnswerRef.current = handleCheckAnswer;
+  const handleRatingRef = useRef(handleRating);
+  handleRatingRef.current = handleRating;
+  const handleOverrideRef = useRef(handleOverride);
+  handleOverrideRef.current = handleOverride;
+  const onExitRef = useRef(onExit);
+  onExitRef.current = onExit;
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Don't intercept if user is typing in an unrelated input
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'SELECT') return;
+      // Allow the textarea in this component (Enter handled by handleKeyDown above)
+      if (e.target === textareaRef.current && e.key !== 'Escape') return;
+
+      if (e.key === 'Escape') {
+        if (onExitRef.current) onExitRef.current();
+        return;
+      }
+
+      if (!checkedRef.current) {
+        if (e.key === ' ' || e.key === 'Enter') {
+          e.preventDefault();
+          handleCheckAnswerRef.current();
+        }
+      } else {
+        if (['1', '2', '3', '4', '5'].includes(e.key)) {
+          e.preventDefault();
+          handleRatingRef.current(parseInt(e.key) as 1 | 2 | 3 | 4 | 5);
+        } else if (e.key === ' ' || e.key === 'Enter') {
+          e.preventDefault();
+          handleRatingRef.current(isCorrectRef.current ? 5 : 1);
+        } else if (e.key === 'o' || e.key === 'O') {
+          if (overrideAllowedRef.current) handleOverrideRef.current();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []); // Stable: all mutable state accessed via refs
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', width: '100%', maxWidth: '720px', margin: '0 auto' }}>
@@ -236,17 +288,15 @@ export const LearnMode: React.FC<LearnModeProps> = ({ onExit }) => {
             <button
               className="btn-primary"
               onClick={handleCheckAnswer}
-              disabled={!inputVal.trim()}
               style={{
                 alignSelf: 'flex-end',
                 padding: '10px 24px',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
-                opacity: inputVal.trim() ? 1 : 0.5,
               }}
             >
-              Check Answer <ArrowRight size={16} />
+              {inputVal.trim() ? 'Check Answer' : 'Reveal Answer'} <ArrowRight size={16} />
             </button>
           </div>
         ) : (
@@ -410,6 +460,26 @@ export const LearnMode: React.FC<LearnModeProps> = ({ onExit }) => {
           </div>
         )}
 
+      </div>
+
+      {/* Keyboard shortcut hints */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        color: '#6b7280',
+        fontSize: '11px',
+        background: 'rgba(255,255,255,0.02)',
+        padding: '6px 12px',
+        borderRadius: '6px',
+        border: '1px solid rgba(255,255,255,0.04)',
+        justifyContent: 'center',
+      }}>
+        {!checked ? (
+          <span><strong>Enter</strong> to submit • <strong>Space</strong> to reveal without typing • <strong>Esc</strong> to exit</span>
+        ) : (
+          <span>Press <strong>1–5</strong> to rate • <strong>Space/Enter</strong> for recommended • {overrideAllowed && <><strong>O</strong> to override • </>}<strong>Esc</strong> to exit</span>
+        )}
       </div>
     </div>
   );

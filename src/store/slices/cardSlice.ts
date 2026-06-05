@@ -94,6 +94,26 @@ export const createCardSlice: StateCreator<
     return id;
   },
 
+  updateCard: async (cardId, front, back, cardType) => {
+    const card = await db.cards.get(cardId);
+    if (!card) return;
+
+    await db.cards.update(cardId, {
+      front,
+      back,
+      cardType,
+    });
+
+    await get().loadCards(card.deckId);
+
+    // Refresh deck/class/global stats
+    await get().loadClassStats(card.classId);
+    await get().loadDeckStats(card.classId);
+    await get().loadStats(get().activeClassId);
+
+    triggerAutoSave();
+  },
+
   deleteCard: async (cardId) => {
     const card = await db.cards.get(cardId);
     if (!card) return;

@@ -42,7 +42,7 @@ export interface ReviewLog {
   deckId: number;
   classId: number;        // Linked Class (for class-level statistics)
   reviewedAt: Date;
-  rating: number;         // 1 = Again, 2 = Hard, 3 = Good, 4 = Easy
+  rating: number;         // 1 = Again, 2 = Hard, 3 = Good, 4 = Very Well, 5 = Perfect
   stability: number;      // Stability before this review
   difficulty: number;     // Difficulty before this review
   elapsedDays: number;    // Days elapsed since last review

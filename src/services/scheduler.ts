@@ -100,7 +100,7 @@ export function reviewCard(
       nextDifficulty = Math.min(10.0, card.difficulty + 1.5);
       
       // Collapse stability (re-learn quickly: 5 mins or small fraction of old stability)
-      nextStability = Math.min(0.003, card.stability * 0.15);
+      nextStability = Math.max(0.003, card.stability * 0.15);
     } else {
       // Successful recall (2, 3, 4, 5)
       nextState = STATES.Review;
@@ -133,8 +133,10 @@ export function reviewCard(
         nextStability = card.stability * 2.2 * intervalFactor * difficultyFactor * params.easyBonus;
       }
 
-      // Bound minimum stability progression for sanity
-      nextStability = Math.max(nextStability, card.stability * 1.05);
+      // Bound minimum stability progression for sanity (except for ultra-conservative Rating 2)
+      if (rating !== 2) {
+        nextStability = Math.max(nextStability, card.stability * 1.05);
+      }
     }
   }
 
