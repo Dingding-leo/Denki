@@ -255,7 +255,11 @@ export const ClassViewPage: React.FC = () => {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                         <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#f3f4f6' }}>{deck.name}</h3>
                         <button
-                          onClick={() => deck.id && store.deleteDeck(deck.id)}
+                          onClick={() => {
+                            if (deck.id && window.confirm("Are you sure you want to delete this DECK? This will permanently delete all cards in it!")) {
+                              store.deleteDeck(deck.id);
+                            }
+                          }}
                           style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', opacity: 0.6, padding: '4px' }}
                           title="Delete Deck"
                           onMouseEnter={e => e.currentTarget.style.opacity = '1'}

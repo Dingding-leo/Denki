@@ -78,6 +78,9 @@ export const Flashcard: React.FC<FlashcardProps> = ({ card, isFlipped, onFlip, a
         if (engVoice) utterance.voice = engVoice;
       }
       
+      const savedSpeed = localStorage.getItem('denki-speech-speed') || '1.0';
+      utterance.rate = parseFloat(savedSpeed);
+      
       window.speechSynthesis.speak(utterance);
     }
   };

@@ -1,13 +1,15 @@
 import React, { useState, useMemo } from 'react';
 import { NavLink, useNavigate, useParams } from 'react-router-dom';
-import { ChevronRight, ChevronLeft, Sparkles, LayoutDashboard, Plus } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Sparkles, LayoutDashboard, Plus, Settings } from 'lucide-react';
 import { useFlashcardStore } from '../../store/useFlashcardStore';
 import { CreateClassModal } from '../modals/CreateClassModal';
+import { SettingsModal } from '../modals/SettingsModal';
 
 export const Sidebar: React.FC = () => {
   const store = useFlashcardStore();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showClassModal, setShowClassModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   
   const navigate = useNavigate();
   const { classId: routeClassId } = useParams();
@@ -259,6 +261,42 @@ export const Sidebar: React.FC = () => {
             })}
           </div>
         </div>
+
+        {/* Sidebar Footer Settings Action */}
+        <div style={{
+          padding: '12px 16px',
+          borderTop: '1px solid rgba(255,255,255,0.06)',
+          display: 'flex',
+          justifyContent: sidebarCollapsed ? 'center' : 'space-between',
+          alignItems: 'center',
+          gap: '12px',
+        }}>
+          <button
+            onClick={() => setShowSettingsModal(true)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#8e8e93',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '13px',
+              fontWeight: 600,
+              padding: '6px 8px',
+              borderRadius: '6px',
+              width: sidebarCollapsed ? '32px' : 'auto',
+              height: '32px',
+              justifyContent: 'center',
+              transition: 'all 0.2s',
+            }}
+            className="hover-lift"
+            title="App Settings"
+          >
+            <Settings size={16} />
+            {!sidebarCollapsed && <span>Settings</span>}
+          </button>
+        </div>
       </aside>
 
       {showClassModal && (
@@ -268,6 +306,12 @@ export const Sidebar: React.FC = () => {
             setShowClassModal(false);
             navigate(`/class/${classId}`);
           }}
+        />
+      )}
+
+      {showSettingsModal && (
+        <SettingsModal 
+          onClose={() => setShowSettingsModal(false)}
         />
       )}
     </>

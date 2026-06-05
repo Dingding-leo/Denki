@@ -123,7 +123,18 @@ export const createStudySlice: StateCreator<
     if (!currentCard) return;
 
     const now = new Date();
-    const { updatedCard, log } = reviewCard(currentCard, rating, now);
+
+    // Fetch custom FSRS algorithm settings from localStorage
+    const savedRetention = localStorage.getItem('denki-fsrs-retention');
+    const savedEasyBonus = localStorage.getItem('denki-fsrs-easy-bonus');
+    const savedHardMultiplier = localStorage.getItem('denki-fsrs-hard-multiplier');
+    const params = {
+      requestRetention: savedRetention ? parseFloat(savedRetention) : 0.9,
+      easyBonus: savedEasyBonus ? parseFloat(savedEasyBonus) : 1.3,
+      hardIntervalMultiplier: savedHardMultiplier ? parseFloat(savedHardMultiplier) : 1.2,
+    };
+
+    const { updatedCard, log } = reviewCard(currentCard, rating, now, params);
 
     // Save confidence rating directly on the card
     updatedCard.lastRating = rating;
