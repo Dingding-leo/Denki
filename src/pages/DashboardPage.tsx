@@ -107,53 +107,33 @@ export const DashboardPage: React.FC = () => {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '30px', maxWidth: '1000px', margin: '0 auto', width: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1 style={{ fontSize: '28px', fontWeight: 700, color: '#ffffff', letterSpacing: '-0.5px' }}>Global Dashboard</h1>
-          <p style={{ color: '#8e8e93', fontSize: '14px', marginTop: '4px' }}>Analyze aggregate class statistics and daily learning streak.</p>
+          <h1 style={{ fontSize: '32px', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.75px' }} className="gradient-text">Global Dashboard</h1>
+          <p style={{ color: '#8e8e93', fontSize: '14px', marginTop: '6px' }}>Analyze aggregate class statistics and daily learning streak.</p>
         </div>
         
         {store.classes.length === 0 && (
           <button
             onClick={seedDefaultDecks}
-            style={{
-              background: 'linear-gradient(135deg, #0a84ff, #5e5ce6)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              padding: '10px 20px',
-              fontSize: '13px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              boxShadow: '0 4px 12px rgba(10, 132, 255, 0.2)',
-            }}
-            className="hover-lift"
+            className="btn-premium-primary"
           >
-            <Sparkles size={16} /> Seed Default Decks
+            <Sparkles size={15} /> Seed Default Decks
           </button>
         )}
       </div>
       
       {store.classes.length === 0 ? (
-        <div className="glass-panel" style={{ textAlign: 'center', padding: '60px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
-          <FolderOpen size={48} style={{ color: '#636366' }} />
-          <h3 style={{ fontSize: '18px', color: '#ffffff', fontWeight: 600 }}>Welcome to Denki!</h3>
-          <p style={{ color: '#8e8e93', maxWidth: '400px', fontSize: '14px', lineHeight: 1.5 }}>
-            Get started by seeding our curated Computer Science and Spanish learning workspaces, or create your own custom Class in the sidebar.
+        <div className="card-deck-premium" style={{ textAlign: 'center', padding: '60px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
+          <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'rgba(99, 102, 241, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366f1', marginBottom: '8px' }}>
+            <FolderOpen size={32} />
+          </div>
+          <h3 style={{ fontSize: '22px', color: '#ffffff', fontWeight: 800, letterSpacing: '-0.5px' }}>Welcome to Denki</h3>
+          <p style={{ color: '#8e8e93', maxWidth: '440px', fontSize: '14px', lineHeight: 1.6 }}>
+            Unlock FSRS spaced-repetition efficiency. Get started by seeding our curated Computer Science and Spanish workspaces, or create your own custom Class in the sidebar.
           </p>
           <button
             onClick={seedDefaultDecks}
-            style={{
-              background: 'rgba(10, 132, 255, 0.1)',
-              border: '1px solid rgba(10, 132, 255, 0.4)',
-              color: '#0a84ff',
-              borderRadius: '8px',
-              padding: '8px 20px',
-              fontSize: '13px',
-              cursor: 'pointer',
-            }}
-            className="hover-lift"
+            className="btn-premium-primary"
+            style={{ marginTop: '8px' }}
           >
             Seed Interactive Learning Materials
           </button>

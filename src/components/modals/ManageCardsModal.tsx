@@ -256,7 +256,7 @@ export const ManageCardsModal: React.FC<ManageCardsModalProps> = ({ classId, dec
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '12px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <label style={{ fontSize: '11px', color: '#8e8e93', fontWeight: 500 }}>Question Face (Front)</label>
+                <label style={{ fontSize: '11px', color: '#8e8e93', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Question Face (Front)</label>
                 <FormatToolbar field="front" />
               </div>
               <textarea
@@ -265,25 +265,15 @@ export const ManageCardsModal: React.FC<ManageCardsModalProps> = ({ classId, dec
                 placeholder="Enter card question or cloze statement..."
                 value={newCardFront}
                 onChange={e => setNewCardFront(e.target.value)}
-                style={{ 
-                  width: '100%', 
-                  background: 'rgba(0,0,0,0.15)', 
-                  border: '1px solid rgba(255,255,255,0.08)', 
-                  borderRadius: '8px', 
-                  padding: '8px 12px', 
-                  color: '#ffffff', 
-                  fontSize: '13px', 
-                  fontFamily: 'inherit', 
-                  resize: 'none',
-                  outline: 'none'
-                }}
+                className="textarea-premium"
+                style={{ resize: 'none' }}
                 required
               />
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <label style={{ fontSize: '11px', color: '#8e8e93', fontWeight: 500 }}>Answer Face (Back)</label>
+                <label style={{ fontSize: '11px', color: '#8e8e93', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Answer Face (Back)</label>
                 <FormatToolbar field="back" />
               </div>
               <textarea
@@ -292,18 +282,8 @@ export const ManageCardsModal: React.FC<ManageCardsModalProps> = ({ classId, dec
                 placeholder="Enter card answer details or markdown..."
                 value={newCardBack}
                 onChange={e => setNewCardBack(e.target.value)}
-                style={{ 
-                  width: '100%', 
-                  background: 'rgba(0,0,0,0.15)', 
-                  border: '1px solid rgba(255,255,255,0.08)', 
-                  borderRadius: '8px', 
-                  padding: '8px 12px', 
-                  color: '#ffffff', 
-                  fontSize: '13px', 
-                  fontFamily: 'inherit', 
-                  resize: 'none',
-                  outline: 'none'
-                }}
+                className="textarea-premium"
+                style={{ resize: 'none' }}
                 required
               />
             </div>
@@ -311,20 +291,8 @@ export const ManageCardsModal: React.FC<ManageCardsModalProps> = ({ classId, dec
 
           <button
             type="submit"
-            style={{
-              background: '#0a84ff',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              padding: '8px 16px',
-              fontWeight: 600,
-              fontSize: '12px',
-              cursor: 'pointer',
-              alignSelf: 'flex-start',
-              transition: 'background 0.2s',
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = '#0070e3'}
-            onMouseLeave={e => e.currentTarget.style.background = '#0a84ff'}
+            className="btn-premium-primary"
+            style={{ alignSelf: 'flex-start', height: '32px', padding: '0 16px', fontSize: '12px' }}
           >
             Add Card
           </button>
@@ -343,16 +311,8 @@ export const ManageCardsModal: React.FC<ManageCardsModalProps> = ({ classId, dec
                 placeholder="Search cards..." 
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                style={{ 
-                  width: '100%', 
-                  background: 'rgba(0,0,0,0.15)', 
-                  border: '1px solid rgba(255,255,255,0.08)', 
-                  borderRadius: '16px', 
-                  padding: '6px 12px 6px 30px', 
-                  color: '#ffffff', 
-                  fontSize: '12px', 
-                  outline: 'none'
-                }}
+                className="input-premium"
+                style={{ paddingLeft: '30px', height: '32px', fontSize: '12px' }}
               />
             </div>
           </div>
@@ -528,7 +488,7 @@ export const ManageCardsModal: React.FC<ManageCardsModalProps> = ({ classId, dec
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <label style={{ fontSize: '10px', color: '#8e8e93', fontWeight: 500 }}>Question Face (Front)</label>
+                                <label style={{ fontSize: '10px', color: '#8e8e93', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Question Face (Front)</label>
                                 <FormatToolbar field="front" isEdit={true} />
                               </div>
                               <textarea
@@ -536,23 +496,13 @@ export const ManageCardsModal: React.FC<ManageCardsModalProps> = ({ classId, dec
                                 rows={3}
                                 value={editFront}
                                 onChange={e => setEditFront(e.target.value)}
-                                style={{ 
-                                  width: '100%', 
-                                  background: '#1c1c1e', 
-                                  border: '1px solid rgba(255,255,255,0.1)', 
-                                  borderRadius: '6px', 
-                                  padding: '8px 12px', 
-                                  color: '#ffffff', 
-                                  fontSize: '13px', 
-                                  fontFamily: 'inherit',
-                                  outline: 'none'
-                                }}
+                                className="textarea-premium"
                               />
                             </div>
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <label style={{ fontSize: '10px', color: '#8e8e93', fontWeight: 500 }}>Answer Face (Back)</label>
+                                <label style={{ fontSize: '10px', color: '#8e8e93', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Answer Face (Back)</label>
                                 <FormatToolbar field="back" isEdit={true} />
                               </div>
                               <textarea
@@ -560,51 +510,22 @@ export const ManageCardsModal: React.FC<ManageCardsModalProps> = ({ classId, dec
                                 rows={3}
                                 value={editBack}
                                 onChange={e => setEditBack(e.target.value)}
-                                style={{ 
-                                  width: '100%', 
-                                  background: '#1c1c1e', 
-                                  border: '1px solid rgba(255,255,255,0.1)', 
-                                  borderRadius: '6px', 
-                                  padding: '8px 12px', 
-                                  color: '#ffffff', 
-                                  fontSize: '13px', 
-                                  fontFamily: 'inherit',
-                                  outline: 'none'
-                                }}
+                                className="textarea-premium"
                               />
                             </div>
 
                             <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
                               <button
                                 onClick={() => card.id && handleSaveEdit(card.id)}
-                                style={{
-                                  background: '#30d158',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '6px',
-                                  padding: '6px 12px',
-                                  fontSize: '12px',
-                                  fontWeight: 600,
-                                  cursor: 'pointer',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '4px'
-                                }}
+                                style={{ height: '28px', padding: '0 12px', fontSize: '11px' }}
+                                className="btn-premium-success"
                               >
                                 <Check size={12} /> Save Changes
                               </button>
                               <button
                                 onClick={() => setEditingCardId(null)}
-                                style={{
-                                  background: 'rgba(255, 255, 255, 0.08)',
-                                  color: '#ffffff',
-                                  border: 'none',
-                                  borderRadius: '6px',
-                                  padding: '6px 12px',
-                                  fontSize: '12px',
-                                  fontWeight: 500,
-                                  cursor: 'pointer'
-                                }}
+                                style={{ height: '28px', padding: '0 12px', fontSize: '11px' }}
+                                className="btn-premium-secondary"
                               >
                                 Cancel
                               </button>

@@ -180,27 +180,15 @@ export const StudySessionPage: React.FC = () => {
           </div>
 
           {/* Study Mode Selector Tab Panels */}
-          <div style={{
-            display: 'flex',
-            background: 'rgba(255,255,255,0.03)',
-            border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: '8px',
-            padding: '3px',
-            gap: '4px',
-          }}>
+          <div className="segmented-control" style={{ padding: '3px' }}>
             <button
               onClick={() => setStudyMode('review')}
               style={{
-                background: studyMode === 'review' ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
-                border: 'none',
-                color: studyMode === 'review' ? '#a5b4fc' : '#9ca3af',
-                borderRadius: '6px',
-                padding: '6px 16px',
+                background: studyMode === 'review' ? 'rgba(99, 102, 241, 0.18)' : 'transparent',
+                color: studyMode === 'review' ? '#a5b4fc' : '#8e8e93',
                 fontSize: '12px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'all 0.2s',
               }}
+              className={`segmented-control-item ${studyMode === 'review' ? 'active' : ''}`}
             >
               FSRS Spaced Review
             </button>
@@ -208,16 +196,11 @@ export const StudySessionPage: React.FC = () => {
               <button
                 onClick={() => setStudyMode('match')}
                 style={{
-                  background: studyMode === 'match' ? 'rgba(129, 140, 248, 0.15)' : 'transparent',
-                  border: 'none',
-                  color: studyMode === 'match' ? '#a5b4fc' : '#9ca3af',
-                  borderRadius: '6px',
-                  padding: '6px 16px',
+                  background: studyMode === 'match' ? 'rgba(99, 102, 241, 0.18)' : 'transparent',
+                  color: studyMode === 'match' ? '#a5b4fc' : '#8e8e93',
                   fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
                 }}
+                className={`segmented-control-item ${studyMode === 'match' ? 'active' : ''}`}
               >
                 Match Game (Timed)
               </button>
@@ -225,16 +208,11 @@ export const StudySessionPage: React.FC = () => {
             <button
               onClick={() => setStudyMode('learn')}
               style={{
-                background: studyMode === 'learn' ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
-                border: 'none',
-                color: studyMode === 'learn' ? '#6ee7b7' : '#9ca3af',
-                borderRadius: '6px',
-                padding: '6px 16px',
+                background: studyMode === 'learn' ? 'rgba(16, 185, 129, 0.18)' : 'transparent',
+                color: studyMode === 'learn' ? '#6ee7b7' : '#8e8e93',
                 fontSize: '12px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'all 0.2s',
               }}
+              className={`segmented-control-item ${studyMode === 'learn' ? 'active' : ''}`}
             >
               Learn Mode (Active)
             </button>
@@ -246,46 +224,36 @@ export const StudySessionPage: React.FC = () => {
                 <button
                   onClick={() => setShowNotes(!showNotes)}
                   style={{
-                    background: showNotes ? 'rgba(99, 102, 241, 0.15)' : 'rgba(255, 255, 255, 0.03)',
-                    border: showNotes ? '1px solid rgba(99, 102, 241, 0.3)' : '1px solid rgba(255, 255, 255, 0.08)',
-                    color: showNotes ? '#a5b4fc' : '#9ca3af',
-                    borderRadius: '8px',
-                    padding: '6px 14px',
+                    height: '32px',
+                    padding: '0 12px',
                     fontSize: '12px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    transition: 'all 0.25s ease',
+                    background: showNotes ? 'rgba(99, 102, 241, 0.12)' : 'rgba(255, 255, 255, 0.03)',
+                    borderColor: showNotes ? 'rgba(99, 102, 241, 0.4)' : 'rgba(255, 255, 255, 0.08)',
+                    color: showNotes ? '#a5b4fc' : '#9ca3af',
+                    boxShadow: showNotes ? '0 0 10px rgba(99, 102, 241, 0.15)' : 'none',
                   }}
-                  className="hover-lift"
+                  className="btn-premium-secondary"
                   title="Toggle Markdown Notepad"
                 >
-                  <BookOpen size={14} />
+                  <BookOpen size={13} />
                   <span>Notepad: {showNotes ? 'ON' : 'OFF'}</span>
                 </button>
 
                 <button
                   onClick={() => setAutoSpeak(!autoSpeak)}
                   style={{
-                    background: autoSpeak ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.03)',
-                    border: autoSpeak ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(255, 255, 255, 0.08)',
-                    color: autoSpeak ? '#34d399' : '#9ca3af',
-                    borderRadius: '8px',
-                    padding: '6px 14px',
+                    height: '32px',
+                    padding: '0 12px',
                     fontSize: '12px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    transition: 'all 0.25s ease',
+                    background: autoSpeak ? 'rgba(16, 185, 129, 0.12)' : 'rgba(255, 255, 255, 0.03)',
+                    borderColor: autoSpeak ? 'rgba(16, 185, 129, 0.4)' : 'rgba(255, 255, 255, 0.08)',
+                    color: autoSpeak ? '#34d399' : '#9ca3af',
+                    boxShadow: autoSpeak ? '0 0 10px rgba(16, 185, 129, 0.15)' : 'none',
                   }}
-                  className="hover-lift"
+                  className="btn-premium-secondary"
                   title="Automatically speak cards aloud"
                 >
-                  <Volume2 size={14} />
+                  <Volume2 size={13} />
                   <span>Auto Aloud: {autoSpeak ? 'ON' : 'OFF'}</span>
                 </button>
               </>
@@ -294,16 +262,11 @@ export const StudySessionPage: React.FC = () => {
             <button
               onClick={handleExitStudy}
               style={{
-                background: 'rgba(255, 255, 255, 0.03)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                color: '#ef4444',
-                borderRadius: '8px',
-                padding: '6px 14px',
+                height: '32px',
+                padding: '0 14px',
                 fontSize: '12px',
-                fontWeight: 600,
-                cursor: 'pointer',
               }}
-              className="hover-lift"
+              className="btn-premium-danger"
             >
               Exit Session (Esc)
             </button>

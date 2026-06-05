@@ -105,7 +105,11 @@ export const Sidebar: React.FC = () => {
                 DENKI
               </span>
               {currentStreak > 0 && (
-                <span style={{ fontSize: '10px', color: '#ff9f0a', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '3px' }} title="Daily Study Streak!">
+                <span 
+                  style={{ fontSize: '10px', color: '#ff9f0a', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '3px' }} 
+                  title="Daily Study Streak!"
+                  className="streak-badge-glow"
+                >
                   🔥 {currentStreak} day streak
                 </span>
               )}
@@ -125,16 +129,17 @@ export const Sidebar: React.FC = () => {
               padding: '10px 12px',
               borderRadius: '8px',
               border: 'none',
-              background: isActive && !activeClassId ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
+              background: isActive && !activeClassId ? 'linear-gradient(90deg, rgba(10, 132, 255, 0.15) 0%, rgba(94, 92, 230, 0.05) 100%)' : 'transparent',
               color: isActive && !activeClassId ? '#ffffff' : '#8e8e93',
               fontSize: '13px',
               fontWeight: 600,
               cursor: 'pointer',
               transition: 'all 0.2s ease',
               justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
-              textDecoration: 'none'
+              textDecoration: 'none',
+              borderLeft: isActive && !activeClassId ? '3px solid #0a84ff' : '3px solid transparent'
             })}
-            className="hover-glow"
+            className="hover-glow hover-lift"
           >
             {({ isActive }) => (
               <>
@@ -196,7 +201,7 @@ export const Sidebar: React.FC = () => {
                     padding: sidebarCollapsed ? '10px 0' : '10px 12px',
                     borderRadius: '8px',
                     border: 'none',
-                    background: isSelected ? 'rgba(255,255,255,0.08)' : 'transparent',
+                    background: isSelected ? 'linear-gradient(90deg, rgba(10, 132, 255, 0.15) 0%, rgba(94, 92, 230, 0.05) 100%)' : 'transparent',
                     color: isSelected ? '#ffffff' : '#8e8e93',
                     cursor: 'pointer',
                     transition: 'all 0.15s ease',
@@ -204,7 +209,7 @@ export const Sidebar: React.FC = () => {
                     borderLeft: isSelected ? '3px solid #0a84ff' : '3px solid transparent',
                     textDecoration: 'none'
                   }}
-                  className="hover-glow"
+                  className="hover-glow hover-lift"
                   title={sidebarCollapsed ? `${cls.name} (${cls.total} cards)` : undefined}
                 >
                   <div style={{ position: 'relative', width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -274,23 +279,12 @@ export const Sidebar: React.FC = () => {
           <button
             onClick={() => setShowSettingsModal(true)}
             style={{
-              background: 'transparent',
-              border: 'none',
-              color: '#8e8e93',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontSize: '13px',
-              fontWeight: 600,
-              padding: '6px 8px',
-              borderRadius: '6px',
-              width: sidebarCollapsed ? '32px' : 'auto',
-              height: '32px',
+              padding: '6px 12px',
+              width: sidebarCollapsed ? '32px' : '100%',
+              height: '36px',
               justifyContent: 'center',
-              transition: 'all 0.2s',
             }}
-            className="hover-lift"
+            className="btn-premium-secondary"
             title="App Settings"
           >
             <Settings size={16} />

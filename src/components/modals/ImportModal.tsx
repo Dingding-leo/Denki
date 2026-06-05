@@ -64,28 +64,16 @@ export const ImportModal: React.FC<ImportModalProps> = ({ classId, deckId, onClo
           </p>
         </div>
 
-        <div style={{
-          display: 'flex',
-          background: 'rgba(255,255,255,0.03)',
-          border: '1px solid rgba(255,255,255,0.08)',
-          borderRadius: '8px',
-          padding: '3px',
-          gap: '4px',
-        }}>
+        <div className="segmented-control" style={{ display: 'flex', padding: '3px' }}>
           <button
             onClick={() => setImportTab('csv')}
             style={{
               flex: 1,
-              background: importTab === 'csv' ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
-              border: 'none',
+              background: importTab === 'csv' ? 'rgba(99, 102, 241, 0.18)' : 'transparent',
               color: importTab === 'csv' ? '#a5b4fc' : '#9ca3af',
-              borderRadius: '6px',
-              padding: '8px',
               fontSize: '12px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              transition: 'all 0.2s',
             }}
+            className={`segmented-control-item ${importTab === 'csv' ? 'active' : ''}`}
           >
             CSV Upload
           </button>
@@ -93,16 +81,11 @@ export const ImportModal: React.FC<ImportModalProps> = ({ classId, deckId, onClo
             onClick={() => setImportTab('anki')}
             style={{
               flex: 1,
-              background: importTab === 'anki' ? 'rgba(129, 140, 248, 0.15)' : 'transparent',
-              border: 'none',
+              background: importTab === 'anki' ? 'rgba(99, 102, 241, 0.18)' : 'transparent',
               color: importTab === 'anki' ? '#a5b4fc' : '#9ca3af',
-              borderRadius: '6px',
-              padding: '8px',
               fontSize: '12px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              transition: 'all 0.2s',
             }}
+            className={`segmented-control-item ${importTab === 'anki' ? 'active' : ''}`}
           >
             Anki (.apkg) Package
           </button>

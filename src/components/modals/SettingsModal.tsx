@@ -123,7 +123,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '13px', color: '#d1d5db', marginBottom: '6px', fontWeight: 500 }}>Easy Bonus</label>
+                <label style={{ display: 'block', fontSize: '11px', color: '#8e8e93', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Easy Bonus</label>
                 <input
                   type="number"
                   min="1.0"
@@ -131,12 +131,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
                   step="0.1"
                   value={easyBonus}
                   onChange={e => setEasyBonus(parseFloat(e.target.value))}
-                  style={{ width: '100%', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '6px', padding: '8px 10px', color: '#ffffff', fontSize: '13px', outline: 'none' }}
+                  className="input-premium"
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '13px', color: '#d1d5db', marginBottom: '6px', fontWeight: 500 }}>Hard Multiplier</label>
+                <label style={{ display: 'block', fontSize: '11px', color: '#8e8e93', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Hard Multiplier</label>
                 <input
                   type="number"
                   min="1.0"
@@ -144,7 +144,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
                   step="0.05"
                   value={hardMultiplier}
                   onChange={e => setHardMultiplier(parseFloat(e.target.value))}
-                  style={{ width: '100%', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '6px', padding: '8px 10px', color: '#ffffff', fontSize: '13px', outline: 'none' }}
+                  className="input-premium"
                 />
               </div>
             </div>
@@ -184,16 +184,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
           <button
             type="button"
             onClick={handleReset}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: '#8e8e93',
-              fontSize: '12px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-            }}
+            style={{ height: '32px', padding: '0 12px', fontSize: '12px' }}
+            className="btn-premium-danger"
           >
             <RotateCcw size={12} /> Reset to Defaults
           </button>
@@ -202,31 +194,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
             <button
               type="button"
               onClick={onClose}
-              style={{
-                background: 'rgba(255,255,255,0.03)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                color: '#d1d5db',
-                borderRadius: '6px',
-                padding: '8px 16px',
-                fontSize: '13px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
+              style={{ height: '36px', padding: '0 16px', fontSize: '13px' }}
+              className="btn-premium-secondary"
             >
               Cancel
             </button>
             <button
               type="submit"
-              style={{
-                background: '#0a84ff',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                padding: '8px 20px',
-                fontSize: '13px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
+              style={{ height: '36px', padding: '0 20px', fontSize: '13px' }}
+              className="btn-premium-primary"
             >
               Apply Changes
             </button>

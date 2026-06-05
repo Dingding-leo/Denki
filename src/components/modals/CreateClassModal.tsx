@@ -63,43 +63,32 @@ export const CreateClassModal: React.FC<CreateClassModalProps> = ({ onClose, onC
 
         <form onSubmit={handleCreateClassSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div>
-            <label style={{ display: 'block', fontSize: '12px', color: '#9ca3af', marginBottom: '6px', fontWeight: 500 }}>Class Name</label>
+            <label style={{ display: 'block', fontSize: '11px', color: '#8e8e93', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Class Name</label>
             <input
               type="text"
               placeholder="e.g. Medical School, Spanish 101"
               value={newClassName}
               onChange={e => setNewClassName(e.target.value)}
-              style={{ width: '100%', background: '#0a0e17', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '10px 12px', color: '#f3f4f6', fontSize: '14px' }}
+              className="input-premium"
               required
             />
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: '12px', color: '#9ca3af', marginBottom: '6px', fontWeight: 500 }}>Description</label>
+            <label style={{ display: 'block', fontSize: '11px', color: '#8e8e93', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Description</label>
             <textarea
               rows={3}
               placeholder="Summarize the courses or examinations..."
               value={newClassDesc}
               onChange={e => setNewClassDesc(e.target.value)}
-              style={{ width: '100%', background: '#0a0e17', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '10px 12px', color: '#f3f4f6', fontSize: '14px', fontFamily: 'inherit', resize: 'vertical' }}
+              className="textarea-premium"
             />
           </div>
 
           <button
             type="submit"
-            style={{
-              background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              padding: '12px 20px',
-              fontWeight: 600,
-              fontSize: '14px',
-              cursor: 'pointer',
-              textAlign: 'center',
-              boxShadow: '0 4px 15px rgba(99, 102, 241, 0.3)',
-            }}
-            className="hover-lift"
+            className="btn-premium-primary"
+            style={{ width: '100%', height: '44px', marginTop: '8px' }}
           >
             Create Class Workspace
           </button>

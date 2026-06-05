@@ -127,19 +127,8 @@ export const ClassViewPage: React.FC = () => {
                 navigate('/');
               }
             }}
-            style={{
-              background: 'rgba(239, 68, 68, 0.05)',
-              border: '1px solid rgba(239, 68, 68, 0.2)',
-              color: '#fca5a5',
-              padding: '8px 14px',
-              borderRadius: '8px',
-              fontSize: '12px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
-            className="hover-glow"
+            style={{ padding: '6px 12px', fontSize: '12px' }}
+            className="btn-premium-danger"
           >
             <Trash2 size={13} /> Delete Class
           </button>
@@ -170,21 +159,7 @@ export const ClassViewPage: React.FC = () => {
               {classDueCount > 0 ? (
                 <button
                   onClick={() => handleStartClassStudy(activeClass.id || 0)}
-                  style={{
-                    background: '#30d158',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '8px',
-                    padding: '10px 20px',
-                    fontSize: '14px',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    boxShadow: '0 4px 12px rgba(48, 209, 88, 0.2)',
-                  }}
-                  className="hover-lift"
+                  className="btn-premium-success"
                 >
                   <Play size={16} /> Study All Due in Class ({classDueCount})
                 </button>
@@ -196,43 +171,32 @@ export const ClassViewPage: React.FC = () => {
             </div>
 
             {/* Inline Quick Add Deck form */}
-            <form onSubmit={handleCreateDeckSubmit} className="glass-panel" style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'flex-end', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <form onSubmit={handleCreateDeckSubmit} className="card-deck-premium" style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'flex-end', padding: '20px' }}>
               <div style={{ flex: 1, minWidth: '180px' }}>
-                <label style={{ display: 'block', fontSize: '11px', color: '#8e8e93', marginBottom: '6px', fontWeight: 500 }}>Create New Deck</label>
+                <label style={{ display: 'block', fontSize: '11px', color: '#8e8e93', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Create New Deck</label>
                 <input
                   type="text"
                   placeholder="e.g. Unit testing mockups..."
                   value={newDeckName}
                   onChange={e => setNewDeckName(e.target.value)}
-                  style={{ width: '100%', background: 'rgba(0,0,0,0.15)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', padding: '8px 12px', color: '#ffffff', fontSize: '13px', outline: 'none' }}
+                  className="input-premium"
                   required
                 />
               </div>
               <div style={{ flex: 2, minWidth: '260px' }}>
-                <label style={{ display: 'block', fontSize: '11px', color: '#8e8e93', marginBottom: '6px', fontWeight: 500 }}>Deck Description</label>
+                <label style={{ display: 'block', fontSize: '11px', color: '#8e8e93', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Deck Description</label>
                 <input
                   type="text"
                   placeholder="Briefly state the card categories..."
                   value={newDeckDesc}
                   onChange={e => setNewDeckDesc(e.target.value)}
-                  style={{ width: '100%', background: 'rgba(0,0,0,0.15)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', padding: '8px 12px', color: '#ffffff', fontSize: '13px', outline: 'none' }}
+                  className="input-premium"
                 />
               </div>
               <button
                 type="submit"
-                style={{
-                  background: '#0a84ff',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  padding: '8px 16px',
-                  fontWeight: 600,
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                  transition: 'background 0.2s',
-                }}
-                onMouseEnter={e => e.currentTarget.style.background = '#0070e3'}
-                onMouseLeave={e => e.currentTarget.style.background = '#0a84ff'}
+                className="btn-premium-primary"
+                style={{ height: '40px', padding: '0 20px' }}
               >
                 Add Deck
               </button>
@@ -240,7 +204,7 @@ export const ClassViewPage: React.FC = () => {
 
             {/* Grid of Decks in Class */}
             {activeClassDecks.length === 0 ? (
-              <div className="glass-panel" style={{ textAlign: 'center', padding: '40px', color: '#6b7280', fontSize: '14px' }}>
+              <div className="card-deck-premium" style={{ textAlign: 'center', padding: '40px', color: '#6b7280', fontSize: '14px' }}>
                 No decks found inside this class. Add a deck above to start adding flashcards!
               </div>
             ) : (
@@ -250,7 +214,7 @@ export const ClassViewPage: React.FC = () => {
                 gap: '20px',
               }}>
                 {activeClassDecks.map(deck => (
-                  <div key={deck.id} className="glass-panel hover-lift" style={{ display: 'flex', flexDirection: 'column', minHeight: '190px', justifyContent: 'space-between' }}>
+                  <div key={deck.id} className="card-deck-premium" style={{ display: 'flex', flexDirection: 'column', minHeight: '210px', justifyContent: 'space-between' }}>
                     <div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                         <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#f3f4f6' }}>{deck.name}</h3>
@@ -275,18 +239,7 @@ export const ClassViewPage: React.FC = () => {
                         if (!matchRecord) return null;
                         return (
                           <div style={{ marginBottom: '12px' }}>
-                            <span style={{ 
-                              display: 'inline-flex', 
-                              alignItems: 'center', 
-                              gap: '3.5px', 
-                              fontSize: '10px', 
-                              color: '#eab308', 
-                              background: 'rgba(234, 179, 8, 0.07)', 
-                              padding: '2.5px 8px', 
-                              borderRadius: '5px', 
-                              border: '1px solid rgba(234, 179, 8, 0.15)',
-                              fontWeight: 600,
-                            }}>
+                            <span className="badge-premium badge-premium-amber">
                               🏆 Match Record: {parseFloat(matchRecord).toFixed(1)}s
                             </span>
                           </div>
@@ -331,15 +284,7 @@ export const ClassViewPage: React.FC = () => {
                           <span style={{ fontSize: '11px', color: '#d1d5db', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                             {deck.total} cards
                             {deck.dueCount > 0 && (
-                              <span style={{
-                                background: 'rgba(99, 102, 241, 0.15)',
-                                color: '#a5b4fc',
-                                padding: '1px 5px',
-                                borderRadius: '4px',
-                                fontSize: '10px',
-                                fontWeight: 600,
-                                border: '1px solid rgba(99, 102, 241, 0.25)',
-                              }}>
+                              <span className="badge-premium badge-premium-blue">
                                 {deck.dueCount} due
                               </span>
                             )}
@@ -357,20 +302,8 @@ export const ClassViewPage: React.FC = () => {
                         <div style={{ display: 'flex', gap: '6px' }}>
                           <button
                             onClick={() => deck.id && setImportingDeckId(deck.id)}
-                            style={{
-                              background: 'rgba(255,255,255,0.02)',
-                              border: '1px solid rgba(255,255,255,0.06)',
-                              color: '#9ca3af',
-                              borderRadius: '6px',
-                              width: '28px',
-                              height: '28px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              cursor: 'pointer',
-                              transition: 'all 0.2s',
-                            }}
-                            className="hover-glow"
+                            style={{ width: '28px', height: '28px', padding: 0 }}
+                            className="btn-premium-secondary"
                             title="Import Cards via CSV"
                           >
                             <Upload size={12} />
@@ -382,20 +315,8 @@ export const ClassViewPage: React.FC = () => {
                                 await store.resetDeckProgress(deck.id);
                               }
                             }}
-                            style={{
-                              background: 'rgba(239, 68, 68, 0.05)',
-                              border: '1px solid rgba(239, 68, 68, 0.15)',
-                              color: '#f87171',
-                              borderRadius: '6px',
-                              width: '28px',
-                              height: '28px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              cursor: 'pointer',
-                              transition: 'all 0.2s',
-                            }}
-                            className="hover-glow"
+                            style={{ width: '28px', height: '28px', padding: 0 }}
+                            className="btn-premium-danger"
                             title="Reset all learning history and progress for this deck"
                           >
                             <RotateCcw size={12} />
@@ -406,21 +327,8 @@ export const ClassViewPage: React.FC = () => {
                         <div style={{ display: 'flex', gap: '6px' }}>
                           <button
                             onClick={() => deck.id && setManagingDeckId(deck.id)}
-                            style={{
-                              background: 'rgba(255,255,255,0.02)',
-                              border: '1px solid rgba(255,255,255,0.06)',
-                              color: '#a5b4fc',
-                              borderRadius: '6px',
-                              padding: '4px 10px',
-                              height: '28px',
-                              fontSize: '11px',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              transition: 'all 0.2s',
-                            }}
-                            className="hover-glow"
+                            style={{ height: '28px', padding: '0 10px', fontSize: '11px' }}
+                            className="btn-premium-secondary"
                           >
                             <Edit2 size={11} /> Cards
                           </button>
@@ -428,23 +336,8 @@ export const ClassViewPage: React.FC = () => {
                           <button
                             onClick={() => deck.id && deck.total > 0 && handleStartDeckStudy(deck.id)}
                             disabled={deck.total === 0}
-                            style={{
-                              background: deck.dueCount > 0 ? '#6366f1' : 'rgba(255,255,255,0.05)',
-                              color: deck.dueCount > 0 ? 'white' : '#9ca3af',
-                              border: 'none',
-                              borderRadius: '6px',
-                              padding: '4px 12px',
-                              height: '28px',
-                              fontSize: '11px',
-                              fontWeight: 700,
-                              cursor: deck.total === 0 ? 'not-allowed' : 'pointer',
-                              opacity: deck.total === 0 ? 0.35 : 1,
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '2px',
-                              transition: 'all 0.2s',
-                            }}
-                            className={deck.total > 0 ? "hover-lift" : ""}
+                            style={{ height: '28px', padding: '0 12px', fontSize: '11px' }}
+                            className="btn-premium-primary"
                             title={deck.total === 0 ? "Add cards before studying" : undefined}
                           >
                             Study <ChevronRight size={11} />

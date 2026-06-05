@@ -173,38 +173,31 @@ export const Flashcard: React.FC<FlashcardProps> = ({ card, isFlipped, onFlip, a
                 <button
                   onClick={toggleScratchpad}
                   style={{
-                    background: showScratchpad ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.03)',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    color: showScratchpad ? '#a5b4fc' : '#9ca3af',
-                    borderRadius: '50%',
                     width: '32px',
                     height: '32px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
+                    borderRadius: '50%',
+                    padding: 0,
+                    background: showScratchpad ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.03)',
+                    borderColor: showScratchpad ? 'rgba(99,102,241,0.4)' : 'rgba(255,255,255,0.08)',
+                    color: showScratchpad ? '#a5b4fc' : '#9ca3af',
                   }}
+                  className="btn-premium-secondary"
                   title="Toggle Scratchpad"
                 >
-                  <Edit3 size={15} />
+                  <Edit3 size={14} />
                 </button>
                 <button
                   onClick={speak}
                   style={{
-                    background: 'rgba(255, 255, 255, 0.03)',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
-                    color: '#9ca3af',
-                    borderRadius: '50%',
                     width: '32px',
                     height: '32px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
+                    borderRadius: '50%',
+                    padding: 0,
                   }}
+                  className="btn-premium-secondary"
                   title="Pronounce English Text"
                 >
-                  <Volume2 size={15} />
+                  <Volume2 size={14} />
                 </button>
               </div>
             </div>
@@ -237,20 +230,15 @@ export const Flashcard: React.FC<FlashcardProps> = ({ card, isFlipped, onFlip, a
               <button
                 onClick={speak}
                 style={{
-                  background: 'rgba(255, 255, 255, 0.03)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                  color: '#9ca3af',
-                  borderRadius: '50%',
                   width: '32px',
                   height: '32px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
+                  borderRadius: '50%',
+                  padding: 0,
                 }}
+                className="btn-premium-secondary"
                 title="Pronounce English Text"
               >
-                <Volume2 size={15} />
+                <Volume2 size={14} />
               </button>
             </div>
 
