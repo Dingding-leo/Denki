@@ -163,9 +163,10 @@ export const Flashcard: React.FC<FlashcardProps> = ({ card, isFlipped, onFlip, a
         <div className="flip-card-inner">
           
           {/* FRONT OF THE CARD */}
-          <div className="flip-card-front" style={{ padding: '40px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', width: '100%' }}>
-              <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px', color: '#6366f1', fontWeight: 600, background: 'rgba(99, 102, 241, 0.12)', padding: '4px 8px', borderRadius: '4px' }}>
+          <div className="flip-card-front" style={{ padding: '32px 40px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', width: '100%', zIndex: 5 }}>
+              <span className="badge-premium badge-premium-blue" style={{ fontSize: '10px', textTransform: 'uppercase', padding: '4px 10px', borderRadius: '30px', fontWeight: 700 }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#6366f1', marginRight: '6px', display: 'inline-block', boxShadow: '0 0 8px #6366f1' }} />
                 {card.cardType === 'cloze' ? 'Cloze Deletion' : 'Front'}
               </span>
               
@@ -202,18 +203,16 @@ export const Flashcard: React.FC<FlashcardProps> = ({ card, isFlipped, onFlip, a
               </div>
             </div>
 
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', overflowY: 'auto', minHeight: 0 }}>
-              <div style={{ margin: 'auto 0' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', overflowY: 'auto', minHeight: 0, zIndex: 5 }}>
               <div
                 className="markdown-content"
                 dangerouslySetInnerHTML={{ __html: cardFrontHTML }}
-                style={{ fontSize: '1.65rem', color: '#f3f4f6', lineHeight: 1.6, textAlign: 'center', maxWidth: '800px', margin: '0 auto' }}
+                style={{ fontSize: '1.8rem', color: '#ffffff', fontWeight: 600, letterSpacing: '-0.01em', lineHeight: 1.55, textAlign: 'center', maxWidth: '100%', margin: '0 auto' }}
               />
-              </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', color: '#6b7280', fontSize: '12px', marginTop: '16px' }}>
-              <RotateCw size={12} /> Click card to flip
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px', color: '#8e8e93', fontSize: '11px', letterSpacing: '0.5px', textTransform: 'uppercase', fontWeight: 700, marginTop: '16px', zIndex: 5, opacity: 0.8 }}>
+              <RotateCw size={11} style={{ color: '#818cf8' }} /> Click card to flip
             </div>
 
             {/* Canvas Sketchpad Overlay */}
@@ -221,9 +220,10 @@ export const Flashcard: React.FC<FlashcardProps> = ({ card, isFlipped, onFlip, a
           </div>
 
           {/* BACK OF THE CARD */}
-          <div className="flip-card-back" style={{ padding: '40px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', width: '100%' }}>
-              <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px', color: '#10b981', fontWeight: 600, background: 'rgba(16, 185, 129, 0.12)', padding: '4px 8px', borderRadius: '4px' }}>
+          <div className="flip-card-back" style={{ padding: '32px 40px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', width: '100%', zIndex: 5 }}>
+              <span className="badge-premium badge-premium-green" style={{ fontSize: '10px', textTransform: 'uppercase', padding: '4px 10px', borderRadius: '30px', fontWeight: 700 }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', marginRight: '6px', display: 'inline-block', boxShadow: '0 0 8px #10b981' }} />
                 Back / Answer
               </span>
               
@@ -243,24 +243,22 @@ export const Flashcard: React.FC<FlashcardProps> = ({ card, isFlipped, onFlip, a
             </div>
 
             {/* Split layout if cloze deletion, showing card front as well */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', overflowY: 'auto', gap: '20px', minHeight: 0 }}>
-              <div style={{ margin: 'auto 0' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', overflowY: 'auto', gap: '20px', minHeight: 0, zIndex: 5 }}>
               {card.cardType === 'cloze' && (
-                <div style={{ opacity: 0.4, borderBottom: '1px dashed rgba(255,255,255,0.08)', paddingBottom: '12px' }}>
-                  <div className="markdown-content" dangerouslySetInnerHTML={{ __html: cardFrontHTML }} style={{ fontSize: '1.25rem' }} />
+                <div style={{ opacity: 0.45, borderBottom: '1px dashed rgba(255,255,255,0.08)', paddingBottom: '16px', width: '100%', textAlign: 'center' }}>
+                  <div className="markdown-content" dangerouslySetInnerHTML={{ __html: cardFrontHTML }} style={{ fontSize: '1.3rem', fontWeight: 500 }} />
                 </div>
               )}
               
               <div
                 className="markdown-content"
                 dangerouslySetInnerHTML={{ __html: cardBackHTML }}
-                style={{ fontSize: '1.65rem', color: '#f3f4f6', lineHeight: 1.6, textAlign: 'center', maxWidth: '800px', margin: '0 auto' }}
+                style={{ fontSize: '1.8rem', color: '#ffffff', fontWeight: 600, letterSpacing: '-0.01em', lineHeight: 1.55, textAlign: 'center', maxWidth: '100%', margin: '0 auto' }}
               />
-              </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', color: '#6b7280', fontSize: '12px', marginTop: '16px' }}>
-              <RotateCw size={12} /> Flip back to front
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px', color: '#8e8e93', fontSize: '11px', letterSpacing: '0.5px', textTransform: 'uppercase', fontWeight: 700, marginTop: '16px', zIndex: 5, opacity: 0.8 }}>
+              <RotateCw size={11} style={{ color: '#34d399' }} /> Flip back to front
             </div>
           </div>
 

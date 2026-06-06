@@ -187,20 +187,16 @@ export const StudyCheckpoint: React.FC<StudyCheckpointProps> = ({
 
       <button
         onClick={onContinue}
+        className="btn-premium-primary hover-lift"
         style={{
-          background: '#6366f1',
-          color: 'white',
-          border: 'none',
-          borderRadius: '8px',
-          padding: '12px 24px',
-          fontWeight: 700,
-          cursor: 'pointer',
-          fontSize: '14px',
-          boxShadow: '0 4px 15px rgba(99,102,241,0.25)',
           width: '100%',
           marginTop: '10px',
+          padding: '14px 24px',
+          borderRadius: '10px',
+          fontSize: '14px',
+          background: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
+          boxShadow: '0 4px 15px rgba(99, 102, 241, 0.35)',
         }}
-        className="hover-lift"
       >
         Continue Studying (Space / Enter)
       </button>

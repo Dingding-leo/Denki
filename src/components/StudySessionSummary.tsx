@@ -134,18 +134,15 @@ export const StudySessionSummary: React.FC<StudySessionSummaryProps> = ({
 
       <button
         onClick={onExit}
+        className="btn-premium-primary hover-lift"
         style={{
-          background: '#6366f1',
-          color: 'white',
-          border: 'none',
-          borderRadius: '8px',
-          padding: '12px 32px',
-          fontWeight: 600,
-          cursor: 'pointer',
           marginTop: '8px',
-          boxShadow: '0 4px 15px rgba(99,102,241,0.25)',
+          padding: '14px 36px',
+          borderRadius: '10px',
+          fontSize: '14px',
+          background: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
+          boxShadow: '0 4px 15px rgba(99, 102, 241, 0.35)',
         }}
-        className="hover-lift"
       >
         Return to Workspace
       </button>

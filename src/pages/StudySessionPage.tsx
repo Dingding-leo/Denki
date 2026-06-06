@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { BookOpen, Volume2, Keyboard, Eye } from 'lucide-react';
+import { BookOpen, Volume2, Keyboard, Eye, ArrowLeft, X } from 'lucide-react';
 import { useFlashcardStore } from '../store/useFlashcardStore';
 import { Flashcard } from '../components/Flashcard';
 import { MatchGame } from '../components/MatchGame';
@@ -20,6 +20,7 @@ export const StudySessionPage: React.FC = () => {
   const [isFlipped, setIsFlipped] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [autoSpeak, setAutoSpeak] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(true);
   
   const [checkpointOpen, setCheckpointOpen] = useState(false);
   const [roundAverages, setRoundAverages] = useState<number[]>([]);
@@ -164,6 +165,156 @@ export const StudySessionPage: React.FC = () => {
         <div className="bg-glow-4" />
       </div>
 
+      <header className="study-top-nav">
+        {/* Left Side: Back button and Deck name stack */}
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <button 
+            onClick={handleExitStudy}
+            style={{
+              width: '36px',
+              height: '36px',
+              borderRadius: '50%',
+              padding: 0,
+              marginRight: '14px',
+            }}
+            className="btn-premium-secondary"
+            title="Exit Session (Esc)"
+          >
+            <ArrowLeft size={16} />
+          </button>
+          <div style={{ textAlign: 'left' }}>
+            <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#ffffff', lineHeight: 1.2 }}>
+              {store.session.deckId 
+                ? store.decks.find(d => d.id === store.session?.deckId)?.name 
+                : store.classes.find(c => c.id === store.session?.classId)?.name || 'Study Session'}
+            </h3>
+            <span style={{ fontSize: '9px', color: '#8e8e93', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.8px' }}>
+              {isCram ? 'Cram Session' : 'Spaced Repetition'}
+            </span>
+          </div>
+        </div>
+
+        {/* Center: Segmented control tabs */}
+        <div className="segmented-control" style={{ padding: '3px', background: 'rgba(255, 255, 255, 0.04)' }}>
+          <button
+            onClick={() => setStudyMode('review')}
+            style={{
+              background: studyMode === 'review' ? 'rgba(99, 102, 241, 0.18)' : 'transparent',
+              color: studyMode === 'review' ? '#a5b4fc' : '#8e8e93',
+              fontSize: '12px',
+              padding: '6px 14px',
+              fontWeight: 600,
+            }}
+            className={`segmented-control-item ${studyMode === 'review' ? 'active' : ''}`}
+          >
+            Review Mode
+          </button>
+          {store.session.deckId && (
+            <button
+              onClick={() => setStudyMode('match')}
+              style={{
+                background: studyMode === 'match' ? 'rgba(99, 102, 241, 0.18)' : 'transparent',
+                color: studyMode === 'match' ? '#a5b4fc' : '#8e8e93',
+                fontSize: '12px',
+                padding: '6px 14px',
+                fontWeight: 600,
+              }}
+              className={`segmented-control-item ${studyMode === 'match' ? 'active' : ''}`}
+            >
+              Match Game
+            </button>
+          )}
+          <button
+            onClick={() => setStudyMode('learn')}
+            style={{
+              background: studyMode === 'learn' ? 'rgba(16, 185, 129, 0.18)' : 'transparent',
+              color: studyMode === 'learn' ? '#6ee7b7' : '#8e8e93',
+              fontSize: '12px',
+              padding: '6px 14px',
+              fontWeight: 600,
+            }}
+            className={`segmented-control-item ${studyMode === 'learn' ? 'active' : ''}`}
+          >
+            Learn Mode
+          </button>
+        </div>
+
+        {/* Right Side: Tools toolbar */}
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {studyMode === 'review' && queue.length > 0 && (
+            <>
+              <button
+                onClick={() => setShowNotes(!showNotes)}
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
+                  padding: 0,
+                  background: showNotes ? 'rgba(99, 102, 241, 0.12)' : 'rgba(255, 255, 255, 0.03)',
+                  borderColor: showNotes ? 'rgba(99, 102, 241, 0.35)' : 'rgba(255, 255, 255, 0.08)',
+                  color: showNotes ? '#a5b4fc' : '#9ca3af',
+                  boxShadow: showNotes ? '0 0 12px rgba(99, 102, 241, 0.2)' : 'none',
+                }}
+                className="btn-premium-secondary"
+                title={`Toggle Notepad (${showNotes ? 'ON' : 'OFF'})`}
+              >
+                <BookOpen size={15} />
+              </button>
+
+              <button
+                onClick={() => setAutoSpeak(!autoSpeak)}
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
+                  padding: 0,
+                  background: autoSpeak ? 'rgba(16, 185, 129, 0.12)' : 'rgba(255, 255, 255, 0.03)',
+                  borderColor: autoSpeak ? 'rgba(16, 185, 129, 0.35)' : 'rgba(255, 255, 255, 0.08)',
+                  color: autoSpeak ? '#34d399' : '#9ca3af',
+                  boxShadow: autoSpeak ? '0 0 12px rgba(16, 185, 129, 0.2)' : 'none',
+                }}
+                className="btn-premium-secondary"
+                title={`Auto Pronounce English (${autoSpeak ? 'ON' : 'OFF'})`}
+              >
+                <Volume2 size={15} />
+              </button>
+
+              <button
+                onClick={() => setShowShortcuts(!showShortcuts)}
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
+                  padding: 0,
+                  background: showShortcuts ? 'rgba(59, 130, 246, 0.12)' : 'rgba(255, 255, 255, 0.03)',
+                  borderColor: showShortcuts ? 'rgba(59, 130, 246, 0.35)' : 'rgba(255, 255, 255, 0.08)',
+                  color: showShortcuts ? '#93c5fd' : '#9ca3af',
+                  boxShadow: showShortcuts ? '0 0 12px rgba(59, 130, 246, 0.2)' : 'none',
+                }}
+                className="btn-premium-secondary"
+                title="Keyboard Shortcuts Guide"
+              >
+                <Keyboard size={15} />
+              </button>
+            </>
+          )}
+
+          <button
+            onClick={handleExitStudy}
+            style={{
+              width: '36px',
+              height: '36px',
+              borderRadius: '50%',
+              padding: 0,
+            }}
+            className="btn-premium-danger"
+            title="Exit Session (Esc)"
+          >
+            <X size={15} />
+          </button>
+        </div>
+      </header>
+
       <div style={{
         display: 'flex',
         flexDirection: 'column',
@@ -171,117 +322,10 @@ export const StudySessionPage: React.FC = () => {
         width: '100%',
         maxWidth: showNotes && studyMode === 'review' ? '1600px' : '780px',
         margin: '0 auto',
-        padding: '24px 0',
+        padding: '94px 0 24px 0',
         boxSizing: 'border-box',
         transition: 'max-width 0.3s ease',
       }}>
-      
-        {/* Header Study indicators */}
-        <div style={{ width: '100%', maxWidth: showNotes && studyMode === 'review' ? '1600px' : '780px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', transition: 'max-width 0.3s ease' }}>
-          <div>
-            <span style={{ fontSize: '10px', color: '#6b7280', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '1px' }}>
-              {isCram ? 'Cram Session (All Cards)' : 'Spaced Repetition Review'}
-            </span>
-            <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#f3f4f6', marginTop: '2px' }}>
-              {store.session.deckId 
-                ? store.decks.find(d => d.id === store.session?.deckId)?.name 
-                : store.classes.find(c => c.id === store.session?.classId)?.name || 'Study Session'}
-            </h3>
-          </div>
-
-          {/* Study Mode Selector Tab Panels */}
-          <div className="segmented-control" style={{ padding: '3px' }}>
-            <button
-              onClick={() => setStudyMode('review')}
-              style={{
-                background: studyMode === 'review' ? 'rgba(99, 102, 241, 0.18)' : 'transparent',
-                color: studyMode === 'review' ? '#a5b4fc' : '#8e8e93',
-                fontSize: '12px',
-              }}
-              className={`segmented-control-item ${studyMode === 'review' ? 'active' : ''}`}
-            >
-              FSRS Spaced Review
-            </button>
-            {store.session.deckId && (
-              <button
-                onClick={() => setStudyMode('match')}
-                style={{
-                  background: studyMode === 'match' ? 'rgba(99, 102, 241, 0.18)' : 'transparent',
-                  color: studyMode === 'match' ? '#a5b4fc' : '#8e8e93',
-                  fontSize: '12px',
-                }}
-                className={`segmented-control-item ${studyMode === 'match' ? 'active' : ''}`}
-              >
-                Match Game (Timed)
-              </button>
-            )}
-            <button
-              onClick={() => setStudyMode('learn')}
-              style={{
-                background: studyMode === 'learn' ? 'rgba(16, 185, 129, 0.18)' : 'transparent',
-                color: studyMode === 'learn' ? '#6ee7b7' : '#8e8e93',
-                fontSize: '12px',
-              }}
-              className={`segmented-control-item ${studyMode === 'learn' ? 'active' : ''}`}
-            >
-              Learn Mode (Active)
-            </button>
-          </div>
-
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            {studyMode === 'review' && queue.length > 0 && (
-              <>
-                <button
-                  onClick={() => setShowNotes(!showNotes)}
-                  style={{
-                    height: '32px',
-                    padding: '0 12px',
-                    fontSize: '12px',
-                    background: showNotes ? 'rgba(99, 102, 241, 0.12)' : 'rgba(255, 255, 255, 0.03)',
-                    borderColor: showNotes ? 'rgba(99, 102, 241, 0.4)' : 'rgba(255, 255, 255, 0.08)',
-                    color: showNotes ? '#a5b4fc' : '#9ca3af',
-                    boxShadow: showNotes ? '0 0 10px rgba(99, 102, 241, 0.15)' : 'none',
-                  }}
-                  className="btn-premium-secondary"
-                  title="Toggle Markdown Notepad"
-                >
-                  <BookOpen size={13} />
-                  <span>Notepad: {showNotes ? 'ON' : 'OFF'}</span>
-                </button>
-
-                <button
-                  onClick={() => setAutoSpeak(!autoSpeak)}
-                  style={{
-                    height: '32px',
-                    padding: '0 12px',
-                    fontSize: '12px',
-                    background: autoSpeak ? 'rgba(16, 185, 129, 0.12)' : 'rgba(255, 255, 255, 0.03)',
-                    borderColor: autoSpeak ? 'rgba(16, 185, 129, 0.4)' : 'rgba(255, 255, 255, 0.08)',
-                    color: autoSpeak ? '#34d399' : '#9ca3af',
-                    boxShadow: autoSpeak ? '0 0 10px rgba(16, 185, 129, 0.15)' : 'none',
-                  }}
-                  className="btn-premium-secondary"
-                  title="Automatically speak cards aloud"
-                >
-                  <Volume2 size={13} />
-                  <span>Auto Aloud: {autoSpeak ? 'ON' : 'OFF'}</span>
-                </button>
-              </>
-            )}
-
-            <button
-              onClick={handleExitStudy}
-              style={{
-                height: '32px',
-                padding: '0 14px',
-                fontSize: '12px',
-              }}
-              className="btn-premium-danger"
-            >
-              Exit Session (Esc)
-            </button>
-          </div>
-        </div>
 
         {studyMode === 'match' && store.session.deckId ? (
           <MatchGame
@@ -387,11 +431,10 @@ export const StudySessionPage: React.FC = () => {
                 <StudyNotepad deckId={activeStudyDeckId} deckName={deckName} />
               )}
             </div>
-
             {/* Submit Spacing grades buttons */}
-            <div style={{ width: '100%', maxWidth: '720px', minHeight: '70px', display: 'flex', justifyContent: 'center' }}>
+            <div style={{ width: '100%', maxWidth: '760px', minHeight: '80px', display: 'flex', justifyContent: 'center', zIndex: 10 }}>
               {!isFlipped ? (
-                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
                   {history.length > 0 && (
                     <button
                       onClick={async () => {
@@ -399,90 +442,103 @@ export const StudySessionPage: React.FC = () => {
                         setIsFlipped(false);
                       }}
                       style={{
-                        background: 'rgba(255, 255, 255, 0.02)',
+                        background: 'rgba(255, 255, 255, 0.03)',
                         border: '1px solid rgba(255, 255, 255, 0.08)',
-                        color: '#9ca3af',
-                        borderRadius: '10px',
-                        padding: '12px 24px',
-                        fontSize: '15px',
-                        fontWeight: 600,
+                        color: '#e5e7eb',
+                        borderRadius: '12px',
+                        padding: '14px 28px',
+                        fontSize: '14px',
+                        fontWeight: 700,
                         cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
                       }}
                       className="hover-lift"
                       title="Undo last rating"
                     >
-                      Undo (Z)
+                      Undo <kbd className="keycap-badge">Z</kbd>
                     </button>
                   )}
                   <button
                     onClick={() => setIsFlipped(true)}
                     className="btn-premium-primary"
-                    style={{ padding: '14px 44px', fontSize: '16px', borderRadius: '12px' }}
+                    style={{ 
+                      padding: '16px 48px', 
+                      fontSize: '16px', 
+                      borderRadius: '30px', 
+                      fontWeight: 800,
+                      letterSpacing: '0.5px',
+                      background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+                      boxShadow: '0 8px 30px rgba(99, 102, 241, 0.45)',
+                    }}
                   >
                     Reveal Answer <Eye size={16} />
                   </button>
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%', alignItems: 'center' }}>
-                  <span style={{ fontSize: '10px', color: '#9ca3af', fontWeight: 700, letterSpacing: '0.8px' }}>HOW WELL DID YOU KNOW THIS?</span>
+                <div className="rating-dock">
+                  <span style={{ fontSize: '10px', color: '#8e8e93', fontWeight: 800, letterSpacing: '0.8px', textAlign: 'center', textTransform: 'uppercase' }}>
+                    How well did you know this?
+                  </span>
+                  
                   <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
-                    
                     {/* Rating 1 - Not at all */}
                     <button
                       onClick={() => handleRateCard(1)}
-                      className="btn-score-1 hover-lift"
-                      style={{ flex: 1, border: '1px solid', borderRadius: '10px', padding: '12px 6px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', transition: 'all 0.2s ease' }}
+                      className="rating-btn-card rating-btn-1"
                       title="Not at all (1)"
                     >
-                      <span style={{ fontSize: '18px', fontWeight: 800 }}>1</span>
-                      <span style={{ fontSize: '10px', opacity: 0.8, marginTop: '2px', whiteSpace: 'nowrap' }}>Not at all</span>
+                      <span style={{ fontSize: '20px', fontWeight: 800 }}>1</span>
+                      <span style={{ fontSize: '10px', fontWeight: 700, opacity: 0.9 }}>Not at all</span>
+                      <kbd className="keycap-badge" style={{ marginTop: '4px' }}>1</kbd>
                     </button>
 
                     {/* Rating 2 - Slightly */}
                     <button
                       onClick={() => handleRateCard(2)}
-                      className="btn-score-2 hover-lift"
-                      style={{ flex: 1, border: '1px solid', borderRadius: '10px', padding: '12px 6px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', transition: 'all 0.2s ease' }}
+                      className="rating-btn-card rating-btn-2"
                       title="Slightly (2)"
                     >
-                      <span style={{ fontSize: '18px', fontWeight: 800 }}>2</span>
-                      <span style={{ fontSize: '10px', opacity: 0.8, marginTop: '2px', whiteSpace: 'nowrap' }}>Slightly</span>
+                      <span style={{ fontSize: '20px', fontWeight: 800 }}>2</span>
+                      <span style={{ fontSize: '10px', fontWeight: 700, opacity: 0.9 }}>Slightly</span>
+                      <kbd className="keycap-badge" style={{ marginTop: '4px' }}>2</kbd>
                     </button>
 
                     {/* Rating 3 - Moderately */}
                     <button
                       onClick={() => handleRateCard(3)}
-                      className="btn-score-3 hover-lift"
-                      style={{ flex: 1, border: '1px solid', borderRadius: '10px', padding: '12px 6px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', transition: 'all 0.2s ease' }}
+                      className="rating-btn-card rating-btn-3"
                       title="Moderately (3)"
                     >
-                      <span style={{ fontSize: '18px', fontWeight: 800 }}>3</span>
-                      <span style={{ fontSize: '10px', opacity: 0.8, marginTop: '2px', whiteSpace: 'nowrap' }}>Moderately</span>
+                      <span style={{ fontSize: '20px', fontWeight: 800 }}>3</span>
+                      <span style={{ fontSize: '10px', fontWeight: 700, opacity: 0.9 }}>Moderately</span>
+                      <kbd className="keycap-badge" style={{ marginTop: '4px' }}>3</kbd>
                     </button>
 
                     {/* Rating 4 - Very well */}
                     <button
                       onClick={() => handleRateCard(4)}
-                      className="btn-score-4 hover-lift"
-                      style={{ flex: 1, border: '1px solid', borderRadius: '10px', padding: '12px 6px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', transition: 'all 0.2s ease' }}
+                      className="rating-btn-card rating-btn-4"
                       title="Very well (4)"
                     >
-                      <span style={{ fontSize: '18px', fontWeight: 800 }}>4</span>
-                      <span style={{ fontSize: '10px', opacity: 0.8, marginTop: '2px', whiteSpace: 'nowrap' }}>Very well</span>
+                      <span style={{ fontSize: '20px', fontWeight: 800 }}>4</span>
+                      <span style={{ fontSize: '10px', fontWeight: 700, opacity: 0.9 }}>Very Well</span>
+                      <kbd className="keycap-badge" style={{ marginTop: '4px' }}>4</kbd>
                     </button>
 
                     {/* Rating 5 - Perfectly */}
                     <button
                       onClick={() => handleRateCard(5)}
-                      className="btn-score-5 hover-lift"
-                      style={{ flex: 1, border: '1px solid', borderRadius: '10px', padding: '12px 6px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', transition: 'all 0.2s ease' }}
+                      className="rating-btn-card rating-btn-5"
                       title="Perfectly (5)"
                     >
-                      <span style={{ fontSize: '18px', fontWeight: 800 }}>5</span>
-                      <span style={{ fontSize: '10px', opacity: 0.8, marginTop: '2px', whiteSpace: 'nowrap' }}>Perfectly</span>
+                      <span style={{ fontSize: '20px', fontWeight: 800 }}>5</span>
+                      <span style={{ fontSize: '10px', fontWeight: 700, opacity: 0.9 }}>Perfectly</span>
+                      <kbd className="keycap-badge" style={{ marginTop: '4px' }}>5</kbd>
                     </button>
 
-                    {/* Undo Action Button */}
+                    {/* Undo Button inside the dock */}
                     {history.length > 0 && (
                       <button
                         onClick={async () => {
@@ -490,17 +546,25 @@ export const StudySessionPage: React.FC = () => {
                           setIsFlipped(false);
                         }}
                         style={{
+                          flex: 0.8,
                           background: 'rgba(255, 255, 255, 0.02)',
-                          border: '1px solid rgba(255, 255, 255, 0.08)',
-                          color: '#9ca3af',
-                          borderRadius: '10px',
-                          padding: '12px 20px',
+                          border: '1px solid rgba(255, 255, 255, 0.05)',
+                          borderRadius: '12px',
                           cursor: 'pointer',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '4px',
+                          padding: '12px 6px',
+                          color: '#9ca3af',
+                          transition: 'all 0.2s',
                         }}
                         className="hover-lift"
                         title="Undo last rating"
                       >
-                        Undo (Z)
+                        <span style={{ fontSize: '12px', fontWeight: 700 }}>Undo</span>
+                        <kbd className="keycap-badge">Z</kbd>
                       </button>
                     )}
                   </div>
@@ -509,20 +573,26 @@ export const StudySessionPage: React.FC = () => {
             </div>
 
             {/* Shortcut markers */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              color: '#6b7280',
-              fontSize: '11px',
-              background: 'rgba(255,255,255,0.02)',
-              padding: '6px 12px',
-              borderRadius: '6px',
-              border: '1px solid rgba(255,255,255,0.04)',
-            }}>
-              <Keyboard size={12} />
-              <span>Press <strong>Space</strong> to Flip. Press keys <strong>1 - 5</strong> to submit confidence. Press <strong>Z</strong> to Undo last rating.</span>
-            </div>
+            {showShortcuts && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                color: '#8e8e93',
+                fontSize: '11px',
+                background: 'rgba(255, 255, 255, 0.02)',
+                padding: '8px 16px',
+                borderRadius: '10px',
+                border: '1px solid rgba(255, 255, 255, 0.04)',
+                marginTop: '8px',
+                animation: 'slideUpFade 0.3s ease',
+              }}>
+                <Keyboard size={13} style={{ color: '#818cf8' }} />
+                <span>
+                  Press <kbd className="keycap-badge">Space</kbd> or <kbd className="keycap-badge">Enter</kbd> to Flip &bull; Press keys <kbd className="keycap-badge">1</kbd> &ndash; <kbd className="keycap-badge">5</kbd> to rate &bull; Press <kbd className="keycap-badge">Z</kbd> to Undo last rating
+                </span>
+              </div>
+            )}
 
           </div>
         )}
