@@ -145,7 +145,9 @@ export const StudySessionPage: React.FC = () => {
     <div style={{
       position: 'fixed',
       top: 0, left: 0, right: 0, bottom: 0,
-      background: '#07090e',
+      background: 'rgba(9, 12, 21, 0.75)',
+      backdropFilter: 'blur(24px)',
+      WebkitBackdropFilter: 'blur(24px)',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
@@ -154,12 +156,20 @@ export const StudySessionPage: React.FC = () => {
       padding: '0 24px',
       overflowY: 'auto',
     }}>
+      {/* Background Glowing meshes inside the study view overlay */}
+      <div className="bg-glow-container" style={{ zIndex: -1 }}>
+        <div className="bg-glow-1" />
+        <div className="bg-glow-2" />
+        <div className="bg-glow-3" />
+        <div className="bg-glow-4" />
+      </div>
+
       <div style={{
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         width: '100%',
-        maxWidth: showNotes && studyMode === 'review' ? '1600px' : '960px',
+        maxWidth: showNotes && studyMode === 'review' ? '1600px' : '780px',
         margin: '0 auto',
         padding: '24px 0',
         boxSizing: 'border-box',
@@ -167,7 +177,7 @@ export const StudySessionPage: React.FC = () => {
       }}>
       
         {/* Header Study indicators */}
-        <div style={{ width: '100%', maxWidth: showNotes && studyMode === 'review' ? '1600px' : '960px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', transition: 'max-width 0.3s ease' }}>
+        <div style={{ width: '100%', maxWidth: showNotes && studyMode === 'review' ? '1600px' : '780px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', transition: 'max-width 0.3s ease' }}>
           <div>
             <span style={{ fontSize: '10px', color: '#6b7280', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '1px' }}>
               {isCram ? 'Cram Session (All Cards)' : 'Spaced Repetition Review'}
@@ -348,7 +358,7 @@ export const StudySessionPage: React.FC = () => {
           <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
             
             {/* Brainscape-Style Deck Mastery Stacked Progress Bar */}
-            <div style={{ width: '100%', maxWidth: showNotes ? '1600px' : '960px', display: 'flex', flexDirection: 'column', gap: '8px', transition: 'max-width 0.3s ease' }}>
+            <div style={{ width: '100%', maxWidth: showNotes && studyMode === 'review' ? '1600px' : '780px', display: 'flex', flexDirection: 'column', gap: '8px', transition: 'max-width 0.3s ease' }}>
               <StudyProgressBar queue={queue} currentIndex={currentIndex} />
             </div>
 
@@ -356,7 +366,7 @@ export const StudySessionPage: React.FC = () => {
             <div style={{
               display: 'flex',
               width: '100%',
-              maxWidth: showNotes ? '1600px' : '960px',
+              maxWidth: showNotes && studyMode === 'review' ? '1600px' : '780px',
               gap: '24px',
               alignItems: 'stretch',
               justifyContent: 'center',
@@ -406,20 +416,8 @@ export const StudySessionPage: React.FC = () => {
                   )}
                   <button
                     onClick={() => setIsFlipped(true)}
-                    style={{
-                      background: 'rgba(255, 255, 255, 0.04)',
-                      border: '1px solid rgba(255, 255, 255, 0.08)',
-                      color: '#f3f4f6',
-                      borderRadius: '10px',
-                      padding: '12px 30px',
-                      fontSize: '15px',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                    }}
-                    className="hover-lift"
+                    className="btn-premium-primary"
+                    style={{ padding: '14px 44px', fontSize: '16px', borderRadius: '12px' }}
                   >
                     Reveal Answer <Eye size={16} />
                   </button>

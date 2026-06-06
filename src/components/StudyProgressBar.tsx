@@ -42,15 +42,16 @@ export const StudyProgressBar: React.FC<StudyProgressBarProps> = ({ queue, curre
       {/* Contiguous Stacked bar representing the entire deck's state */}
       <div style={{
         width: '100%',
-        height: '8px',
-        borderRadius: '4px',
-        background: 'rgba(255,255,255,0.04)',
+        height: '12px',
+        borderRadius: '6px',
+        background: 'rgba(0, 0, 0, 0.45)',
         display: 'flex',
         overflow: 'hidden',
-        border: '1px solid rgba(255,255,255,0.05)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        boxShadow: '0 2px 5px rgba(0,0,0,0.3) inset',
       }}>
         {progressSegments.unseen > 0 && (
-          <div style={{ width: `${progressSegments.pctUnseen}%`, height: '100%', background: '#374151', transition: 'width 0.3s ease' }} title={`Unseen: ${progressSegments.unseen} cards`} />
+          <div style={{ width: `${progressSegments.pctUnseen}%`, height: '100%', background: '#4b5563', transition: 'width 0.3s ease' }} title={`Unseen: ${progressSegments.unseen} cards`} />
         )}
         {progressSegments.score1 > 0 && (
           <div style={{ width: `${progressSegments.pct1}%`, height: '100%', background: '#ef4444', transition: 'width 0.3s ease' }} title={`Not at all (1): ${progressSegments.score1} cards`} />
@@ -70,33 +71,33 @@ export const StudyProgressBar: React.FC<StudyProgressBarProps> = ({ queue, curre
       </div>
 
       {/* Legendary labels & Session metrics indicators */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <span style={{ fontSize: '9px', color: '#4b5563', fontWeight: 800, letterSpacing: '0.5px' }}>DECK MASTERY:</span>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10px', color: '#9ca3af' }} title="Unseen / New">
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#374151' }} /> {progressSegments.unseen}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '10px', color: '#8e8e93', fontWeight: 700, letterSpacing: '0.5px' }}>DECK STATUS:</span>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <span className="badge-premium" style={{ background: 'rgba(75, 85, 99, 0.15)', borderColor: 'rgba(75, 85, 99, 0.25)', color: '#d1d5db', fontSize: '9px', padding: '2px 6px' }} title="Unseen / New">
+              <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#4b5563', marginRight: '4px', display: 'inline-block' }} />New: {progressSegments.unseen}
             </span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10px', color: '#fca5a5' }} title="Rating 1 (Not at all)">
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#ef4444' }} /> {progressSegments.score1}
+            <span className="badge-premium badge-premium-danger" style={{ fontSize: '9px', padding: '2px 6px' }} title="Rating 1 (Not at all)">
+              <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#ef4444', marginRight: '4px', display: 'inline-block' }} />1: {progressSegments.score1}
             </span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10px', color: '#fdba74' }} title="Rating 2 (Slightly)">
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#f97316' }} /> {progressSegments.score2}
+            <span className="badge-premium" style={{ background: 'rgba(249, 115, 22, 0.12)', borderColor: 'rgba(249, 115, 22, 0.25)', color: '#fdba74', fontSize: '9px', padding: '2px 6px' }} title="Rating 2 (Slightly)">
+              <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#f97316', marginRight: '4px', display: 'inline-block' }} />2: {progressSegments.score2}
             </span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10px', color: '#fde047' }} title="Rating 3 (Moderately)">
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#eab308' }} /> {progressSegments.score3}
+            <span className="badge-premium badge-premium-amber" style={{ fontSize: '9px', padding: '2px 6px' }} title="Rating 3 (Moderately)">
+              <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#eab308', marginRight: '4px', display: 'inline-block' }} />3: {progressSegments.score3}
             </span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10px', color: '#6ee7b7' }} title="Rating 4 (Very well)">
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981' }} /> {progressSegments.score4}
+            <span className="badge-premium badge-premium-green" style={{ fontSize: '9px', padding: '2px 6px' }} title="Rating 4 (Very well)">
+              <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#10b981', marginRight: '4px', display: 'inline-block' }} />4: {progressSegments.score4}
             </span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '10px', color: '#93c5fd' }} title="Rating 5 (Perfectly)">
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#3b82f6' }} /> {progressSegments.score5}
+            <span className="badge-premium badge-premium-blue" style={{ fontSize: '9px', padding: '2px 6px' }} title="Rating 5 (Perfectly)">
+              <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#3b82f6', marginRight: '4px', display: 'inline-block' }} />5: {progressSegments.score5}
             </span>
           </div>
         </div>
 
-        <span style={{ fontSize: '10px', color: '#6b7280', fontWeight: 700 }}>
-          Session: {currentIndex + 1} / {queue.length}
+        <span className="badge-premium" style={{ fontSize: '10px', color: '#a5b4fc', borderColor: 'rgba(99, 102, 241, 0.25)', background: 'rgba(99, 102, 241, 0.08)', fontWeight: 700 }}>
+          Session Card: {currentIndex + 1} / {queue.length}
         </span>
       </div>
     </div>

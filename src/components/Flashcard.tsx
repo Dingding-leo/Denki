@@ -207,7 +207,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({ card, isFlipped, onFlip, a
               <div
                 className="markdown-content"
                 dangerouslySetInnerHTML={{ __html: cardFrontHTML }}
-                style={{ fontSize: '1.65rem', color: '#f3f4f6', lineHeight: 1.6 }}
+                style={{ fontSize: '1.65rem', color: '#f3f4f6', lineHeight: 1.6, textAlign: 'center', maxWidth: '800px', margin: '0 auto' }}
               />
               </div>
             </div>
@@ -254,7 +254,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({ card, isFlipped, onFlip, a
               <div
                 className="markdown-content"
                 dangerouslySetInnerHTML={{ __html: cardBackHTML }}
-                style={{ fontSize: '1.65rem', color: '#f3f4f6', lineHeight: 1.6 }}
+                style={{ fontSize: '1.65rem', color: '#f3f4f6', lineHeight: 1.6, textAlign: 'center', maxWidth: '800px', margin: '0 auto' }}
               />
               </div>
             </div>

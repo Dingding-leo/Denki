@@ -1,27 +1,27 @@
 /* Denki Core Design System */
 
 :root {
-  --bg-primary: #000000; /* Apple true black background */
-  --bg-secondary: #1c1c1e; /* Apple system secondary background */
-  --bg-tertiary: #2c2c2e; /* Apple system tertiary background */
-  --bg-card: rgba(28, 28, 30, 0.65); /* Semi-translucent card style */
-  --bg-glass: rgba(20, 20, 25, 0.5); /* True translucent liquid glass */
+  --bg-primary: #090a0f; /* Deep obsidian navy background */
+  --bg-secondary: #11131c; /* Dark slate secondary background */
+  --bg-tertiary: #1a1d29; /* Tertiary background */
+  --bg-card: rgba(22, 25, 38, 0.6); /* Semi-translucent card style */
+  --bg-glass: rgba(13, 15, 23, 0.65); /* True translucent liquid glass */
   
-  --border-glass: rgba(255, 255, 255, 0.12); /* Glossy glass border highlight */
-  --border-active: #0a84ff; /* System Blue */
+  --border-glass: rgba(255, 255, 255, 0.14); /* Glossy glass border highlight */
+  --border-active: #6366f1; /* Indigo System Blue */
   
   --text-primary: #ffffff;
-  --text-secondary: #8e8e93; /* System Gray */
-  --text-muted: #636366; /* Muted Dark Gray */
+  --text-secondary: #9ca3af; /* Modern Gray */
+  --text-muted: #6b7280; /* Muted Dark Gray */
   
-  --accent-color: #0a84ff; /* System Blue */
-  --accent-glowing: rgba(10, 132, 255, 0.2);
+  --accent-color: #6366f1; /* Indigo Accent */
+  --accent-glowing: rgba(99, 102, 241, 0.15);
   
-  /* Study Ratings colors (Apple System Colors) */
-  --color-again: #ff453a; /* System Red */
-  --color-hard: #ff9f0a;  /* System Orange */
-  --color-good: #0a84ff;  /* System Blue */
-  --color-easy: #30d158;  /* System Green */
+  /* Study Ratings colors (Premium Colors) */
+  --color-again: #ff453a; 
+  --color-hard: #ff9f0a;  
+  --color-good: #3b82f6;  
+  --color-easy: #10b981;  
   
   /* Fonts */
   --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "SF Pro", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -161,6 +161,7 @@ body {
   perspective: 1500px;
   width: 100%;
   height: calc(100vh - 300px);
+  max-height: 480px;
   min-height: 360px;
   position: relative;
   cursor: pointer;
