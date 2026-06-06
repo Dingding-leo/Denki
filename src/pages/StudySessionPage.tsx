@@ -320,7 +320,7 @@ export const StudySessionPage: React.FC = () => {
         flexDirection: 'column',
         alignItems: 'center',
         width: '100%',
-        maxWidth: showNotes && studyMode === 'review' ? '1600px' : '780px',
+        maxWidth: showNotes && studyMode === 'review' ? '1600px' : '880px',
         margin: '0 auto',
         padding: '94px 0 24px 0',
         boxSizing: 'border-box',
@@ -402,7 +402,7 @@ export const StudySessionPage: React.FC = () => {
           <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
             
             {/* Brainscape-Style Deck Mastery Stacked Progress Bar */}
-            <div style={{ width: '100%', maxWidth: showNotes && studyMode === 'review' ? '1600px' : '780px', display: 'flex', flexDirection: 'column', gap: '8px', transition: 'max-width 0.3s ease' }}>
+            <div style={{ width: '100%', maxWidth: showNotes && studyMode === 'review' ? '1600px' : '880px', display: 'flex', flexDirection: 'column', gap: '8px', transition: 'max-width 0.3s ease' }}>
               <StudyProgressBar queue={queue} currentIndex={currentIndex} />
             </div>
 
@@ -410,7 +410,7 @@ export const StudySessionPage: React.FC = () => {
             <div style={{
               display: 'flex',
               width: '100%',
-              maxWidth: showNotes && studyMode === 'review' ? '1600px' : '780px',
+              maxWidth: showNotes && studyMode === 'review' ? '1600px' : '880px',
               gap: '24px',
               alignItems: 'stretch',
               justifyContent: 'center',

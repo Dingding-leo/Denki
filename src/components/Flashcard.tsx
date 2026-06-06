@@ -203,12 +203,14 @@ export const Flashcard: React.FC<FlashcardProps> = ({ card, isFlipped, onFlip, a
               </div>
             </div>
 
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', overflowY: 'auto', minHeight: 0, zIndex: 5 }}>
-              <div
-                className="markdown-content"
-                dangerouslySetInnerHTML={{ __html: cardFrontHTML }}
-                style={{ fontSize: '1.8rem', color: '#ffffff', fontWeight: 600, letterSpacing: '-0.01em', lineHeight: 1.55, textAlign: 'center', maxWidth: '100%', margin: '0 auto' }}
-              />
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', overflowY: 'auto', minHeight: 0, zIndex: 5, width: '100%' }}>
+              <div style={{ margin: 'auto 0', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px 0' }}>
+                <div
+                  className="markdown-content"
+                  dangerouslySetInnerHTML={{ __html: cardFrontHTML }}
+                  style={{ fontSize: '1.75rem', color: '#ffffff', fontWeight: 600, letterSpacing: '-0.012em', lineHeight: 1.5, textAlign: 'center', maxWidth: '100%', margin: '0 auto' }}
+                />
+              </div>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px', color: '#8e8e93', fontSize: '11px', letterSpacing: '0.5px', textTransform: 'uppercase', fontWeight: 700, marginTop: '16px', zIndex: 5, opacity: 0.8 }}>
@@ -243,18 +245,20 @@ export const Flashcard: React.FC<FlashcardProps> = ({ card, isFlipped, onFlip, a
             </div>
 
             {/* Split layout if cloze deletion, showing card front as well */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', overflowY: 'auto', gap: '20px', minHeight: 0, zIndex: 5 }}>
-              {card.cardType === 'cloze' && (
-                <div style={{ opacity: 0.45, borderBottom: '1px dashed rgba(255,255,255,0.08)', paddingBottom: '16px', width: '100%', textAlign: 'center' }}>
-                  <div className="markdown-content" dangerouslySetInnerHTML={{ __html: cardFrontHTML }} style={{ fontSize: '1.3rem', fontWeight: 500 }} />
-                </div>
-              )}
-              
-              <div
-                className="markdown-content"
-                dangerouslySetInnerHTML={{ __html: cardBackHTML }}
-                style={{ fontSize: '1.8rem', color: '#ffffff', fontWeight: 600, letterSpacing: '-0.01em', lineHeight: 1.55, textAlign: 'center', maxWidth: '100%', margin: '0 auto' }}
-              />
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', overflowY: 'auto', minHeight: 0, zIndex: 5, width: '100%' }}>
+              <div style={{ margin: 'auto 0', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', padding: '16px 0' }}>
+                {card.cardType === 'cloze' && (
+                  <div style={{ opacity: 0.45, borderBottom: '1px dashed rgba(255,255,255,0.08)', paddingBottom: '16px', width: '100%', textAlign: 'center' }}>
+                    <div className="markdown-content" dangerouslySetInnerHTML={{ __html: cardFrontHTML }} style={{ fontSize: '1.3rem', fontWeight: 500 }} />
+                  </div>
+                )}
+                
+                <div
+                  className="markdown-content"
+                  dangerouslySetInnerHTML={{ __html: cardBackHTML }}
+                  style={{ fontSize: '1.75rem', color: '#ffffff', fontWeight: 600, letterSpacing: '-0.012em', lineHeight: 1.5, textAlign: 'center', maxWidth: '100%', margin: '0 auto' }}
+                />
+              </div>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px', color: '#8e8e93', fontSize: '11px', letterSpacing: '0.5px', textTransform: 'uppercase', fontWeight: 700, marginTop: '16px', zIndex: 5, opacity: 0.8 }}>
