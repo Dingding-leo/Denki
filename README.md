@@ -13,7 +13,7 @@
 [![Local-First](https://img.shields.io/badge/Database-Dexie-green?style=for-the-badge)](https://dexie.org)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=for-the-badge)](http://makeapullrequest.com)
 
-[**Live Demo**](#) • [**Quick Start**](#-quick-start) • [**Contributing**](#-contributing)
+[**🚀 Live Demo**](https://dingding-leo.github.io/Denki/) • [**Quick Start**](#-quick-start) • [**Contributing**](#-contributing)
 
 </div>
 

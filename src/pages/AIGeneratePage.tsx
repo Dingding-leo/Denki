@@ -181,21 +181,34 @@ const AIGeneratePage: React.FC = () => {
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <select
                 id="import-class"
+                value={selectedClassId ?? ''}
+                onChange={e => setSelectedClassId(e.target.value ? Number(e.target.value) : null)}
                 style={{
                   padding: '8px 14px', borderRadius: 10,
                   background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)',
                   color: 'var(--text-main)', fontSize: '0.9rem'
                 }}
               >
+                <option value="">Select class...</option>
                 {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <select
+                value={selectedDeckId ?? ''}
+                onChange={e => setSelectedDeckId(e.target.value ? Number(e.target.value) : null)}
+                disabled={!selectedClassId}
+                style={{
+                  padding: '8px 14px', borderRadius: 10,
+                  background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)',
+                  color: 'var(--text-main)', fontSize: '0.9rem'
+                }}
+              >
+                <option value="">Select deck...</option>
+                {decks.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
               </select>
               <button
                 className="btn-primary"
-                onClick={() => {
-                  const sel = (document.getElementById('import-class') as HTMLSelectElement);
-                  if (sel) approveAndImport(Number(sel.value));
-                }}
-                disabled={importing || classes.length === 0}
+                onClick={approveAndImport}
+                disabled={importing || !selectedClassId || !selectedDeckId}
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
               >
                 <CheckCircle size={18} />

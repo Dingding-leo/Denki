@@ -1,7 +1,7 @@
-import React from 'react';
-import { Sparkles, FolderOpen } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { useFlashcardStore } from '../store/useFlashcardStore';
 import { AnalyticsDashboard } from '../components/AnalyticsDashboard';
+import LandingPage from './LandingPage';
 import confetti from 'canvas-confetti';
 
 export const DashboardPage: React.FC = () => {
@@ -122,22 +122,7 @@ export const DashboardPage: React.FC = () => {
       </div>
       
       {store.classes.length === 0 ? (
-        <div className="card-deck-premium" style={{ textAlign: 'center', padding: '64px 32px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '24px' }}>
-          <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'var(--bg-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-primary)', marginBottom: '4px' }}>
-            <FolderOpen size={28} />
-          </div>
-          <h3 style={{ fontSize: '24px', color: '#ffffff', fontWeight: 800, letterSpacing: '-0.02em' }}>Welcome to Denki</h3>
-          <p style={{ color: '#9ca3af', maxWidth: '480px', fontSize: '14px', lineHeight: 1.6 }}>
-            Unlock FSRS spaced-repetition efficiency. Get started by seeding our curated Computer Science and Spanish workspaces, or create your own custom Class in the sidebar.
-          </p>
-          <button
-            onClick={seedDefaultDecks}
-            className="btn-premium-primary hover-lift"
-            style={{ marginTop: '12px', padding: '12px 32px' }}
-          >
-            Seed Interactive Learning Materials
-          </button>
-        </div>
+        <LandingPage hasClasses={false} />
       ) : (
         <AnalyticsDashboard />
       )}
