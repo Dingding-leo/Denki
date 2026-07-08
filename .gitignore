@@ -25,3 +25,7 @@ dist-ssr
 
 # Backups
 denki-backup.json
+
+# Local skill / agent tooling artifacts
+.agents/
+skills-lock.json
