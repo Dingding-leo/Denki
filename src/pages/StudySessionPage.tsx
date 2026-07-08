@@ -10,6 +10,7 @@ import { StudyProgressBar } from '../components/StudyProgressBar';
 import { StudyCheckpoint } from '../components/StudyCheckpoint';
 import { StudySessionSummary } from '../components/StudySessionSummary';
 import confetti from 'canvas-confetti';
+import { reviewCard, formatInterval } from '../services/scheduler';
 
 export const StudySessionPage: React.FC = () => {
   const { classId, deckId } = useParams();
@@ -45,6 +46,7 @@ export const StudySessionPage: React.FC = () => {
   // Refs for stable keydown handler in review mode
   const handleRateCardRef = useRef<(rating: number) => void>(() => {});
   const handleExitStudyRef = useRef<() => void>(() => {});
+  const handleContinueRef = useRef<() => void>(() => {});
   const isFlippedRef = useRef(isFlipped);
   isFlippedRef.current = isFlipped;
   const checkpointOpenRef = useRef(checkpointOpen);
@@ -60,8 +62,18 @@ export const StudySessionPage: React.FC = () => {
         return;
       }
       
-      if (!store.session || store.session.queue.length === 0 || checkpointOpenRef.current) {
+      if (!store.session || store.session.queue.length === 0) {
         if (e.key === 'Escape') {
+          handleExitStudyRef.current();
+        }
+        return;
+      }
+
+      if (checkpointOpenRef.current) {
+        if (e.code === 'Space' || e.code === 'Enter') {
+          e.preventDefault();
+          handleContinueRef.current();
+        } else if (e.key === 'Escape') {
           handleExitStudyRef.current();
         }
         return;
@@ -69,7 +81,7 @@ export const StudySessionPage: React.FC = () => {
 
       if (e.code === 'Space' || e.code === 'Enter') {
         e.preventDefault();
-        setIsFlipped(true);
+        setIsFlipped(prev => !prev);
       }
       
       if (isFlippedRef.current) {
@@ -130,9 +142,15 @@ export const StudySessionPage: React.FC = () => {
     navigate(-1);
   };
 
+  const handleContinue = () => {
+    setCheckpointOpen(false);
+    cardStartTimeRef.current = Date.now();
+  };
+
   // Keep refs current so the stable useEffect handler uses the latest implementations
   handleRateCardRef.current = handleRateCard;
   handleExitStudyRef.current = handleExitStudy;
+  handleContinueRef.current = handleContinue;
 
   if (!store.session) {
     return <div style={{ display: 'flex', height: '100vh', justifyContent: 'center', alignItems: 'center', color: '#f3f4f6' }}>Loading study session...</div>;
@@ -142,28 +160,28 @@ export const StudySessionPage: React.FC = () => {
   const currentStreak = store.currentStreak;
   const totalTimeSpent = (Date.now() - sessionStartTimeRef.current) / 1000;
 
+  // Compute intervals for FSRS transparency when card is flipped
+  let predictedIntervals: string[] = ['', '', '', '', ''];
+  if (isFlipped && currentIndex < queue.length) {
+    const currentCard = queue[currentIndex];
+    predictedIntervals = [1, 2, 3, 4, 5].map(rating => {
+      const { updatedCard } = reviewCard(currentCard, rating as any);
+      return formatInterval(updatedCard.scheduledDays);
+    });
+  }
+
   return (
     <div style={{
       position: 'fixed',
       top: 0, left: 0, right: 0, bottom: 0,
-      background: 'rgba(9, 12, 21, 0.75)',
-      backdropFilter: 'blur(24px)',
-      WebkitBackdropFilter: 'blur(24px)',
+      background: 'var(--bg-primary)',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
-      justifyContent: 'flex-start',
       zIndex: 1000,
       padding: '0 24px',
-      overflowY: 'auto',
+      overflow: 'hidden',
     }}>
-      {/* Background Glowing meshes inside the study view overlay */}
-      <div className="bg-glow-container" style={{ zIndex: -1 }}>
-        <div className="bg-glow-1" />
-        <div className="bg-glow-2" />
-        <div className="bg-glow-3" />
-        <div className="bg-glow-4" />
-      </div>
 
       <header className="study-top-nav">
         {/* Left Side: Back button and Deck name stack */}
@@ -391,10 +409,7 @@ export const StudySessionPage: React.FC = () => {
             queueLength={queue.length}
             currentStreak={currentStreak}
             roundAverages={roundAverages}
-            onContinue={() => {
-              setCheckpointOpen(false);
-              cardStartTimeRef.current = Date.now();
-            }}
+            onContinue={handleContinue}
             onExit={handleExitStudy}
           />
         ) : (
@@ -489,6 +504,7 @@ export const StudySessionPage: React.FC = () => {
                       className="rating-btn-card rating-btn-1"
                       title="Not at all (1)"
                     >
+                      <span style={{ fontSize: '11px', fontWeight: 800, opacity: 0.9, marginBottom: '2px', color: '#fca5a5' }}>{predictedIntervals[0]}</span>
                       <span style={{ fontSize: '20px', fontWeight: 800 }}>1</span>
                       <span style={{ fontSize: '10px', fontWeight: 700, opacity: 0.9 }}>Not at all</span>
                       <kbd className="keycap-badge" style={{ marginTop: '4px' }}>1</kbd>
@@ -500,6 +516,7 @@ export const StudySessionPage: React.FC = () => {
                       className="rating-btn-card rating-btn-2"
                       title="Slightly (2)"
                     >
+                      <span style={{ fontSize: '11px', fontWeight: 800, opacity: 0.9, marginBottom: '2px', color: '#fcd34d' }}>{predictedIntervals[1]}</span>
                       <span style={{ fontSize: '20px', fontWeight: 800 }}>2</span>
                       <span style={{ fontSize: '10px', fontWeight: 700, opacity: 0.9 }}>Slightly</span>
                       <kbd className="keycap-badge" style={{ marginTop: '4px' }}>2</kbd>
@@ -511,6 +528,7 @@ export const StudySessionPage: React.FC = () => {
                       className="rating-btn-card rating-btn-3"
                       title="Moderately (3)"
                     >
+                      <span style={{ fontSize: '11px', fontWeight: 800, opacity: 0.9, marginBottom: '2px', color: '#fef08a' }}>{predictedIntervals[2]}</span>
                       <span style={{ fontSize: '20px', fontWeight: 800 }}>3</span>
                       <span style={{ fontSize: '10px', fontWeight: 700, opacity: 0.9 }}>Moderately</span>
                       <kbd className="keycap-badge" style={{ marginTop: '4px' }}>3</kbd>
@@ -522,6 +540,7 @@ export const StudySessionPage: React.FC = () => {
                       className="rating-btn-card rating-btn-4"
                       title="Very well (4)"
                     >
+                      <span style={{ fontSize: '11px', fontWeight: 800, opacity: 0.9, marginBottom: '2px', color: '#6ee7b7' }}>{predictedIntervals[3]}</span>
                       <span style={{ fontSize: '20px', fontWeight: 800 }}>4</span>
                       <span style={{ fontSize: '10px', fontWeight: 700, opacity: 0.9 }}>Very Well</span>
                       <kbd className="keycap-badge" style={{ marginTop: '4px' }}>4</kbd>
@@ -533,6 +552,7 @@ export const StudySessionPage: React.FC = () => {
                       className="rating-btn-card rating-btn-5"
                       title="Perfectly (5)"
                     >
+                      <span style={{ fontSize: '11px', fontWeight: 800, opacity: 0.9, marginBottom: '2px', color: '#93c5fd' }}>{predictedIntervals[4]}</span>
                       <span style={{ fontSize: '20px', fontWeight: 800 }}>5</span>
                       <span style={{ fontSize: '10px', fontWeight: 700, opacity: 0.9 }}>Perfectly</span>
                       <kbd className="keycap-badge" style={{ marginTop: '4px' }}>5</kbd>
