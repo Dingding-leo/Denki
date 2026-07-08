@@ -107,7 +107,7 @@ export const DashboardPage: React.FC = () => {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '30px', maxWidth: '1000px', margin: '0 auto', width: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1 style={{ fontSize: '32px', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.75px' }} className="gradient-text">Global Dashboard</h1>
+          <h1 style={{ fontSize: '32px', fontWeight: 700, color: '#ffffff', letterSpacing: '-0.02em' }}>Global Dashboard</h1>
           <p style={{ color: '#8e8e93', fontSize: '14px', marginTop: '6px' }}>Analyze aggregate class statistics and daily learning streak.</p>
         </div>
         
@@ -122,18 +122,18 @@ export const DashboardPage: React.FC = () => {
       </div>
       
       {store.classes.length === 0 ? (
-        <div className="card-deck-premium" style={{ textAlign: 'center', padding: '60px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
-          <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'rgba(99, 102, 241, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366f1', marginBottom: '8px' }}>
-            <FolderOpen size={32} />
+        <div className="card-deck-premium" style={{ textAlign: 'center', padding: '64px 32px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '24px' }}>
+          <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'var(--bg-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-primary)', marginBottom: '4px' }}>
+            <FolderOpen size={28} />
           </div>
-          <h3 style={{ fontSize: '22px', color: '#ffffff', fontWeight: 800, letterSpacing: '-0.5px' }}>Welcome to Denki</h3>
-          <p style={{ color: '#8e8e93', maxWidth: '440px', fontSize: '14px', lineHeight: 1.6 }}>
+          <h3 style={{ fontSize: '24px', color: '#ffffff', fontWeight: 800, letterSpacing: '-0.02em' }}>Welcome to Denki</h3>
+          <p style={{ color: '#9ca3af', maxWidth: '480px', fontSize: '14px', lineHeight: 1.6 }}>
             Unlock FSRS spaced-repetition efficiency. Get started by seeding our curated Computer Science and Spanish workspaces, or create your own custom Class in the sidebar.
           </p>
           <button
             onClick={seedDefaultDecks}
-            className="btn-premium-primary"
-            style={{ marginTop: '8px' }}
+            className="btn-premium-primary hover-lift"
+            style={{ marginTop: '12px', padding: '12px 32px' }}
           >
             Seed Interactive Learning Materials
           </button>

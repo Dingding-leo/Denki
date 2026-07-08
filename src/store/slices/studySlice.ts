@@ -30,27 +30,14 @@ export const createStudySlice: StateCreator<
       });
     }
 
-    // Build weighted queue using FSRS parameters and lastRating directly from the card
-    const weightedQueue: Card[] = [];
-    for (const card of filteredCards) {
-      const rating = card.lastRating ?? 0; // 0 = unseen / new
-      let copies: number;
-      if (rating <= 1) copies = 5;       // Unseen or Rating 1 (Again)
-      else if (rating === 2) copies = 4; // Rating 2 (Hard)
-      else if (rating === 3) copies = 3; // Rating 3 (Good)
-      else if (rating === 4) copies = 2; // Rating 4 (Easy)
-      else copies = 1;                   // Rating 5 (Perfect)
-      
-      for (let i = 0; i < copies; i++) {
-        weightedQueue.push(card);
-      }
-    }
+    // Build weighted queue containing exactly 1 copy of each card for FSRS session order
+    const weightedQueue: Card[] = [...filteredCards];
     
-    // Shuffle using Fisher-Yates
-    for (let i = weightedQueue.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [weightedQueue[i], weightedQueue[j]] = [weightedQueue[j], weightedQueue[i]];
-    }
+    // Sort chronologically by card ID or creation date (first created to last)
+    weightedQueue.sort((a, b) => {
+      if (a.id && b.id) return a.id - b.id;
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    });
 
     set({
       session: {
@@ -79,27 +66,14 @@ export const createStudySlice: StateCreator<
       });
     }
 
-    // Build weighted queue using card.lastRating directly
-    const weightedQueue: Card[] = [];
-    for (const card of filteredCards) {
-      const rating = card.lastRating ?? 0;
-      let copies: number;
-      if (rating <= 1) copies = 5;
-      else if (rating === 2) copies = 4;
-      else if (rating === 3) copies = 3;
-      else if (rating === 4) copies = 2;
-      else copies = 1;
-      
-      for (let i = 0; i < copies; i++) {
-        weightedQueue.push(card);
-      }
-    }
+    // Build weighted queue containing exactly 1 copy of each card for FSRS session order
+    const weightedQueue: Card[] = [...filteredCards];
     
-    // Fisher-Yates shuffle
-    for (let i = weightedQueue.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [weightedQueue[i], weightedQueue[j]] = [weightedQueue[j], weightedQueue[i]];
-    }
+    // Sort chronologically by card ID or creation date (first created to last)
+    weightedQueue.sort((a, b) => {
+      if (a.id && b.id) return a.id - b.id;
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    });
 
     set({
       session: {
@@ -165,6 +139,8 @@ export const createStudySlice: StateCreator<
     // Re-insert card back into the queue ONLY for low-confidence ratings.
     // Cards rated 3+ are handled by the FSRS scheduler for future sessions.
     const newQueue = [...queue];
+    newQueue[currentIndex] = updatedCard; // Update the reference at current index so progress segments can read the new rating
+    
     const nextIndex = currentIndex + 1;
     const nextCompleted = completedCount + 1;
 

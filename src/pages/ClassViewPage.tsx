@@ -159,12 +159,12 @@ export const ClassViewPage: React.FC = () => {
               {classDueCount > 0 ? (
                 <button
                   onClick={() => handleStartClassStudy(activeClass.id || 0)}
-                  className="btn-premium-success"
+                  className="btn-premium-primary"
                 >
                   <Play size={16} /> Study All Due in Class ({classDueCount})
                 </button>
               ) : (
-                <span style={{ fontSize: '13px', color: '#30d158', fontWeight: 600 }}>
+                <span style={{ fontSize: '13px', color: '#10b981', fontWeight: 600 }}>
                   ✓ All caught up with this class!
                 </span>
               )}
@@ -195,8 +195,8 @@ export const ClassViewPage: React.FC = () => {
               </div>
               <button
                 type="submit"
-                className="btn-premium-primary"
-                style={{ height: '40px', padding: '0 20px' }}
+                className="btn-premium-secondary"
+                style={{ height: '37px', padding: '0 20px' }}
               >
                 Add Deck
               </button>
@@ -295,18 +295,17 @@ export const ClassViewPage: React.FC = () => {
                           {Math.round(deck.masteryPct)}% mastered
                         </span>
                       </div>
-
                       {/* Bottom action row */}
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                         {/* Secondary utility actions (Import, Reset) */}
                         <div style={{ display: 'flex', gap: '6px' }}>
                           <button
                             onClick={() => deck.id && setImportingDeckId(deck.id)}
-                            style={{ width: '28px', height: '28px', padding: 0 }}
-                            className="btn-premium-secondary"
+                            style={{ width: '32px', height: '32px', padding: 0 }}
+                            className="btn-premium-secondary hover-lift"
                             title="Import Cards via CSV"
                           >
-                            <Upload size={12} />
+                            <Upload size={13} />
                           </button>
 
                           <button
@@ -315,11 +314,11 @@ export const ClassViewPage: React.FC = () => {
                                 await store.resetDeckProgress(deck.id);
                               }
                             }}
-                            style={{ width: '28px', height: '28px', padding: 0 }}
-                            className="btn-premium-danger"
+                            style={{ width: '32px', height: '32px', padding: 0 }}
+                            className="btn-premium-danger hover-lift"
                             title="Reset all learning history and progress for this deck"
                           >
-                            <RotateCcw size={12} />
+                            <RotateCcw size={13} />
                           </button>
                         </div>
 
@@ -327,8 +326,8 @@ export const ClassViewPage: React.FC = () => {
                         <div style={{ display: 'flex', gap: '6px' }}>
                           <button
                             onClick={() => deck.id && setManagingDeckId(deck.id)}
-                            style={{ height: '28px', padding: '0 10px', fontSize: '11px' }}
-                            className="btn-premium-secondary"
+                            style={{ height: '32px', padding: '0 12px', fontSize: '11px' }}
+                            className="btn-premium-secondary hover-lift"
                           >
                             <Edit2 size={11} /> Cards
                           </button>
@@ -336,8 +335,8 @@ export const ClassViewPage: React.FC = () => {
                           <button
                             onClick={() => deck.id && deck.total > 0 && handleStartDeckStudy(deck.id)}
                             disabled={deck.total === 0}
-                            style={{ height: '28px', padding: '0 12px', fontSize: '11px' }}
-                            className="btn-premium-primary"
+                            style={{ height: '32px', padding: '0 14px', fontSize: '11px' }}
+                            className="btn-premium-primary hover-lift"
                             title={deck.total === 0 ? "Add cards before studying" : undefined}
                           >
                             Study <ChevronRight size={11} />

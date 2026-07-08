@@ -39,10 +39,8 @@ export const Sidebar: React.FC = () => {
     <>
       <aside style={{
         width: sidebarCollapsed ? '72px' : '280px',
-        background: 'rgba(28, 28, 30, 0.8)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        borderRight: '1px solid rgba(255, 255, 255, 0.08)',
+        background: 'var(--bg-primary)',
+        borderRight: '1px solid var(--border-glass)',
         display: 'flex',
         flexDirection: 'column',
         zIndex: 10,
@@ -60,19 +58,22 @@ export const Sidebar: React.FC = () => {
             width: '24px',
             height: '24px',
             borderRadius: '50%',
-            background: '#2c2c2e',
-            border: '1px solid rgba(255, 255, 255, 0.12)',
+            background: 'rgba(255, 255, 255, 0.05)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             color: '#8e8e93',
             cursor: 'pointer',
             zIndex: 100,
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.4)',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.35)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
           }}
+          className="hover-lift"
           title={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
         >
-          {sidebarCollapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
+          {sidebarCollapsed ? <ChevronRight size={12} style={{ color: '#ffffff' }} /> : <ChevronLeft size={12} style={{ color: '#ffffff' }} />}
         </button>
 
         {/* Logo Brand Header */}
@@ -89,12 +90,12 @@ export const Sidebar: React.FC = () => {
             width: '32px',
             height: '32px',
             borderRadius: '8px',
-            background: 'linear-gradient(135deg, #0a84ff, #5e5ce6)',
+            background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             color: 'white',
-            boxShadow: '0 0 12px rgba(10, 132, 255, 0.2)',
+            boxShadow: '0 0 12px rgba(99, 102, 241, 0.25)',
             flexShrink: 0,
           }}>
             <Sparkles size={16} />
@@ -129,7 +130,7 @@ export const Sidebar: React.FC = () => {
               padding: '10px 12px',
               borderRadius: '8px',
               border: 'none',
-              background: isActive && !activeClassId ? 'linear-gradient(90deg, rgba(10, 132, 255, 0.15) 0%, rgba(94, 92, 230, 0.05) 100%)' : 'transparent',
+              background: isActive && !activeClassId ? 'linear-gradient(90deg, rgba(99, 102, 241, 0.12) 0%, rgba(99, 102, 241, 0.02) 100%)' : 'transparent',
               color: isActive && !activeClassId ? '#ffffff' : '#8e8e93',
               fontSize: '13px',
               fontWeight: 600,
@@ -137,13 +138,13 @@ export const Sidebar: React.FC = () => {
               transition: 'all 0.2s ease',
               justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
               textDecoration: 'none',
-              borderLeft: isActive && !activeClassId ? '3px solid #0a84ff' : '3px solid transparent'
+              borderLeft: isActive && !activeClassId ? '3px solid #6366f1' : '3px solid transparent'
             })}
             className="hover-glow hover-lift"
           >
             {({ isActive }) => (
               <>
-                <LayoutDashboard size={16} style={{ color: isActive && !activeClassId ? '#0a84ff' : '#8e8e93', flexShrink: 0 }} />
+                <LayoutDashboard size={16} style={{ color: isActive && !activeClassId ? '#6366f1' : '#8e8e93', flexShrink: 0 }} />
                 {!sidebarCollapsed && <span>Dashboard Home</span>}
               </>
             )}
@@ -201,15 +202,13 @@ export const Sidebar: React.FC = () => {
                     padding: sidebarCollapsed ? '10px 0' : '10px 12px',
                     borderRadius: '8px',
                     border: 'none',
-                    background: isSelected ? 'linear-gradient(90deg, rgba(10, 132, 255, 0.15) 0%, rgba(94, 92, 230, 0.05) 100%)' : 'transparent',
+                    background: isSelected ? 'rgba(255, 255, 255, 0.06)' : 'transparent',
                     color: isSelected ? '#ffffff' : '#8e8e93',
                     cursor: 'pointer',
                     transition: 'all 0.15s ease',
                     justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
-                    borderLeft: isSelected ? '3px solid #0a84ff' : '3px solid transparent',
                     textDecoration: 'none'
                   }}
-                  className="hover-glow hover-lift"
                   title={sidebarCollapsed ? `${cls.name} (${cls.total} cards)` : undefined}
                 >
                   <div style={{ position: 'relative', width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -227,8 +226,8 @@ export const Sidebar: React.FC = () => {
                       />
                       <defs>
                         <linearGradient id={`classMasterGrad-${cls.id}`} x1="0" y1="0" x2="1" y2="1">
-                          <stop offset="0%" stopColor="#0a84ff" />
-                          <stop offset="100%" stopColor="#30d158" />
+                          <stop offset="0%" stopColor="#6366f1" />
+                          <stop offset="100%" stopColor="#10b981" />
                         </linearGradient>
                       </defs>
                     </svg>
@@ -250,9 +249,9 @@ export const Sidebar: React.FC = () => {
  
                   {!sidebarCollapsed && cls.dueCount > 0 && (
                     <span style={{
-                      background: 'rgba(10, 132, 255, 0.15)',
-                      border: '1px solid rgba(10, 132, 255, 0.3)',
-                      color: '#0a84ff',
+                      background: 'rgba(99, 102, 241, 0.1)',
+                      border: '1px solid rgba(99, 102, 241, 0.25)',
+                      color: '#a5b4fc',
                       fontSize: '9px',
                       fontWeight: 700,
                       padding: '2px 6px',

@@ -38,7 +38,7 @@ export const AnalyticsDashboard: React.FC = () => {
       }}>
         {/* Metric 1 */}
         <div className="card-deck-premium" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '20px' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(99, 102, 241, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366f1', boxShadow: '0 0 10px rgba(99, 102, 241, 0.15)' }}>
+          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(99, 102, 241, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366f1' }}>
             <Award size={24} />
           </div>
           <div>
@@ -51,7 +51,7 @@ export const AnalyticsDashboard: React.FC = () => {
 
         {/* Metric 2 */}
         <div className="card-deck-premium" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '20px' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(16, 185, 129, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981', boxShadow: '0 0 10px rgba(16, 185, 129, 0.15)' }}>
+          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(16, 185, 129, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981' }}>
             <Calendar size={24} />
           </div>
           <div>
@@ -64,7 +64,7 @@ export const AnalyticsDashboard: React.FC = () => {
 
         {/* Metric 3 */}
         <div className="card-deck-premium" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '20px' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(59, 130, 246, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3b82f6', boxShadow: '0 0 10px rgba(59, 130, 246, 0.15)' }}>
+          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(59, 130, 246, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3b82f6' }}>
             <TrendingUp size={24} />
           </div>
           <div>
@@ -77,7 +77,7 @@ export const AnalyticsDashboard: React.FC = () => {
 
         {/* Metric 4 */}
         <div className="card-deck-premium" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '20px' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(245, 158, 11, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b', boxShadow: '0 0 10px rgba(245, 158, 11, 0.15)' }}>
+          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(245, 158, 11, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b' }}>
             <Layers size={24} />
           </div>
           <div>

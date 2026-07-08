@@ -10,9 +10,17 @@ export const StudyProgressBar: React.FC<StudyProgressBarProps> = ({ queue, curre
   const progressSegments = useMemo(() => {
     if (queue.length === 0) return null;
     
+    // Deduplicate by card ID, keeping the latest card state in the queue
+    const uniqueCardsMap = new Map<number, Card>();
+    queue.forEach(card => {
+      if (card.id !== undefined) {
+        uniqueCardsMap.set(card.id, card);
+      }
+    });
+
     let score1 = 0, score2 = 0, score3 = 0, score4 = 0, score5 = 0, unseen = 0;
     
-    queue.forEach(card => {
+    uniqueCardsMap.forEach(card => {
       const r = card.lastRating;
       if (r === 1) score1++;
       else if (r === 2) score2++;
@@ -22,15 +30,16 @@ export const StudyProgressBar: React.FC<StudyProgressBarProps> = ({ queue, curre
       else unseen++;
     });
     
-    const total = queue.length;
+    const total = uniqueCardsMap.size;
     return {
       unseen, score1, score2, score3, score4, score5,
-      pctUnseen: (unseen / total) * 100,
-      pct1: (score1 / total) * 100,
-      pct2: (score2 / total) * 100,
-      pct3: (score3 / total) * 100,
-      pct4: (score4 / total) * 100,
-      pct5: (score5 / total) * 100,
+      total,
+      pctUnseen: total > 0 ? (unseen / total) * 100 : 0,
+      pct1: total > 0 ? (score1 / total) * 100 : 0,
+      pct2: total > 0 ? (score2 / total) * 100 : 0,
+      pct3: total > 0 ? (score3 / total) * 100 : 0,
+      pct4: total > 0 ? (score4 / total) * 100 : 0,
+      pct5: total > 0 ? (score5 / total) * 100 : 0,
     };
   }, [queue]);
 

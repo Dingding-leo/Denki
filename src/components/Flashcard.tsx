@@ -137,6 +137,17 @@ export const Flashcard: React.FC<FlashcardProps> = ({ card, isFlipped, onFlip, a
     setShowScratchpad(!showScratchpad);
   };
 
+  const getFontSize = (text: string) => {
+    const hasList = text.includes('\n') || text.includes('- ') || text.includes('1. ') || text.includes('* ');
+    if (text.length > 250 || hasList) {
+      return '1.15rem';
+    }
+    if (text.length > 100) {
+      return '1.4rem';
+    }
+    return '1.75rem';
+  };
+
   const cardFrontHTML = renderContent(card.front, card.cardType === 'cloze', isFlipped);
   const cardBackHTML = renderContent(card.back, false, true);
 
@@ -158,12 +169,10 @@ export const Flashcard: React.FC<FlashcardProps> = ({ card, isFlipped, onFlip, a
         aria-label="Flip flashcard"
         className={`perspective-container ${isFlipped ? 'flipped' : ''}`}
       >
-        <div className="card-glowing-glow" />
-        
         <div className="flip-card-inner">
           
           {/* FRONT OF THE CARD */}
-          <div className="flip-card-front" style={{ padding: '32px 40px' }}>
+          <div className="flip-card-front" style={{ padding: '24px 32px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', width: '100%', zIndex: 5 }}>
               <span className="badge-premium badge-premium-blue" style={{ fontSize: '10px', textTransform: 'uppercase', padding: '4px 10px', borderRadius: '30px', fontWeight: 700 }}>
                 <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#6366f1', marginRight: '6px', display: 'inline-block', boxShadow: '0 0 8px #6366f1' }} />
@@ -203,12 +212,12 @@ export const Flashcard: React.FC<FlashcardProps> = ({ card, isFlipped, onFlip, a
               </div>
             </div>
 
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', overflowY: 'auto', minHeight: 0, zIndex: 5, width: '100%' }}>
-              <div style={{ margin: 'auto 0', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px 0' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', overflowY: 'hidden', minHeight: 0, zIndex: 5, width: '100%' }}>
+              <div style={{ margin: 'auto 0', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '8px 0' }}>
                 <div
                   className="markdown-content"
                   dangerouslySetInnerHTML={{ __html: cardFrontHTML }}
-                  style={{ fontSize: '1.75rem', color: '#ffffff', fontWeight: 600, letterSpacing: '-0.012em', lineHeight: 1.5, textAlign: 'center', maxWidth: '100%', margin: '0 auto' }}
+                  style={{ fontSize: getFontSize(card.front), color: '#ffffff', fontWeight: 600, letterSpacing: '-0.012em', lineHeight: 1.4, textAlign: 'center', maxWidth: '100%', margin: '0 auto' }}
                 />
               </div>
             </div>
@@ -222,7 +231,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({ card, isFlipped, onFlip, a
           </div>
 
           {/* BACK OF THE CARD */}
-          <div className="flip-card-back" style={{ padding: '32px 40px' }}>
+          <div className="flip-card-back" style={{ padding: '24px 32px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', width: '100%', zIndex: 5 }}>
               <span className="badge-premium badge-premium-green" style={{ fontSize: '10px', textTransform: 'uppercase', padding: '4px 10px', borderRadius: '30px', fontWeight: 700 }}>
                 <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', marginRight: '6px', display: 'inline-block', boxShadow: '0 0 8px #10b981' }} />
@@ -245,18 +254,18 @@ export const Flashcard: React.FC<FlashcardProps> = ({ card, isFlipped, onFlip, a
             </div>
 
             {/* Split layout if cloze deletion, showing card front as well */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', overflowY: 'auto', minHeight: 0, zIndex: 5, width: '100%' }}>
-              <div style={{ margin: 'auto 0', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', padding: '16px 0' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', overflowY: 'hidden', minHeight: 0, zIndex: 5, width: '100%' }}>
+              <div style={{ margin: 'auto 0', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', padding: '8px 0' }}>
                 {card.cardType === 'cloze' && (
-                  <div style={{ opacity: 0.45, borderBottom: '1px dashed rgba(255,255,255,0.08)', paddingBottom: '16px', width: '100%', textAlign: 'center' }}>
-                    <div className="markdown-content" dangerouslySetInnerHTML={{ __html: cardFrontHTML }} style={{ fontSize: '1.3rem', fontWeight: 500 }} />
+                  <div style={{ opacity: 0.45, borderBottom: '1px dashed rgba(255,255,255,0.08)', paddingBottom: '12px', width: '100%', textAlign: 'center' }}>
+                    <div className="markdown-content" dangerouslySetInnerHTML={{ __html: cardFrontHTML }} style={{ fontSize: '1.2rem', fontWeight: 500 }} />
                   </div>
                 )}
                 
                 <div
                   className="markdown-content"
                   dangerouslySetInnerHTML={{ __html: cardBackHTML }}
-                  style={{ fontSize: '1.75rem', color: '#ffffff', fontWeight: 600, letterSpacing: '-0.012em', lineHeight: 1.5, textAlign: 'center', maxWidth: '100%', margin: '0 auto' }}
+                  style={{ fontSize: getFontSize(card.back), color: '#ffffff', fontWeight: 600, letterSpacing: '-0.012em', lineHeight: 1.4, textAlign: 'center', maxWidth: '100%', margin: '0 auto' }}
                 />
               </div>
             </div>

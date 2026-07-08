@@ -180,3 +180,28 @@ export function reviewCard(
 
   return { updatedCard, log };
 }
+
+/**
+ * Converts a fractional day interval into a human-readable string.
+ * Examples: "< 5m", "15m", "1h", "1d", "3mo", "1.5y"
+ */
+export function formatInterval(days: number): string {
+  if (days < 0.0035) return '< 5m';
+  if (days < 0.041) {
+    const mins = Math.round(days * 24 * 60);
+    return `${mins}m`;
+  }
+  if (days < 1.0) {
+    const hours = Math.round(days * 24);
+    return `${hours}h`;
+  }
+  if (days < 30) {
+    return `${Math.round(days)}d`;
+  }
+  if (days < 365) {
+    const months = (days / 30).toFixed(1).replace('.0', '');
+    return `${months}mo`;
+  }
+  const years = (days / 365).toFixed(1).replace('.0', '');
+  return `${years}y`;
+}
