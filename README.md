@@ -1,66 +1,103 @@
-# ⚡ Denki (電気) — The Ultimate Spaced Repetition Flashcard Studio
+<div align="center">
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Built with React](https://img.shields.io/badge/Built%20with-React%2019-blue?logo=react)](https://react.dev)
-[![Vite](https://img.shields.io/badge/Bundled%20with-Vite%208-646CFF?logo=vite)](https://vite.dev)
-[![Local-First](https://img.shields.io/badge/Database-IndexedDB%20(Dexie)-green)](https://dexie.org)
+<!-- Logo Placeholder: Use an animated SVG or GIF here -->
+<img src="./src/assets/logo.png" alt="Denki Logo" width="150" />
 
-**Denki** (Japanese for *electricity*) is a premium, local-first flashcard studio engineered for learners who demand both scientific precision and breathtaking aesthetics. 
+# ⚡ Denki (電気)
 
-Powered by the state-of-the-art **FSRS 4.5** memory scheduler, Denki eliminates the friction of studying, replacing cluttered legacy interfaces with a gorgeous glassmorphic, immersive canvas designed to boost retention and keep you in the flow state.
+**The Ultimate Local-First Spaced Repetition Studio that feels like magic.**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
+[![Built with React](https://img.shields.io/badge/React-19-000000?style=for-the-badge&logo=react)](https://react.dev)
+[![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=for-the-badge&logo=vite)](https://vite.dev)
+[![Local-First](https://img.shields.io/badge/Database-Dexie-green?style=for-the-badge)](https://dexie.org)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=for-the-badge)](http://makeapullrequest.com)
+
+[**Live Demo**](#) • [**Quick Start**](#-quick-start) • [**Contributing**](#-contributing)
+
+</div>
 
 ---
 
-## ✨ Key Features
+## 🌟 Why Denki?
 
-### 🧠 1. State-of-the-Art Spaced Repetition (FSRS 4.5)
-Legacy flashcard apps rely on decades-old SM-2 algorithms. Denki implements the **Free Spaced Repetition Scheduler (FSRS) v4.5**, the modern standard in cognitive science.
-- **Dynamic Stability & Difficulty Tracking**: Learns how *you* learn.
-- **Targeted Retention**: Schedules reviews to optimize a customizable probability of recall (default: 90%).
-- **Dual Review Systems**: Choose between classic Anki-style review scores or Brainscape-style 1-to-5 confidence ratings.
+**Denki** (Japanese for *electricity*) is a premium, offline-first flashcard studio engineered for learners who demand scientific precision wrapped in breathtaking aesthetics. 
 
-### 🎨 2. Immersive, Glowing Interface
-- **Premium Glassmorphic Panel Design**: Sleek dark mode with glowing mesh gradient backgrounds.
-- **Smooth 3D Card Flipping**: Tactile micro-animations that feel physical and responsive.
-- **Gamified Rewards**: Celebratory canvas confetti transitions to keep dopamine high.
+Powered by the state-of-the-art **FSRS 4.5** memory scheduler, Denki eliminates the friction of studying. We replaced cluttered, legacy interfaces with a glowing, glassmorphic canvas designed to boost retention and keep you in the ultimate flow state.
 
-### ✍️ 3. Integrated Interactive Canvas & Scratchpad
-- Never search for scrap paper again. Sketch kanji, draw diagrams, write mathematical formulas, or trace chemical structures directly on top of your flashcard using the interactive digital scratchpad.
+---
 
-### 📝 4. Rich Markdown & Syntax Highlighting
-- Create cards with headings, lists, bold text, code blocks (powered by PrismJS), blockquotes, and **Interactive Cloze Deletions** (fill-in-the-blanks) that reveal themselves with a click.
+## 🏆 How We Compare
 
-### 🕹️ 5. Speed Match Game
-- Break up long study sessions with a fast-paced, interactive card-matching game. Test your instant recall and beat your high scores!
+| Feature | ⚡ **Denki** | 🟦 **Anki** | 🟪 **Quizlet** | 🔵 **RemNote** |
+| :--- | :---: | :---: | :---: | :---: |
+| **Spaced Repetition Algorithm** | FSRS 4.5 | SM-2 / FSRS | Basic | SM-2 variant |
+| **Offline First** | 🟢 Yes (100%) | 🟢 Yes | 🔴 No | 🟡 Partial |
+| **UI / UX Aesthetics** | ✨ Stunning Glassmorphism | 💀 Legacy / Clunky | 🎨 Modern | 📋 Utilitarian |
+| **Built-in Scratchpad** | 🟢 Yes (Native) | 🟡 Needs Plugin | 🔴 No | 🔴 No |
+| **Speed Match Game** | 🟢 Yes | 🔴 No | 🟢 Yes | 🔴 No |
+| **Native Cloze Deletions** | 🟢 Yes | 🟢 Yes | 🔴 No | 🟢 Yes |
+| **Open Source** | 🟢 Yes | 🟢 Yes | 🔴 No | 🔴 No |
 
-### 📥 6. Universal Import Suite
-- **Anki Importer (`.apkg`)**: Instantly migrate your Anki decks, images, and card formats.
-- **CSV Importer**: Drag and drop spreadsheets to batch-generate hundreds of cards in seconds.
+---
 
-### 🔒 7. Local-First & Lightning Fast
-- All decks, review history, and cards are stored in your browser using **Dexie.js (IndexedDB)**.
-- 100% offline functionality. Your data never leaves your device.
+## 📸 Sneak Peek
+
+*Replace these placeholders with actual high-quality screenshots:*
+
+> **[🖼️ Screenshot 1 Placeholder]** 
+> *Showcase the Glowing Glassmorphic Study Dashboard with study streaks and progress rings.*
+
+> **[🖼️ Screenshot 2 Placeholder]** 
+> *Highlight the interactive Canvas/Scratchpad mode where users draw directly on flashcards.*
+
+> **[🖼️ Screenshot 3 Placeholder]** 
+> *Show the fast-paced Match Game interface with confetti and high scores.*
+
+---
+
+## ✨ Features that Spark Joy
+
+- 🧠 **Next-Gen Memory Engine (FSRS 4.5)**: Denki utilizes the Free Spaced Repetition Scheduler v4.5, optimizing your reviews for a targeted 90% recall probability. Study less, remember more.
+- 🎨 **Immersive, Glowing Interface**: A sleek dark mode with mesh gradients, 3D card flips, and buttery-smooth micro-animations that make learning feel tactile.
+- ✍️ **Integrated Scratchpad**: Never look for scrap paper again. Sketch kanji, trace formulas, or draw diagrams right on top of your flashcards.
+- 🕹️ **Speed Match Game**: Break the monotony of reviews with an integrated arcade-style matching game.
+- 📥 **1-Click Import Suite**: Drag-and-drop your `.apkg` files to instantly migrate from Anki, or upload CSVs to batch-create hundreds of cards.
+- ⚡ **Lightning Fast & Local-First**: Built on Dexie.js (IndexedDB). Your cards load instantly, work 100% offline, and your data never leaves your device.
+- 📝 **Rich Markdown & Syntax Highlighting**: Fully supports code blocks, math, blockquotes, and interactive Cloze Deletions (fill-in-the-blanks).
+
+---
+
+## 🆚 Why Denki over Anki?
+
+Anki is a phenomenal tool that popularized spaced repetition, but let's be honest—its interface feels like it's stuck in 2005. 
+
+**Denki is built for the modern learner.** 
+We took the most powerful scheduling algorithms available today (FSRS) and wrapped them in an interface you'll *actually want* to use. 
+- **Zero Configuration**: No need to download 15 plugins just to make the app look good or get a functional scratchpad. Denki is gorgeous and feature-rich out of the box.
+- **Web Native**: Runs entirely in your browser without desktop clients, yet works perfectly offline.
+- **Micro-interactions**: From tactile card flips to celebratory confetti, Denki uses psychological rewards to keep your dopamine high and study fatigue low.
 
 ---
 
 ## 🛠️ The Tech Stack
 
-Denki is built using modern, lightweight, and high-performance technologies:
-- **Frontend Framework**: [React 19](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/)
-- **Bundler & Build Tool**: [Vite 8](https://vite.dev/)
-- **State Management**: [Zustand](https://zustand.docs.pmnd.rs/) (for ultra-fast, reactive atomic state)
-- **Local Database**: [Dexie.js](https://dexie.org/) (robust wrapper for IndexedDB)
-- **Styling**: Vanilla CSS custom variables (designed for custom glowing themes & GPU-accelerated micro-animations)
-- **Utilities**: `marked` + `prismjs` + `canvas-confetti` + `lucide-react`
+Denki is crafted with modern, lightweight, and high-performance technologies:
+
+![React](https://img.shields.io/badge/react-%2320232a.svg?style=for-the-badge&logo=react&logoColor=%2361DAFB)
+![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white)
+![Vite](https://img.shields.io/badge/vite-%23646CFF.svg?style=for-the-badge&logo=vite&logoColor=white)
+![Zustand](https://img.shields.io/badge/zustand-%2320232a.svg?style=for-the-badge&logo=react)
+![Dexie.js](https://img.shields.io/badge/Dexie.js-IndexedDB-4B8BBE?style=for-the-badge)
+![Tailwind/CSS](https://img.shields.io/badge/css3-%231572B6.svg?style=for-the-badge&logo=css3&logoColor=white)
+
+*(Powered by `marked`, `prismjs`, `canvas-confetti`, and `lucide-react`)*
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Quick Start
 
-### Prerequisites
-Make sure you have [Node.js](https://nodejs.org/) installed (v18 or higher recommended).
-
-### Installation
+Get your local Denki studio running in seconds. Make sure you have [Node.js](https://nodejs.org/) installed (v18+).
 
 1. **Clone the repository:**
    ```bash
@@ -73,39 +110,38 @@ Make sure you have [Node.js](https://nodejs.org/) installed (v18 or higher recom
    npm install
    ```
 
-3. **Start the local development server:**
+3. **Ignite the development server:**
    ```bash
    npm run dev
    ```
-   Open your browser and navigate to `http://localhost:5173`.
+   Open your browser and navigate to `http://localhost:5173`. Boom. ⚡
 
 ---
 
-## 📐 How FSRS 4.5 Works in Denki
+## 📈 Star History
 
-Our scheduler updates memory parameters dynamically using mathematical equations:
-- **Stability ($S$)**: The number of days it takes for probability of recall to drop to 90%.
-- **Difficulty ($D$)**: A rating from 1 to 10 representing the complexity of the card.
-- **Retrievability ($R$)**: The probability that you successfully recall a card.
+[![Star History Chart](https://api.star-history.com/svg?repos=Dingding-leo/Denki&type=Date)](https://star-history.com/#Dingding-leo/Denki&Date)
 
-Every time you review a card, Denki recalculates stability:
-$$R = 0.9^{\frac{t}{S}}$$
-
-Where $t$ is the elapsed days since the last review. This guarantees that you are tested at the precise point of forgetting, drastically shortening your overall study time.
+*Help us go viral! If you love Denki, please give us a ⭐️.*
 
 ---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please follow these steps:
-1. Fork the Project.
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`).
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`).
-4. Push to the Branch (`git push origin feature/AmazingFeature`).
-5. Open a Pull Request.
+We want to make Denki the ultimate open-source study tool, and we'd love your help! 
+
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'feat: Add some AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
 ---
 
 ## 📄 License
 
 Distributed under the MIT License. See `LICENSE` for more information.
+
+<div align="center">
+  <p>Built with ❤️ and ⚡ for learners everywhere.</p>
+</div>

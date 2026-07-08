@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { HashRouter, Routes, Route } from 'react-router-dom';
 import { useFlashcardStore } from './store/useFlashcardStore';
 
 // Layout
@@ -30,7 +30,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <BrowserRouter>
+    <HashRouter>
       <Routes>
         <Route path="/" element={<MainLayout />}>
           <Route index element={<DashboardPage />} />
@@ -41,7 +41,7 @@ const App: React.FC = () => {
         <Route path="/study/class/:classId" element={<StudySessionPage />} />
         <Route path="/study/deck/:deckId" element={<StudySessionPage />} />
       </Routes>
-    </BrowserRouter>
+    </HashRouter>
   );
 };
 
