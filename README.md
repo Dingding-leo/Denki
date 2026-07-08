@@ -7,6 +7,7 @@
 
 **The Ultimate Local-First Spaced Repetition Studio that feels like magic.**
 
+[![GitHub Stars](https://img.shields.io/github/stars/Dingding-leo/Denki?style=for-the-badge&logo=github&color=6366f1)](https://github.com/Dingding-leo/Denki/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
 [![Built with React](https://img.shields.io/badge/React-19-000000?style=for-the-badge&logo=react)](https://react.dev)
 [![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=for-the-badge&logo=vite)](https://vite.dev)
