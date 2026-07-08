@@ -149,6 +149,37 @@ export const Sidebar: React.FC = () => {
               </>
             )}
           </NavLink>
+
+          <NavLink
+            to="/ai-generate"
+            style={({ isActive }) => ({
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              width: '100%',
+              padding: '10px 12px',
+              borderRadius: '8px',
+              border: 'none',
+              background: isActive ? 'linear-gradient(90deg, rgba(168, 85, 247, 0.12) 0%, rgba(168, 85, 247, 0.02) 100%)' : 'transparent',
+              color: isActive ? '#ffffff' : '#8e8e93',
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
+              textDecoration: 'none',
+              borderLeft: isActive ? '3px solid #a855f7' : '3px solid transparent',
+              marginTop: '4px'
+            })}
+            className="hover-glow hover-lift"
+          >
+            {({ isActive }) => (
+              <>
+                <Sparkles size={16} style={{ color: isActive ? '#a855f7' : '#8e8e93', flexShrink: 0 }} />
+                {!sidebarCollapsed && <span>AI Generate</span>}
+              </>
+            )}
+          </NavLink>
         </div>
 
         {/* MY CLASSES LIST */}

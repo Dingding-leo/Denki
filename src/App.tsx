@@ -9,6 +9,7 @@ import { MainLayout } from './components/layout/MainLayout';
 import { DashboardPage } from './pages/DashboardPage';
 import { ClassViewPage } from './pages/ClassViewPage';
 import { StudySessionPage } from './pages/StudySessionPage';
+import AIGeneratePage from './pages/AIGeneratePage';
 
 const App: React.FC = () => {
   const store = useFlashcardStore();
@@ -35,6 +36,7 @@ const App: React.FC = () => {
         <Route path="/" element={<MainLayout />}>
           <Route index element={<DashboardPage />} />
           <Route path="class/:classId" element={<ClassViewPage />} />
+          <Route path="ai-generate" element={<AIGeneratePage />} />
         </Route>
         
         {/* Immersion Study Session routes (No sidebar) */}
