@@ -98,6 +98,13 @@ Denki is crafted with modern, lightweight, and high-performance technologies:
 
 ## 🚀 Quick Start
 
+### Docker (recommended)
+```bash
+docker run -p 8080:80 ghcr.io/dingding-leo/denki:latest
+```
+Then open http://localhost:8080. Boom. ⚡
+
+### Local Development
 Get your local Denki studio running in seconds. Make sure you have [Node.js](https://nodejs.org/) installed (v18+).
 
 1. **Clone the repository:**
