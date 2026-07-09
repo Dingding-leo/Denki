@@ -113,9 +113,9 @@ export const LearnMode: React.FC<LearnModeProps> = ({ onExit }) => {
       // Strip html tags
       .replace(/<[^>]*>/g, '')
       // Strip common markdown elements
-      .replace(/[\*_`#\-\[\]]/g, '')
+      .replace(/[*_`#\-[\]]/g, '')
       // Strip common punctuation marks
-      .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, '')
+      .replace(/[.,/#!$%^&*;:{}=\-_`~()?]/g, '')
       .replace(/\s+/g, ' ')
       .trim();
   };

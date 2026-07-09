@@ -10,6 +10,54 @@ interface ManageCardsModalProps {
   onClose: () => void;
 }
 
+const toolbarBtnStyle: React.CSSProperties = {
+  background: 'rgba(255,255,255,0.04)',
+  border: '1px solid rgba(255,255,255,0.08)',
+  color: '#8e8e93',
+  cursor: 'pointer',
+  padding: '3px 6px',
+  borderRadius: '4px',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  transition: 'all 0.15s ease',
+};
+
+// Module-scoped so it isn't recreated (and remounted, losing focus) on every
+// render of the modal.
+const FormatToolbar: React.FC<{
+  field: 'front' | 'back';
+  isEdit?: boolean;
+  onInsert: (field: 'front' | 'back', start: string, end: string, isEdit: boolean) => void;
+}> = ({ field, isEdit, onInsert }) => (
+  <div style={{ display: 'flex', gap: '3px' }}>
+    {([
+      { label: 'Bold', icon: <Bold size={12} />, start: '**', end: '**', color: '#8e8e93' },
+      { label: 'Italic', icon: <Italic size={12} />, start: '*', end: '*', color: '#8e8e93' },
+      { label: 'Code', icon: <Code size={12} />, start: '`', end: '`', color: '#8e8e93' },
+      { label: 'Cloze', icon: <Brackets size={12} />, start: '{{c1::', end: '}}', color: '#0a84ff' },
+    ] as const).map((btn) => (
+      <button
+        key={btn.label}
+        type="button"
+        onClick={() => onInsert(field, btn.start, btn.end, isEdit ?? false)}
+        style={{ ...toolbarBtnStyle, color: btn.color }}
+        title={btn.label}
+        onMouseEnter={e => {
+          e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
+          e.currentTarget.style.color = '#ffffff';
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+          e.currentTarget.style.color = btn.color;
+        }}
+      >
+        {btn.icon}
+      </button>
+    ))}
+  </div>
+);
+
 export const ManageCardsModal: React.FC<ManageCardsModalProps> = ({ classId, deckId, onClose }) => {
   const store = useFlashcardStore();
   
@@ -118,48 +166,6 @@ export const ManageCardsModal: React.FC<ManageCardsModalProps> = ({ classId, dec
     }, 0);
   };
 
-  const toolbarBtnStyle: React.CSSProperties = {
-    background: 'rgba(255,255,255,0.04)',
-    border: '1px solid rgba(255,255,255,0.08)',
-    color: '#8e8e93',
-    cursor: 'pointer',
-    padding: '3px 6px',
-    borderRadius: '4px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    transition: 'all 0.15s ease',
-  };
-
-  const FormatToolbar = ({ field, isEdit }: { field: 'front' | 'back', isEdit?: boolean }) => (
-    <div style={{ display: 'flex', gap: '3px' }}>
-      {([
-        { label: 'Bold', icon: <Bold size={12} />, start: '**', end: '**', color: '#8e8e93' },
-        { label: 'Italic', icon: <Italic size={12} />, start: '*', end: '*', color: '#8e8e93' },
-        { label: 'Code', icon: <Code size={12} />, start: '`', end: '`', color: '#8e8e93' },
-        { label: 'Cloze', icon: <Brackets size={12} />, start: '{{c1::', end: '}}', color: '#0a84ff' },
-      ] as const).map((btn) => (
-        <button
-          key={btn.label}
-          type="button"
-          onClick={() => insertFormatting(field, btn.start, btn.end, isEdit)}
-          style={{ ...toolbarBtnStyle, color: btn.color }}
-          title={btn.label}
-          onMouseEnter={e => {
-            e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
-            e.currentTarget.style.color = '#ffffff';
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
-            e.currentTarget.style.color = btn.color;
-          }}
-        >
-          {btn.icon}
-        </button>
-      ))}
-    </div>
-  );
-
   return (
     <div style={{
       position: 'fixed',
@@ -257,7 +263,7 @@ export const ManageCardsModal: React.FC<ManageCardsModalProps> = ({ classId, dec
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <label style={{ fontSize: '11px', color: '#8e8e93', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Question Face (Front)</label>
-                <FormatToolbar field="front" />
+                <FormatToolbar field="front" onInsert={insertFormatting} />
               </div>
               <textarea
                 id="new-front"
@@ -274,7 +280,7 @@ export const ManageCardsModal: React.FC<ManageCardsModalProps> = ({ classId, dec
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <label style={{ fontSize: '11px', color: '#8e8e93', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Answer Face (Back)</label>
-                <FormatToolbar field="back" />
+                <FormatToolbar field="back" onInsert={insertFormatting} />
               </div>
               <textarea
                 id="new-back"
@@ -489,7 +495,7 @@ export const ManageCardsModal: React.FC<ManageCardsModalProps> = ({ classId, dec
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <label style={{ fontSize: '10px', color: '#8e8e93', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Question Face (Front)</label>
-                                <FormatToolbar field="front" isEdit={true} />
+                                <FormatToolbar field="front" isEdit={true} onInsert={insertFormatting} />
                               </div>
                               <textarea
                                 id="edit-front"
@@ -503,7 +509,7 @@ export const ManageCardsModal: React.FC<ManageCardsModalProps> = ({ classId, dec
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <label style={{ fontSize: '10px', color: '#8e8e93', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Answer Face (Back)</label>
-                                <FormatToolbar field="back" isEdit={true} />
+                                <FormatToolbar field="back" isEdit={true} onInsert={insertFormatting} />
                               </div>
                               <textarea
                                 id="edit-back"

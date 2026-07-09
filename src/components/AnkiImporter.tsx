@@ -94,7 +94,7 @@ export const AnkiImporter: React.FC<AnkiImporterProps> = ({ classId, onComplete 
     
     Object.entries(mediaLookup).forEach(([filename, dataUrl]) => {
       // Escape regex special chars
-      const escapedName = filename.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      const escapedName = filename.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
       
       // Replace image source: src="filename" or src='filename' or src=filename
       const srcRegex = new RegExp(`src=["']?${escapedName}["']?`, 'gi');
@@ -137,7 +137,7 @@ export const AnkiImporter: React.FC<AnkiImporterProps> = ({ classId, onComplete 
 
       // 2. Parse the internal media mapping
       setProgressMsg('Parsing media asset files...');
-      let mediaLookup: Record<string, string> = {};
+      const mediaLookup: Record<string, string> = {};
       const mediaFile = zip.file('media');
       if (mediaFile) {
         const mediaText = await mediaFile.async('text');
@@ -210,7 +210,7 @@ export const AnkiImporter: React.FC<AnkiImporterProps> = ({ classId, onComplete 
             }
           }
         } catch (err) {
-          throw new Error('Could not find deck configuration in the collection database.');
+          throw new Error('Could not find deck configuration in the collection database.', { cause: err });
         }
       }
 

@@ -211,7 +211,7 @@ export const createStatsSlice: StateCreator<
       const start = new Date(forecastToday.getTime() + i * 24 * 60 * 60 * 1000);
       const end = new Date(start.getTime() + 24 * 60 * 60 * 1000 - 1);
       
-      let count = 0;
+      let count: number;
       if (classId) {
         count = await db.cards
           .where('[classId+due]')
@@ -229,9 +229,9 @@ export const createStatsSlice: StateCreator<
     }
 
     // 4. Card Mastery Breakdown
-    let newCount = 0;
-    let learningCount = 0;
-    let reviewCount = 0;
+    let newCount: number;
+    let learningCount: number;
+    let reviewCount: number;
 
     if (classId) {
       newCount = await db.cards.where('[classId+state]').equals([classId, 0]).count();
