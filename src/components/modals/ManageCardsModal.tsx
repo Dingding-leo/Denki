@@ -596,10 +596,19 @@ export const ManageCardsModal: React.FC<ManageCardsModalProps> = ({ classId, dec
                                 <select
                                   value={card.id ? (card.lastRating ?? 0) : 0}
                                   onChange={async (e) => {
-                                    if (card.id) {
-                                      const ratingVal = parseInt(e.target.value, 10);
-                                      await store.manuallySetCardConfidence(card.id, ratingVal);
+                                    if (!card.id) return;
+                                    const ratingVal = parseInt(e.target.value, 10);
+                                    // Resetting to "Unseen (New)" deletes the card's entire
+                                    // review history — guard it per AI_GUIDELINES §3.
+                                    if (
+                                      ratingVal === 0 &&
+                                      !window.confirm(
+                                        'Reset this card to New? This permanently deletes its review history and cannot be undone.',
+                                      )
+                                    ) {
+                                      return;
                                     }
+                                    await store.manuallySetCardConfidence(card.id, ratingVal);
                                   }}
                                   style={{
                                     background: '#1c1c1e',

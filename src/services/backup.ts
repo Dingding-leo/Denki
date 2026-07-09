@@ -5,10 +5,22 @@ const DEBOUNCE_MS = 2000; // Save 2 seconds after last change
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
+interface BackupSnapshot {
+  version?: number;
+  exportedAt?: string;
+  data: {
+    classes: unknown[];
+    decks: unknown[];
+    cards: unknown[];
+    reviews: unknown[];
+  };
+}
+
 /**
- * Export the entire Dexie database to a plain JSON snapshot
+ * Export the entire Dexie database to a plain JSON snapshot. The version is
+ * taken from the live schema so it never drifts from the actual DB version.
  */
-async function exportDatabase() {
+export async function exportDatabase(): Promise<BackupSnapshot> {
   const [classes, decks, cards, reviews] = await Promise.all([
     db.classes.toArray(),
     db.decks.toArray(),
@@ -17,35 +29,53 @@ async function exportDatabase() {
   ]);
 
   return {
-    version: 2,
+    version: db.verno,
     exportedAt: new Date().toISOString(),
     data: { classes, decks, cards, reviews },
   };
 }
 
+/** Revive ISO date strings (from a JSON round-trip) back into Date objects. */
+function reviveDates(rows: unknown[] = [], fields: string[]): unknown[] {
+  return rows.map((row) => {
+    const r = { ...(row as Record<string, unknown>) };
+    for (const f of fields) {
+      if (typeof r[f] === 'string') r[f] = new Date(r[f] as string);
+    }
+    return r;
+  });
+}
+
 /**
- * Import a JSON snapshot into the Dexie database (full restore)
+ * Import a JSON snapshot into the Dexie database (full restore).
+ *
+ * Dates arrive as ISO strings after JSON serialization and MUST be revived to
+ * Date objects — IndexedDB keys are type-ordered (number < Date < string), so a
+ * string `due` sorts outside every Date-typed range query and the restored
+ * cards would silently vanish from due counts, the study queue, and stats.
  */
-async function importDatabase(snapshot: {
-  data: {
-    classes: unknown[];
-    decks: unknown[];
-    cards: unknown[];
-    reviews: unknown[];
-  };
-}) {
+export async function importDatabase(snapshot: BackupSnapshot) {
+  if (typeof snapshot.version === 'number' && snapshot.version > db.verno) {
+    throw new Error(
+      `Backup version ${snapshot.version} is newer than this app's schema (${db.verno}); refusing to import.`,
+    );
+  }
+
+  const classes = reviveDates(snapshot.data.classes, ['createdAt']);
+  const decks = reviveDates(snapshot.data.decks, ['createdAt']);
+  const cards = reviveDates(snapshot.data.cards, ['createdAt', 'due', 'lastReviewed']);
+  const reviews = reviveDates(snapshot.data.reviews, ['reviewedAt']);
+
   await db.transaction('rw', [db.classes, db.decks, db.cards, db.reviews], async () => {
-    // Clear existing data
     await db.classes.clear();
     await db.decks.clear();
     await db.cards.clear();
     await db.reviews.clear();
 
-    // Bulk insert from backup
-    if (snapshot.data.classes?.length) await db.classes.bulkAdd(snapshot.data.classes as never[]);
-    if (snapshot.data.decks?.length) await db.decks.bulkAdd(snapshot.data.decks as never[]);
-    if (snapshot.data.cards?.length) await db.cards.bulkAdd(snapshot.data.cards as never[]);
-    if (snapshot.data.reviews?.length) await db.reviews.bulkAdd(snapshot.data.reviews as never[]);
+    if (classes.length) await db.classes.bulkAdd(classes as never[]);
+    if (decks.length) await db.decks.bulkAdd(decks as never[]);
+    if (cards.length) await db.cards.bulkAdd(cards as never[]);
+    if (reviews.length) await db.reviews.bulkAdd(reviews as never[]);
   });
 }
 
