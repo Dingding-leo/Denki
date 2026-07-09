@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Trash2, Play, Upload, Edit2, RotateCcw, ChevronRight } from 'lucide-react';
+import { Trash2, Play, Upload, Download, Edit2, RotateCcw, ChevronRight } from 'lucide-react';
 import { useFlashcardStore } from '../store/useFlashcardStore';
 import { AnalyticsDashboard } from '../components/AnalyticsDashboard';
 import { ManageCardsModal } from '../components/modals/ManageCardsModal';
+import { exportDeckToCsv } from '../services/deckExport';
 import { ImportModal } from '../components/modals/ImportModal';
 import { celebrate } from '../services/celebrate';
 
@@ -303,9 +304,21 @@ export const ClassViewPage: React.FC = () => {
                             onClick={() => deck.id && setImportingDeckId(deck.id)}
                             style={{ width: '32px', height: '32px', padding: 0 }}
                             className="btn-premium-secondary hover-lift"
+                            aria-label="Import cards via CSV"
                             title="Import Cards via CSV"
                           >
                             <Upload size={13} />
+                          </button>
+
+                          <button
+                            onClick={() => deck.id && exportDeckToCsv(deck.id, deck.name)}
+                            disabled={deck.total === 0}
+                            style={{ width: '32px', height: '32px', padding: 0 }}
+                            className="btn-premium-secondary hover-lift"
+                            aria-label="Export deck to CSV"
+                            title="Export deck to CSV"
+                          >
+                            <Download size={13} />
                           </button>
 
                           <button
