@@ -87,4 +87,18 @@ describe('generateFlashcards', () => {
     mockContent('{"note": "no array here"}');
     await expect(generateFlashcards('some text', 'key')).rejects.toThrow(AIError);
   });
+
+  it('rejects content over the size cap', async () => {
+    await expect(generateFlashcards('x'.repeat(30001), 'key')).rejects.toThrow(/too long/i);
+  });
+
+  it('surfaces the provider error body on a non-429 failure', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      statusText: 'Unauthorized',
+      text: async () => 'invalid api key',
+    });
+    await expect(generateFlashcards('some text', 'key')).rejects.toThrow(/invalid api key/);
+  });
 });

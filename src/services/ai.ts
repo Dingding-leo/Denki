@@ -52,25 +52,35 @@ export async function generateFlashcards(
     throw new AIError('Content cannot be empty.');
   }
 
-  const prompt = `Create a list of Q&A flashcards based on the following text. 
+  const MAX_CHARS = 30000;
+  if (text.length > MAX_CHARS) {
+    throw new AIError(`Content is too long (${text.length} chars). Please trim it under ${MAX_CHARS} characters.`);
+  }
+
+  const prompt = `Create a list of Q&A flashcards based on the following text.
 Return ONLY a JSON array of objects with 'question' and 'answer' string properties.
 Do not include markdown blocks or any other text.
 Text:
 ${text}`;
 
+  // Abort the request after 60s so a hung provider doesn't leave the UI stuck.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60_000);
+
   try {
     const response = await fetch(apiUrl, {
       method: 'POST',
+      signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
-        'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'http://localhost', 
+        'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'http://localhost',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash', 
+        model: import.meta.env.VITE_AI_MODEL || 'google/gemini-2.5-flash',
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.3,
-        response_format: { type: "json_object" }
+        response_format: { type: 'json_object' }
       }),
     });
 
@@ -79,7 +89,9 @@ ${text}`;
     }
 
     if (!response.ok) {
-      throw new AIError(`API error: ${response.statusText}`, response.status);
+      const detail = typeof response.text === 'function' ? await response.text().catch(() => '') : '';
+      const suffix = detail ? `: ${detail.slice(0, 200)}` : response.statusText ? `: ${response.statusText}` : '';
+      throw new AIError(`API error (${response.status})${suffix}`, response.status);
     }
 
     const data = await response.json();
@@ -101,7 +113,12 @@ ${text}`;
     return toFlashcards(items);
   } catch (err: unknown) {
     if (err instanceof AIError) throw err;
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new AIError('The request timed out. Try shorter content or check your connection.');
+    }
     const message = err instanceof Error ? err.message : 'Failed to generate flashcards';
     throw new AIError(message);
+  } finally {
+    clearTimeout(timeout);
   }
 }

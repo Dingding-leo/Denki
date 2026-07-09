@@ -8,6 +8,7 @@ const AIGeneratePage: React.FC = () => {
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [importResult, setImportResult] = useState('');
   const [cards, setCards] = useState<AIFlashcard[]>([]);
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('denki_ai_key') || '');
   const [showSettings, setShowSettings] = useState(!localStorage.getItem('denki_ai_key'));
@@ -16,7 +17,7 @@ const AIGeneratePage: React.FC = () => {
   const [selectedDeckId, setSelectedDeckId] = useState<number | null>(null);
   const [decks, setDecks] = useState<Deck[]>([]);
 
-  const { classes, loadClasses, loadDecks, createCard } = useFlashcardStore();
+  const { classes, loadClasses, loadDecks, bulkCreateCards } = useFlashcardStore();
 
   React.useEffect(() => { loadClasses(); }, []);
 
@@ -42,6 +43,7 @@ const AIGeneratePage: React.FC = () => {
 
   const handleGenerate = async () => {
     setError('');
+    setImportResult('');
     setLoading(true);
     try {
       const result = await generateFlashcards(text, apiKey);
@@ -65,29 +67,34 @@ const AIGeneratePage: React.FC = () => {
     setShowSettings(false);
   };
 
-  const importCard = async (card: AIFlashcard) => {
-    if (!selectedClassId || !selectedDeckId) return false;
-    try {
-      await createCard(selectedClassId, selectedDeckId, card.question, card.answer, 'standard');
-      return true;
-    } catch { return false; }
-  };
-
   const approveAndImport = async () => {
     if (!selectedClassId || !selectedDeckId) {
       setError('Please select a Class and Deck to import into.');
       return;
     }
+    const valid = cards.filter(c => c.question.trim() && c.answer.trim());
     setImporting(true);
-    let imported = 0;
-    for (const card of cards) {
-      const ok = await importCard(card);
-      if (ok) imported++;
+    setError('');
+    try {
+      // One bulk transaction (+ one stats refresh) instead of N per-card writes.
+      await bulkCreateCards(
+        valid.map(c => ({
+          classId: selectedClassId,
+          deckId: selectedDeckId,
+          front: c.question.trim(),
+          back: c.answer.trim(),
+          cardType: 'standard' as const,
+        })),
+      );
+      const skipped = cards.length - valid.length;
+      setCards([]);
+      setText('');
+      setImportResult(`Imported ${valid.length} card${valid.length === 1 ? '' : 's'}${skipped ? ` — ${skipped} blank skipped` : ''}.`);
+    } catch (err) {
+      setError('Import failed: ' + (err instanceof Error ? err.message : 'unknown error'));
+    } finally {
+      setImporting(false);
     }
-    setImporting(false);
-    setCards([]);
-    setText('');
-    alert(`Imported ${imported}/${cards.length} cards successfully!`);
   };
 
   return (
@@ -106,6 +113,12 @@ const AIGeneratePage: React.FC = () => {
           {apiKey ? 'Key configured' : 'Set API Key'}
         </button>
       </div>
+
+      {importResult && (
+        <div style={{ marginBottom: 24, padding: '12px 16px', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 12, color: '#6ee7b7', fontSize: '0.9rem' }}>
+          {importResult}
+        </div>
+      )}
 
       {showSettings && (
         <div className="panel" style={{ marginBottom: 24 }}>

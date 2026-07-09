@@ -263,11 +263,20 @@ export const createCardSlice: StateCreator<
     const rows = parseCSV(csvText);
     if (rows.length === 0) return { success: 0, failed: 0 };
 
+    // Skip an optional header row (the "Front, Back, Type" format the UI
+    // documents) so it doesn't get imported as a literal flashcard.
+    const first = rows[0];
+    const hasHeader =
+      first.length >= 2 &&
+      first[0].trim().toLowerCase() === 'front' &&
+      first[1].trim().toLowerCase() === 'back';
+    const dataRows = hasHeader ? rows.slice(1) : rows;
+
     let success = 0;
     let failed = 0;
 
     await db.transaction('rw', db.cards, async () => {
-      for (const row of rows) {
+      for (const row of dataRows) {
         if (row.length < 2) {
           failed++;
           continue;
@@ -278,7 +287,7 @@ export const createCardSlice: StateCreator<
         const rawType = row[2]?.trim().toLowerCase();
         
         let cardType: CardType = 'standard';
-        if (rawType === 'cloze' || front.includes('{{c1::')) {
+        if (rawType === 'cloze' || /\{\{c\d+::/.test(front)) {
           cardType = 'cloze';
         }
 
