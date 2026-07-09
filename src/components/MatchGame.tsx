@@ -45,6 +45,7 @@ export const MatchGame: React.FC<MatchGameProps> = ({ deckId, onExit }) => {
   const [highScore, setHighScore] = useState<number | null>(null);
   const [newHighScoreBadge, setNewHighScoreBadge] = useState<boolean>(false);
   const [gameSize, setGameSize] = useState<number>(6);
+  const [loading, setLoading] = useState<boolean>(true);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(0);
@@ -57,16 +58,29 @@ export const MatchGame: React.FC<MatchGameProps> = ({ deckId, onExit }) => {
       setHighScore(parseFloat(stored));
     }
     let cancelled = false;
+    setLoading(true);
     db.cards.where('deckId').equals(deckId).toArray().then(cards => {
       if (cancelled) return;
       deckCardsRef.current = cards;
       initializeGame();
+      setLoading(false);
     });
     return () => {
       cancelled = true;
       stopTimer();
     };
   }, [deckId]);
+
+  // Allow Escape to leave a game in progress (the page-level Esc handler only
+  // runs in review mode, so without this the active grid can't be exited by key).
+  useEffect(() => {
+    if (!isActive) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onExit?.();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isActive, onExit]);
 
   // Start the timer when game is active
   useEffect(() => {
@@ -250,7 +264,7 @@ export const MatchGame: React.FC<MatchGameProps> = ({ deckId, onExit }) => {
     }
   }, [items, isActive, isCompleted, deckId]);
 
-  if (deckCardsRef.current.length < 3 && items.length === 0) {
+  if (!loading && deckCardsRef.current.length < 3) {
     return (
       <div style={{
         display: 'flex',
