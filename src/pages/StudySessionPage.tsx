@@ -377,24 +377,37 @@ export const StudySessionPage: React.FC = () => {
             gap: '16px',
           }}>
             <BookOpen size={48} style={{ color: '#818cf8' }} />
-            <h2 className="gradient-text" style={{ fontSize: '22px', fontWeight: 800 }}>No Cards Due Today! 🎉</h2>
-            <p style={{ color: '#9ca3af', fontSize: '14px', lineHeight: 1.5, maxWidth: '400px' }}>
-              You have completed all scheduled spaced reviews for this deck. Would you like to Cram study all cards anyway?
-            </p>
+            {store.session.totalCards === 0 ? (
+              <>
+                <h2 className="gradient-text" style={{ fontSize: '22px', fontWeight: 800 }}>This Deck Is Empty</h2>
+                <p style={{ color: '#9ca3af', fontSize: '14px', lineHeight: 1.5, maxWidth: '400px' }}>
+                  There are no cards here yet. Head back and add some cards to start studying.
+                </p>
+              </>
+            ) : (
+              <>
+                <h2 className="gradient-text" style={{ fontSize: '22px', fontWeight: 800 }}>No Cards Due Today! 🎉</h2>
+                <p style={{ color: '#9ca3af', fontSize: '14px', lineHeight: 1.5, maxWidth: '400px' }}>
+                  You have completed all scheduled spaced reviews for this deck. Would you like to Cram study all cards anyway?
+                </p>
+              </>
+            )}
             <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
-              <button
-                onClick={() => {
-                  if (classId) {
-                    store.startClassStudySession(parseInt(classId, 10), true);
-                  } else if (deckId) {
-                    store.startStudySession(parseInt(deckId, 10), true);
-                  }
-                }}
-                style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 24px', fontWeight: 600, cursor: 'pointer' }}
-                className="hover-lift"
-              >
-                Cram Study (All Cards)
-              </button>
+              {store.session.totalCards > 0 && (
+                <button
+                  onClick={() => {
+                    if (classId) {
+                      store.startClassStudySession(parseInt(classId, 10), true);
+                    } else if (deckId) {
+                      store.startStudySession(parseInt(deckId, 10), true);
+                    }
+                  }}
+                  style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 24px', fontWeight: 600, cursor: 'pointer' }}
+                  className="hover-lift"
+                >
+                  Cram Study (All Cards)
+                </button>
+              )}
               <button
                 onClick={handleExitStudy}
                 style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', color: '#9ca3af', borderRadius: '8px', padding: '10px 24px', fontWeight: 600, cursor: 'pointer' }}
@@ -444,6 +457,9 @@ export const StudySessionPage: React.FC = () => {
               {/* Left Column: Flashcard Face */}
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', width: '100%' }}>
                 <Flashcard
+                  // Remount per card so advancing doesn't animate a reverse-flip
+                  // that briefly shows the NEXT card's answer during un-flip.
+                  key={queue[currentIndex]?.id ?? currentIndex}
                   card={queue[currentIndex]}
                   isFlipped={isFlipped}
                   onFlip={() => setIsFlipped(prev => !prev)}

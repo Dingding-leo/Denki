@@ -161,6 +161,9 @@ export const Flashcard: React.FC<FlashcardProps> = ({ card, isFlipped, onFlip, a
         onKeyDown={(e: React.KeyboardEvent) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
+            // Stop the page-level window keydown handler from ALSO toggling the
+            // flip — two toggles cancel out and the card appears stuck.
+            e.stopPropagation();
             onFlip();
           }
         }}

@@ -15,6 +15,7 @@ export interface StudySession {
   currentIndex: number;
   completedCount: number;
   initialQueueSize: number;
+  totalCards: number;     // Total cards in the deck/class (pre due-filter) — distinguishes "empty deck" from "nothing due"
   isCram?: boolean;       // If studying all cards instead of strictly due ones
   history: StudySessionHistoryEntry[];
 }

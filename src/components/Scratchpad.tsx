@@ -74,7 +74,9 @@ export const Scratchpad: React.FC<ScratchpadProps> = ({ visible }) => {
     ctx.moveTo(x, y);
     setIsDrawing(true);
     
-    ctx.strokeStyle = isEraser ? '#161e31' : color; // Matches card background
+    // True erase (transparent) rather than painting the card-bg color over strokes.
+    ctx.globalCompositeOperation = isEraser ? 'destination-out' : 'source-over';
+    ctx.strokeStyle = isEraser ? 'rgba(0,0,0,1)' : color;
     ctx.lineWidth = isEraser ? 24 : lineWidth;
   };
 
@@ -145,7 +147,14 @@ export const Scratchpad: React.FC<ScratchpadProps> = ({ visible }) => {
   if (!visible) return null;
 
   return (
-    <div style={{
+    <div
+      // Stop pointer events inside the scratchpad from bubbling to the card's
+      // flip handler — otherwise drawing or picking a tool flips the card and
+      // reveals the answer.
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
+      style={{
       position: 'absolute',
       top: 0,
       left: 0,
