@@ -132,41 +132,48 @@ export const createStatsSlice: StateCreator<
         .toArray();
     }
 
-    const reviewDates = new Set(
-      reviews.map((r) => new Date(r.reviewedAt).toDateString())
-    );
+    // One local-time YYYY-MM-DD key used everywhere so the streak and heatmap
+    // agree (previously the streak used local toDateString() while the heatmap
+    // used UTC toISOString(), so they could disagree about "today").
+    const localDateKey = (d: Date): string => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    };
+
+    const reviewDates = new Set(reviews.map((r) => localDateKey(new Date(r.reviewedAt))));
 
     // Current streak walk-back
     let currentStreak = 0;
     let checkDate = new Date(now);
-    while (reviewDates.has(checkDate.toDateString())) {
+    while (reviewDates.has(localDateKey(checkDate))) {
       currentStreak++;
       checkDate.setDate(checkDate.getDate() - 1);
     }
 
-    // Check if maintained yesterday if no study yet today
+    // Still count the streak if today isn't studied yet but yesterday was
     if (currentStreak === 0) {
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      checkDate = new Date(yesterday);
-      while (reviewDates.has(checkDate.toDateString())) {
+      checkDate = new Date(now);
+      checkDate.setDate(checkDate.getDate() - 1);
+      while (reviewDates.has(localDateKey(checkDate))) {
         currentStreak++;
         checkDate.setDate(checkDate.getDate() - 1);
       }
     }
 
-    // Longest streak
+    // Longest streak — whole-day gaps between studied days (Math.round tolerates
+    // 23h/25h DST transitions that would otherwise break a run).
     let maxStreak = 0;
-    const sortedDates = Array.from(reviewDates)
-      .map((d) => new Date(d))
+    const sortedDays = Array.from(reviewDates)
+      .map((k) => new Date(k + 'T00:00:00'))
       .sort((a, b) => a.getTime() - b.getTime());
 
-    if (sortedDates.length > 0) {
+    if (sortedDays.length > 0) {
       maxStreak = 1;
       let tempStreak = 1;
-      for (let i = 1; i < sortedDates.length; i++) {
-        const diffTime = Math.abs(sortedDates[i].getTime() - sortedDates[i - 1].getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      for (let i = 1; i < sortedDays.length; i++) {
+        const diffDays = Math.round((sortedDays[i].getTime() - sortedDays[i - 1].getTime()) / (1000 * 60 * 60 * 24));
         if (diffDays === 1) {
           tempStreak++;
           maxStreak = Math.max(maxStreak, tempStreak);
@@ -177,10 +184,10 @@ export const createStatsSlice: StateCreator<
       maxStreak = Math.max(maxStreak, currentStreak);
     }
 
-    // Heatmap calendar grids
+    // Heatmap calendar grids (same local key basis as the streak)
     const heatmapMap: Record<string, number> = {};
     reviews.forEach((r) => {
-      const key = new Date(r.reviewedAt).toISOString().split('T')[0];
+      const key = localDateKey(new Date(r.reviewedAt));
       heatmapMap[key] = (heatmapMap[key] || 0) + 1;
     });
 
@@ -192,7 +199,7 @@ export const createStatsSlice: StateCreator<
     for (let w = 0; w < 53; w++) {
       const week: { date: string; count: number }[] = [];
       for (let d = 0; d < 7; d++) {
-        const key = heatmapStart.toISOString().split('T')[0];
+        const key = localDateKey(heatmapStart);
         week.push({
           date: key,
           count: heatmapMap[key] || 0,
