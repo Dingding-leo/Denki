@@ -29,6 +29,7 @@ export const StudySessionPage: React.FC = () => {
   
   const cardStartTimeRef = useRef<number>(Date.now());
   const sessionStartTimeRef = useRef<number>(Date.now());
+  const roundTimesRef = useRef<number[]>([]); // per-card seconds since the last checkpoint
 
   useEffect(() => {
     sessionStartTimeRef.current = Date.now();
@@ -112,6 +113,7 @@ export const StudySessionPage: React.FC = () => {
   const handleRateCard = async (rating: number) => {
     if (!store.session) return;
     const timeSpentMs = Date.now() - cardStartTimeRef.current;
+    roundTimesRef.current.push(timeSpentMs / 1000);
 
     await store.rateCard(rating as Rating);
     setIsFlipped(false);
@@ -125,7 +127,10 @@ export const StudySessionPage: React.FC = () => {
     if (!s) return;
 
     if (s.completedCount > 0 && s.completedCount % 10 === 0 && s.currentIndex < s.queue.length) {
-      const avg = Math.round(timeSpentMs / 1000);
+      // True mean pace across the cards in this round (not just the last card).
+      const times = roundTimesRef.current;
+      const avg = times.length ? Math.round(times.reduce((a, b) => a + b, 0) / times.length) : 0;
+      roundTimesRef.current = [];
       setRoundAverages(prev => [...prev, avg]);
       setCheckpointOpen(true);
 

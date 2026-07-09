@@ -210,17 +210,20 @@ export const createStatsSlice: StateCreator<
     for (let i = 0; i < 7; i++) {
       const start = new Date(forecastToday.getTime() + i * 24 * 60 * 60 * 1000);
       const end = new Date(start.getTime() + 24 * 60 * 60 * 1000 - 1);
-      
+      // Fold any overdue backlog (due before today) into the "Today" bucket so
+      // it isn't silently dropped from the forecast.
+      const lowerBound = i === 0 ? new Date(0) : start;
+
       let count: number;
       if (classId) {
         count = await db.cards
           .where('[classId+due]')
-          .between([classId, start], [classId, end])
+          .between([classId, lowerBound], [classId, end])
           .count();
       } else {
         count = await db.cards
           .where('due')
-          .between(start, end)
+          .between(lowerBound, end)
           .count();
       }
 

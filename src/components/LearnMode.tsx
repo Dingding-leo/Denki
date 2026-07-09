@@ -217,7 +217,7 @@ export const LearnMode: React.FC<LearnModeProps> = ({ onExit }) => {
           </span>
           <span style={{ fontSize: '11px', color: '#6b7280' }}>|</span>
           <span style={{ fontSize: '13px', color: '#d1d5db' }}>
-            Card {session.currentIndex + 1} of {session.queue.length}
+            Card {Math.min(session.currentIndex + 1, session.initialQueueSize)} of {session.initialQueueSize}
           </span>
         </div>
 
