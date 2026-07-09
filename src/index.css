@@ -17,6 +17,11 @@
   
   --accent-color: #2563eb; /* Clean Blue Accent */
   --accent-glowing: rgba(37, 99, 235, 0.1);
+
+  /* Aliases consumed by component classes (AIGeneratePage, Learn/Match buttons) */
+  --text-main: #ffffff;
+  --border: rgba(255, 255, 255, 0.08);
+  --danger: #ef4444;
   
   /* Study Ratings colors */
   --color-again: #ef4444; 
@@ -797,6 +802,74 @@ body {
   background: rgba(245, 158, 11, 0.12);
   border-color: rgba(245, 158, 11, 0.25);
   color: #fde047;
+}
+
+/* Generic component classes used by AIGeneratePage (and .btn-primary by
+   Learn/Match modes) — previously undefined, so those surfaces rendered
+   unstyled. */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+.page-header h1 {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.5px;
+}
+.panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border-glass);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: var(--shadow-premium);
+}
+.panel h3 {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  border: none;
+  background: var(--accent-color);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: filter 0.2s ease, transform 0.1s ease;
+}
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.ghost-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border-glass);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+.ghost-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
 }
 
 /* Respect users who prefer reduced motion (WCAG 2.3.3 / 2.2.2): neutralize the

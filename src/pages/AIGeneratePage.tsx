@@ -50,9 +50,10 @@ const AIGeneratePage: React.FC = () => {
       } else {
         setCards(result);
       }
-    } catch (err: any) {
-      setError(err.message || 'Generation failed');
-      if (err.message?.includes('API key')) setShowSettings(true);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Generation failed';
+      setError(message);
+      if (message.includes('API key')) setShowSettings(true);
     } finally {
       setLoading(false);
     }
