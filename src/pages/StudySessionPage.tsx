@@ -10,7 +10,8 @@ import { StudyProgressBar } from '../components/StudyProgressBar';
 import { StudyCheckpoint } from '../components/StudyCheckpoint';
 import { StudySessionSummary } from '../components/StudySessionSummary';
 import confetti from 'canvas-confetti';
-import { reviewCard, formatInterval } from '../services/scheduler';
+import { reviewCard, formatInterval, type Rating } from '../services/scheduler';
+import { loadSchedulerParams } from '../services/schedulerParams';
 
 export const StudySessionPage: React.FC = () => {
   const { classId, deckId } = useParams();
@@ -111,23 +112,29 @@ export const StudySessionPage: React.FC = () => {
   const handleRateCard = async (rating: number) => {
     if (!store.session) return;
     const timeSpentMs = Date.now() - cardStartTimeRef.current;
-    
-    await store.rateCard(rating as any);
+
+    await store.rateCard(rating as Rating);
     setIsFlipped(false);
-    
+
     cardStartTimeRef.current = Date.now();
 
-    if (store.session.completedCount > 0 && store.session.completedCount % 10 === 0 && store.session.completedCount !== store.session.queue.length) {
-      const avg = Math.round(timeSpentMs / 1000); 
+    // Read the FRESH session after the await — the captured `store` snapshot is
+    // stale (rateCard replaced the session object), which previously made the
+    // checkpoint fire one card late and the completion confetti never fire.
+    const s = useFlashcardStore.getState().session;
+    if (!s) return;
+
+    if (s.completedCount > 0 && s.completedCount % 10 === 0 && s.currentIndex < s.queue.length) {
+      const avg = Math.round(timeSpentMs / 1000);
       setRoundAverages(prev => [...prev, avg]);
       setCheckpointOpen(true);
-      
+
       confetti({
         particleCount: 50,
         spread: 60,
         origin: { y: 0.6 }
       });
-    } else if (store.session.currentIndex >= store.session.queue.length) {
+    } else if (s.currentIndex >= s.queue.length) {
       confetti({
         particleCount: 150,
         spread: 90,
@@ -160,12 +167,15 @@ export const StudySessionPage: React.FC = () => {
   const currentStreak = store.currentStreak;
   const totalTimeSpent = (Date.now() - sessionStartTimeRef.current) / 1000;
 
-  // Compute intervals for FSRS transparency when card is flipped
+  // Compute intervals for FSRS transparency when card is flipped. Uses the
+  // user's saved params and a fixed (no-fuzz) RNG so previews stay stable across
+  // renders and match what rating the card will actually schedule.
   let predictedIntervals: string[] = ['', '', '', '', ''];
   if (isFlipped && currentIndex < queue.length) {
     const currentCard = queue[currentIndex];
-    predictedIntervals = [1, 2, 3, 4, 5].map(rating => {
-      const { updatedCard } = reviewCard(currentCard, rating as any);
+    const previewParams = loadSchedulerParams();
+    predictedIntervals = ([1, 2, 3, 4, 5] as Rating[]).map(rating => {
+      const { updatedCard } = reviewCard(currentCard, rating, new Date(), previewParams, () => 0.5);
       return formatInterval(updatedCard.scheduledDays);
     });
   }
