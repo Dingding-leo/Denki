@@ -52,4 +52,39 @@ describe('generateFlashcards', () => {
     expect(result[0].answer).toBe('A1');
     expect(result[0].id).toBe('test-uuid-1234');
   });
+
+  const mockContent = (content: string) => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content } }] }),
+    });
+  };
+
+  it('filters out cards with non-string or empty fields (and trims)', async () => {
+    mockContent(
+      JSON.stringify([
+        { question: 'Q1', answer: 'A1' },
+        { question: 'Q2', answer: null },
+        { question: '', answer: 'A3' },
+        { answer: 'only answer' },
+        { question: '  Q5  ', answer: '  A5  ' },
+      ]),
+    );
+    const result = await generateFlashcards('some text', 'key');
+    expect(result).toHaveLength(2);
+    expect(result[0]).toMatchObject({ question: 'Q1', answer: 'A1' });
+    expect(result[1]).toMatchObject({ question: 'Q5', answer: 'A5' });
+  });
+
+  it('accepts an object that wraps the array under any key (e.g. { cards: [...] })', async () => {
+    mockContent('{"cards": [{"question": "Q1", "answer": "A1"}]}');
+    const result = await generateFlashcards('some text', 'key');
+    expect(result).toHaveLength(1);
+    expect(result[0].question).toBe('Q1');
+  });
+
+  it('throws AIError when the response has no array of cards', async () => {
+    mockContent('{"note": "no array here"}');
+    await expect(generateFlashcards('some text', 'key')).rejects.toThrow(AIError);
+  });
 });

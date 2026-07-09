@@ -23,6 +23,11 @@ dist-ssr
 *.sln
 *.sw?
 
+# Env — VITE_* vars get embedded in the PUBLIC client bundle; never commit a real .env
+.env
+.env.*
+!.env.example
+
 # Backups
 denki-backup.json
 

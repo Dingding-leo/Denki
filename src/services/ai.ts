@@ -13,6 +13,32 @@ export class AIError extends Error {
   }
 }
 
+/** Pull the first array out of a parsed AI response: a bare array, or the first
+ *  array-valued property of an object (flashcards / cards / items / …). */
+function firstArray(value: unknown): unknown[] | null {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === 'object') {
+    for (const v of Object.values(value)) if (Array.isArray(v)) return v;
+  }
+  return null;
+}
+
+/** Keep only well-formed cards (non-empty string question AND answer). A model
+ *  that returns a non-string field would otherwise be stored and later crash the
+ *  markdown renderer ("text.replace is not a function") when the card is studied. */
+function toFlashcards(items: unknown[]): Flashcard[] {
+  const cards: Flashcard[] = [];
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue;
+    const q = (item as Record<string, unknown>).question;
+    const a = (item as Record<string, unknown>).answer;
+    if (typeof q === 'string' && typeof a === 'string' && q.trim() && a.trim()) {
+      cards.push({ id: crypto.randomUUID(), question: q.trim(), answer: a.trim() });
+    }
+  }
+  return cards;
+}
+
 export async function generateFlashcards(
   text: string,
   apiKey: string,
@@ -67,25 +93,15 @@ ${text}`;
     }
 
     const parsed = JSON.parse(content);
-    
-    if (!Array.isArray(parsed)) {
-      if (parsed.flashcards && Array.isArray(parsed.flashcards)) {
-         return parsed.flashcards.map((f: any) => ({
-           id: crypto.randomUUID(),
-           question: f.question,
-           answer: f.answer,
-         }));
-      }
-      throw new Error('Invalid format returned by AI');
+    const items = firstArray(parsed);
+    if (!items) {
+      throw new AIError('Invalid format returned by AI (expected a JSON array of cards).');
     }
 
-    return parsed.map((item: any) => ({
-      id: crypto.randomUUID(),
-      question: item.question || '',
-      answer: item.answer || '',
-    }));
-  } catch (err: any) {
+    return toFlashcards(items);
+  } catch (err: unknown) {
     if (err instanceof AIError) throw err;
-    throw new AIError(err.message || 'Failed to generate flashcards');
+    const message = err instanceof Error ? err.message : 'Failed to generate flashcards';
+    throw new AIError(message);
   }
 }

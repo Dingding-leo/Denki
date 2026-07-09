@@ -5,7 +5,9 @@
  * escaping) so that HTML-like syntax inside them is preserved literally.
  */
 export const renderContent = (text: string, isCloze: boolean, showAnswer: boolean): string => {
-  let html = text;
+  // Defense-in-depth: card content can originate from imports (AI/CSV/Anki) and
+  // may not actually be a string at runtime; coerce so `.replace` never throws.
+  let html = String(text ?? '');
 
   // 1. Extract fenced code blocks BEFORE escaping so their content isn't
   //    double-escaped (e.g., `<div>` should show as `<div>` inside a code block,
