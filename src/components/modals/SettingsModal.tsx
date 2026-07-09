@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { X, Sliders, Volume2, RotateCcw } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Sliders, Volume2, RotateCcw, Download, Upload } from 'lucide-react';
 import { celebrate } from '../../services/celebrate';
+import { downloadBackup, importDatabase } from '../../services/backup';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -54,6 +55,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
       setEasyBonus(1.3);
       setHardMultiplier(1.2);
       setSpeechSpeed(1.0);
+    }
+  };
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-picking the same file later
+    if (!file) return;
+    if (!window.confirm('Importing a backup REPLACES all current decks, cards and review history. Continue?')) {
+      return;
+    }
+    try {
+      const snapshot = JSON.parse(await file.text());
+      await importDatabase(snapshot);
+      window.location.reload();
+    } catch (err) {
+      window.alert('Import failed: ' + (err instanceof Error ? err.message : 'invalid backup file'));
     }
   };
 
@@ -176,6 +195,41 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
             <p style={{ fontSize: '11px', color: '#636366', marginTop: '4px', lineHeight: 1.3 }}>
               Adjust the pacing of read-aloud descriptions during study sessions.
             </p>
+          </div>
+        </div>
+
+        {/* Section 3: Data & Backup */}
+        <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '16px' }}>
+          <h4 style={{ fontSize: '12px', color: '#8e8e93', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '12px', fontWeight: 700 }}>
+            💾 Data & Backup
+          </h4>
+          <p style={{ fontSize: '11px', color: '#8e8e93', marginBottom: '12px', lineHeight: 1.4 }}>
+            Your decks live only in this browser. Export a JSON backup to keep it safe or move it to another device.
+          </p>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button
+              type="button"
+              onClick={() => downloadBackup()}
+              className="btn-premium-secondary"
+              style={{ height: '34px', padding: '0 14px', fontSize: '12px' }}
+            >
+              <Download size={13} /> Export backup
+            </button>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="btn-premium-secondary"
+              style={{ height: '34px', padding: '0 14px', fontSize: '12px' }}
+            >
+              <Upload size={13} /> Import backup
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/json,.json"
+              onChange={handleImportFile}
+              style={{ display: 'none' }}
+            />
           </div>
         </div>
 
