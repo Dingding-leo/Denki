@@ -195,6 +195,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({ card, isFlipped, onFlip, a
                     color: showScratchpad ? '#a5b4fc' : '#9ca3af',
                   }}
                   className="btn-premium-secondary"
+                  aria-label="Toggle scratchpad"
                   title="Toggle Scratchpad"
                 >
                   <Edit3 size={14} />
@@ -208,6 +209,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({ card, isFlipped, onFlip, a
                     padding: 0,
                   }}
                   className="btn-premium-secondary"
+                  aria-label="Pronounce text"
                   title="Pronounce English Text"
                 >
                   <Volume2 size={14} />

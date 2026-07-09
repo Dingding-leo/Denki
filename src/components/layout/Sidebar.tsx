@@ -71,6 +71,8 @@ export const Sidebar: React.FC = () => {
             WebkitBackdropFilter: 'blur(8px)',
           }}
           className="hover-lift"
+          aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-expanded={!sidebarCollapsed}
           title={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
         >
           {sidebarCollapsed ? <ChevronRight size={12} style={{ color: '#ffffff' }} /> : <ChevronLeft size={12} style={{ color: '#ffffff' }} />}
@@ -210,6 +212,7 @@ export const Sidebar: React.FC = () => {
                 cursor: 'pointer',
                 color: '#9ca3af',
               }}
+              aria-label="Create new class"
               title="Create New Class"
             >
               <Plus size={12} />
@@ -315,6 +318,7 @@ export const Sidebar: React.FC = () => {
               justifyContent: 'center',
             }}
             className="btn-premium-secondary"
+            aria-label="Open settings"
             title="App Settings"
           >
             <Settings size={16} />

@@ -211,6 +211,7 @@ export const StudySessionPage: React.FC = () => {
               marginRight: '14px',
             }}
             className="btn-premium-secondary"
+            aria-label="Exit session"
             title="Exit Session (Esc)"
           >
             <ArrowLeft size={16} />
@@ -289,6 +290,8 @@ export const StudySessionPage: React.FC = () => {
                   boxShadow: showNotes ? '0 0 12px rgba(99, 102, 241, 0.2)' : 'none',
                 }}
                 className="btn-premium-secondary"
+                aria-label="Toggle notepad"
+                aria-pressed={showNotes}
                 title={`Toggle Notepad (${showNotes ? 'ON' : 'OFF'})`}
               >
                 <BookOpen size={15} />
@@ -307,6 +310,8 @@ export const StudySessionPage: React.FC = () => {
                   boxShadow: autoSpeak ? '0 0 12px rgba(16, 185, 129, 0.2)' : 'none',
                 }}
                 className="btn-premium-secondary"
+                aria-label="Auto-pronounce answers"
+                aria-pressed={autoSpeak}
                 title={`Auto Pronounce English (${autoSpeak ? 'ON' : 'OFF'})`}
               >
                 <Volume2 size={15} />
@@ -325,6 +330,7 @@ export const StudySessionPage: React.FC = () => {
                   boxShadow: showShortcuts ? '0 0 12px rgba(59, 130, 246, 0.2)' : 'none',
                 }}
                 className="btn-premium-secondary"
+                aria-label="Keyboard shortcuts"
                 title="Keyboard Shortcuts Guide"
               >
                 <Keyboard size={15} />
@@ -341,6 +347,7 @@ export const StudySessionPage: React.FC = () => {
               padding: 0,
             }}
             className="btn-premium-danger"
+            aria-label="Exit session"
             title="Exit Session (Esc)"
           >
             <X size={15} />
@@ -501,6 +508,7 @@ export const StudySessionPage: React.FC = () => {
                         gap: '8px',
                       }}
                       className="hover-lift"
+                      aria-label="Undo last rating"
                       title="Undo last rating"
                     >
                       Undo <kbd className="keycap-badge">Z</kbd>
@@ -612,7 +620,8 @@ export const StudySessionPage: React.FC = () => {
                           transition: 'all 0.2s',
                         }}
                         className="hover-lift"
-                        title="Undo last rating"
+                        aria-label="Undo last rating"
+                      title="Undo last rating"
                       >
                         <span style={{ fontSize: '12px', fontWeight: 700 }}>Undo</span>
                         <kbd className="keycap-badge">Z</kbd>
