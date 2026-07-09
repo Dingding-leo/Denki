@@ -140,6 +140,16 @@ const AIGeneratePage: React.FC = () => {
               />
             </label>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              {apiKey && (
+                <button
+                  type="button"
+                  className="ghost-btn"
+                  style={{ color: 'var(--danger)' }}
+                  onClick={() => { localStorage.removeItem('denki_ai_key'); setApiKey(''); }}
+                >
+                  Remove key
+                </button>
+              )}
               {apiKey && <button type="button" className="ghost-btn" onClick={() => setShowSettings(false)}>Cancel</button>}
               <button type="submit" className="btn-primary">Save Key</button>
             </div>

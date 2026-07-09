@@ -190,7 +190,9 @@ export const createStudySlice: StateCreator<
       Promise.all([
         get().loadClassStats(currentCard.classId),
         get().loadDeckStats(currentCard.classId),
-        get().loadStats(get().activeClassId),
+        // Scope the streak/global stats to the class being studied, not whatever
+        // class is selected in the nav (which may differ for a deck session).
+        get().loadStats(currentCard.classId),
       ]).catch(console.warn);
 
       triggerAutoSave();
@@ -262,7 +264,7 @@ export const createStudySlice: StateCreator<
       Promise.all([
         get().loadClassStats(lastEntry.card.classId),
         get().loadDeckStats(lastEntry.card.classId),
-        get().loadStats(get().activeClassId),
+        get().loadStats(lastEntry.card.classId),
       ]).catch(console.warn);
 
       triggerAutoSave();
