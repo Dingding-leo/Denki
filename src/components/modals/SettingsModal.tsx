@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Sliders, Volume2, RotateCcw } from 'lucide-react';
-import confetti from 'canvas-confetti';
+import { celebrate } from '../../services/celebrate';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -38,7 +38,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
     localStorage.setItem('denki-fsrs-hard-multiplier', String(hardMultiplier));
     localStorage.setItem('denki-speech-speed', String(speechSpeed));
 
-    confetti({
+    celebrate({
       particleCount: 30,
       spread: 40,
       origin: { y: 0.8 },

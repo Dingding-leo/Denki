@@ -5,7 +5,7 @@ import { useFlashcardStore } from '../store/useFlashcardStore';
 import { AnalyticsDashboard } from '../components/AnalyticsDashboard';
 import { ManageCardsModal } from '../components/modals/ManageCardsModal';
 import { ImportModal } from '../components/modals/ImportModal';
-import confetti from 'canvas-confetti';
+import { celebrate } from '../services/celebrate';
 
 export const ClassViewPage: React.FC = () => {
   const { classId: routeClassId } = useParams();
@@ -87,7 +87,7 @@ export const ClassViewPage: React.FC = () => {
     setNewDeckName('');
     setNewDeckDesc('');
     
-    confetti({
+    celebrate({
       particleCount: 25,
       spread: 35,
       origin: { y: 0.8 },

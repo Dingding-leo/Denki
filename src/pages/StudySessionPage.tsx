@@ -9,7 +9,7 @@ import { StudyNotepad } from '../components/StudyNotepad';
 import { StudyProgressBar } from '../components/StudyProgressBar';
 import { StudyCheckpoint } from '../components/StudyCheckpoint';
 import { StudySessionSummary } from '../components/StudySessionSummary';
-import confetti from 'canvas-confetti';
+import { celebrate } from '../services/celebrate';
 import { reviewCard, formatInterval, type Rating } from '../services/scheduler';
 import { loadSchedulerParams } from '../services/schedulerParams';
 
@@ -129,13 +129,13 @@ export const StudySessionPage: React.FC = () => {
       setRoundAverages(prev => [...prev, avg]);
       setCheckpointOpen(true);
 
-      confetti({
+      celebrate({
         particleCount: 50,
         spread: 60,
         origin: { y: 0.6 }
       });
     } else if (s.currentIndex >= s.queue.length) {
-      confetti({
+      celebrate({
         particleCount: 150,
         spread: 90,
         origin: { y: 0.6 },

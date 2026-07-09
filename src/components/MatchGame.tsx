@@ -4,7 +4,7 @@ import { useFlashcardStore } from '../store/useFlashcardStore';
 import { renderContent } from '../services/markdown';
 import { db } from '../db';
 import type { Card } from '../db/schema';
-import confetti from 'canvas-confetti';
+import { celebrate } from '../services/celebrate';
 
 /** Fisher-Yates (Knuth) shuffle — unbiased O(n) in-place shuffle */
 function shuffleArray<T>(array: T[]): T[] {
@@ -215,7 +215,7 @@ export const MatchGame: React.FC<MatchGameProps> = ({ deckId, onExit }) => {
       setTime(finalTime);
 
       // Trigger confetti!
-      confetti({
+      celebrate({
         particleCount: 150,
         spread: 80,
         origin: { y: 0.65 },
@@ -231,14 +231,14 @@ export const MatchGame: React.FC<MatchGameProps> = ({ deckId, onExit }) => {
         
         // Extra celebratory confetti shower
         setTimeout(() => {
-          confetti({
+          celebrate({
             particleCount: 100,
             angle: 60,
             spread: 55,
             origin: { x: 0 },
             colors: ['#eab308', '#6366f1']
           });
-          confetti({
+          celebrate({
             particleCount: 100,
             angle: 120,
             spread: 55,

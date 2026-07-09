@@ -25,7 +25,7 @@ const App: React.FC = () => {
 
   if (isInitializing) {
     return (
-      <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'center', justifyContent: 'center', background: '#0a0e17', color: '#f3f4f6' }}>
+      <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'center', justifyContent: 'center', background: '#09090b', color: '#f3f4f6' }}>
         <h2>Initializing Denki...</h2>
       </div>
     );

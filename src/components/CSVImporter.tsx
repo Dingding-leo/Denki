@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
 import { useFlashcardStore } from '../store/useFlashcardStore';
-import confetti from 'canvas-confetti';
+import { celebrate } from '../services/celebrate';
 
 interface CSVImporterProps {
   classId: number;
@@ -50,7 +50,7 @@ export const CSVImporter: React.FC<CSVImporterProps> = ({ classId, deckId, onCom
           });
           
           // Celebrate with confetti
-          confetti({
+          celebrate({
             particleCount: 80,
             spread: 60,
             origin: { y: 0.7 },

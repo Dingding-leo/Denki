@@ -188,7 +188,7 @@ export const Sidebar: React.FC = () => {
             display: 'flex',
             alignItems: 'center',
             padding: sidebarCollapsed ? '12px 0' : '16px 16px 8px 16px',
-            color: '#6b7280',
+            color: '#9ca3af', /* AA contrast at 11px on near-black bg */
             fontSize: '11px',
             textTransform: 'uppercase',
             letterSpacing: '1px',
@@ -274,7 +274,7 @@ export const Sidebar: React.FC = () => {
                       <p style={{ fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {cls.name}
                       </p>
-                      <p style={{ fontSize: '10px', color: '#636366' }}>{cls.decksCount} decks • {cls.total} cards</p>
+                      <p style={{ fontSize: '10px', color: '#9ca3af' }}>{cls.decksCount} decks • {cls.total} cards</p>
                     </div>
                   )}
  

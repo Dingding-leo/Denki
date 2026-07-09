@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Trash2, Edit2, ChevronDown, ChevronRight, Check, Search, Bold, Italic, Code, Brackets } from 'lucide-react';
 import { useFlashcardStore } from '../../store/useFlashcardStore';
 import type { CardType } from '../../db/schema';
-import confetti from 'canvas-confetti';
+import { celebrate } from '../../services/celebrate';
 
 interface ManageCardsModalProps {
   classId: number;
@@ -49,7 +49,7 @@ export const ManageCardsModal: React.FC<ManageCardsModalProps> = ({ classId, dec
     setNewCardFront('');
     setNewCardBack('');
     
-    confetti({
+    celebrate({
       particleCount: 15,
       spread: 20,
       origin: { y: 0.85 },
@@ -69,7 +69,7 @@ export const ManageCardsModal: React.FC<ManageCardsModalProps> = ({ classId, dec
     await store.updateCard(cardId, editFront.trim(), editBack.trim(), editCardType);
     setEditingCardId(null);
     
-    confetti({
+    celebrate({
       particleCount: 10,
       spread: 15,
       origin: { y: 0.85 },

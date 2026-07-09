@@ -2,7 +2,7 @@ import { Sparkles } from 'lucide-react';
 import { useFlashcardStore } from '../store/useFlashcardStore';
 import { AnalyticsDashboard } from '../components/AnalyticsDashboard';
 import LandingPage from './LandingPage';
-import confetti from 'canvas-confetti';
+import { celebrate } from '../services/celebrate';
 
 export const DashboardPage: React.FC = () => {
   const store = useFlashcardStore();
@@ -96,7 +96,7 @@ export const DashboardPage: React.FC = () => {
       'cloze'
     );
 
-    confetti({
+    celebrate({
       particleCount: 100,
       spread: 70,
       origin: { y: 0.6 }

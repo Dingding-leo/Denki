@@ -24,13 +24,14 @@
   --color-good: #3b82f6;  
   --color-easy: #10b981;  
   
-  /* Fonts */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: 'JetBrains Mono', SFMono-Regular, Consolas, Menlo, Courier, monospace;
-  
+  /* Fonts — Plus Jakarta Sans is the family actually loaded in index.html. */
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: SFMono-Regular, Consolas, Menlo, Courier, monospace;
+
   /* Blurs & Shadows */
   --blur-glass: 12px;
   --shadow-premium: 0 4px 24px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --shadow-neon: 0 0 0 3px rgba(37, 99, 235, 0.25); /* accent focus glow */
 }
 
 * {
@@ -487,9 +488,11 @@ body {
 }
 
 .segmented-control-item.active {
-  background: rgba(99, 102, 241, 0.15) !important;
-  color: #a5b4fc !important;
-  border: 1px solid rgba(99, 102, 241, 0.3) !important;
+  /* No !important — a tab can override these with an inline per-mode color
+     (e.g. the Learn tab's green); the class only supplies the default. */
+  background: rgba(99, 102, 241, 0.15);
+  color: #a5b4fc;
+  border: 1px solid rgba(99, 102, 241, 0.3);
   box-shadow: 0 0 10px rgba(99, 102, 241, 0.2);
 }
 
@@ -794,5 +797,19 @@ body {
   background: rgba(245, 158, 11, 0.12);
   border-color: rgba(245, 158, 11, 0.25);
   color: #fde047;
+}
+
+/* Respect users who prefer reduced motion (WCAG 2.3.3 / 2.2.2): neutralize the
+   card flips, infinite pulses/gradients, hover-lifts and entrance animations.
+   Confetti bursts are JS canvas and are guarded separately in code. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 

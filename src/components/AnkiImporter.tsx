@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { Upload, HelpCircle, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
 import { useFlashcardStore } from '../store/useFlashcardStore';
-import confetti from 'canvas-confetti';
+import { celebrate } from '../services/celebrate';
 
 interface AnkiImporterProps {
   classId: number;
@@ -297,7 +297,7 @@ export const AnkiImporter: React.FC<AnkiImporterProps> = ({ classId, onComplete 
       });
 
       // Celebrate with confetti
-      confetti({
+      celebrate({
         particleCount: 120,
         spread: 80,
         origin: { y: 0.7 },

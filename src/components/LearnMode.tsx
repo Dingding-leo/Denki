@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useFlashcardStore } from '../store/useFlashcardStore';
 import { renderContent } from '../services/markdown';
 import { CheckCircle, XCircle, ArrowRight, Sparkles } from 'lucide-react';
-import confetti from 'canvas-confetti';
+import { celebrate } from '../services/celebrate';
 
 interface LearnModeProps {
   onExit?: () => void;
@@ -147,7 +147,7 @@ export const LearnMode: React.FC<LearnModeProps> = ({ onExit }) => {
 
     if (correct) {
       // Trigger subtle correct confetti
-      confetti({
+      celebrate({
         particleCount: 50,
         spread: 40,
         origin: { y: 0.75 },
@@ -170,7 +170,7 @@ export const LearnMode: React.FC<LearnModeProps> = ({ onExit }) => {
   const handleOverride = () => {
     setIsCorrect(true);
     setOverrideAllowed(false);
-    confetti({
+    celebrate({
       particleCount: 40,
       spread: 40,
       origin: { y: 0.75 },
