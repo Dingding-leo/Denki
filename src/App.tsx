@@ -4,6 +4,7 @@ import { useFlashcardStore } from './store/useFlashcardStore';
 
 // Layout
 import { MainLayout } from './components/layout/MainLayout';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 // Pages
 import { DashboardPage } from './pages/DashboardPage';
@@ -31,19 +32,21 @@ const App: React.FC = () => {
   }
 
   return (
-    <HashRouter>
-      <Routes>
-        <Route path="/" element={<MainLayout />}>
-          <Route index element={<DashboardPage />} />
-          <Route path="class/:classId" element={<ClassViewPage />} />
-          <Route path="ai-generate" element={<AIGeneratePage />} />
-        </Route>
-        
-        {/* Immersion Study Session routes (No sidebar) */}
-        <Route path="/study/class/:classId" element={<StudySessionPage />} />
-        <Route path="/study/deck/:deckId" element={<StudySessionPage />} />
-      </Routes>
-    </HashRouter>
+    <ErrorBoundary>
+      <HashRouter>
+        <Routes>
+          <Route path="/" element={<MainLayout />}>
+            <Route index element={<DashboardPage />} />
+            <Route path="class/:classId" element={<ClassViewPage />} />
+            <Route path="ai-generate" element={<AIGeneratePage />} />
+          </Route>
+
+          {/* Immersion Study Session routes (No sidebar) */}
+          <Route path="/study/class/:classId" element={<StudySessionPage />} />
+          <Route path="/study/deck/:deckId" element={<StudySessionPage />} />
+        </Routes>
+      </HashRouter>
+    </ErrorBoundary>
   );
 };
 

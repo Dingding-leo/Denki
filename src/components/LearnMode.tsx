@@ -26,6 +26,54 @@ export const LearnMode: React.FC<LearnModeProps> = ({ onExit }) => {
     }
   }, [session?.currentIndex, checked]);
 
+  // Refs + the global keydown listener are declared BEFORE any early return so
+  // the hook order is unconditional. Declaring them after the `if (!session)` /
+  // `if (!currentCard)` returns below is a rules-of-hooks violation that crashes
+  // the whole app ("rendered fewer hooks than expected") the moment the Learn
+  // queue empties. The refs are synced from render state further down.
+  const checkedRef = useRef(checked);
+  const isCorrectRef = useRef(isCorrect);
+  const overrideAllowedRef = useRef(overrideAllowed);
+  const handleCheckAnswerRef = useRef<() => void>(() => {});
+  const handleRatingRef = useRef<(rating: 1 | 2 | 3 | 4 | 5) => void>(() => {});
+  const handleOverrideRef = useRef<() => void>(() => {});
+  const onExitRef = useRef(onExit);
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Don't intercept if user is typing in an unrelated input
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'SELECT') return;
+      // Allow the textarea in this component (Enter handled by handleKeyDown above)
+      if (e.target === textareaRef.current && e.key !== 'Escape') return;
+
+      if (e.key === 'Escape') {
+        if (onExitRef.current) onExitRef.current();
+        return;
+      }
+
+      if (!checkedRef.current) {
+        if (e.key === ' ' || e.key === 'Enter') {
+          e.preventDefault();
+          handleCheckAnswerRef.current();
+        }
+      } else {
+        if (['1', '2', '3', '4', '5'].includes(e.key)) {
+          e.preventDefault();
+          handleRatingRef.current(parseInt(e.key) as 1 | 2 | 3 | 4 | 5);
+        } else if (e.key === ' ' || e.key === 'Enter') {
+          e.preventDefault();
+          handleRatingRef.current(isCorrectRef.current ? 5 : 1);
+        } else if (e.key === 'o' || e.key === 'O') {
+          if (overrideAllowedRef.current) handleOverrideRef.current();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []); // Stable: all mutable state accessed via refs
+
   if (!session) return null;
 
   const currentCard = session.queue[session.currentIndex];
@@ -139,58 +187,15 @@ export const LearnMode: React.FC<LearnModeProps> = ({ onExit }) => {
     }
   };
 
-  // Use refs for stable references in the global keydown listener,
-  // avoiding stale closure bugs where the effect captures old state.
-  const checkedRef = useRef(checked);
+  // Keep the refs (declared above the early returns) current with this render's
+  // state and handlers, for the stable global keydown listener.
   checkedRef.current = checked;
-  const isCorrectRef = useRef(isCorrect);
   isCorrectRef.current = isCorrect;
-  const overrideAllowedRef = useRef(overrideAllowed);
   overrideAllowedRef.current = overrideAllowed;
-
-  const handleCheckAnswerRef = useRef(handleCheckAnswer);
   handleCheckAnswerRef.current = handleCheckAnswer;
-  const handleRatingRef = useRef(handleRating);
   handleRatingRef.current = handleRating;
-  const handleOverrideRef = useRef(handleOverride);
   handleOverrideRef.current = handleOverride;
-  const onExitRef = useRef(onExit);
   onExitRef.current = onExit;
-
-  useEffect(() => {
-    const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // Don't intercept if user is typing in an unrelated input
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === 'INPUT' || tag === 'SELECT') return;
-      // Allow the textarea in this component (Enter handled by handleKeyDown above)
-      if (e.target === textareaRef.current && e.key !== 'Escape') return;
-
-      if (e.key === 'Escape') {
-        if (onExitRef.current) onExitRef.current();
-        return;
-      }
-
-      if (!checkedRef.current) {
-        if (e.key === ' ' || e.key === 'Enter') {
-          e.preventDefault();
-          handleCheckAnswerRef.current();
-        }
-      } else {
-        if (['1', '2', '3', '4', '5'].includes(e.key)) {
-          e.preventDefault();
-          handleRatingRef.current(parseInt(e.key) as 1 | 2 | 3 | 4 | 5);
-        } else if (e.key === ' ' || e.key === 'Enter') {
-          e.preventDefault();
-          handleRatingRef.current(isCorrectRef.current ? 5 : 1);
-        } else if (e.key === 'o' || e.key === 'O') {
-          if (overrideAllowedRef.current) handleOverrideRef.current();
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleGlobalKeyDown);
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, []); // Stable: all mutable state accessed via refs
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', width: '100%', maxWidth: '720px', margin: '0 auto' }}>
