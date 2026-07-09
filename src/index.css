@@ -541,7 +541,39 @@ body {
     height: calc(100vh - 280px) !important;
     min-height: 340px !important;
   }
-  
+
+  /* Study-session chrome: shrink so the top bar, tabs and rating dock fit
+     narrow viewports instead of overflowing a fixed 70px / 760px layout. */
+  .study-top-nav {
+    height: 56px;
+    padding: 0 12px;
+    gap: 8px;
+  }
+  .study-top-nav h3 {
+    font-size: 13px !important;
+  }
+  .segmented-control {
+    gap: 2px;
+  }
+  .segmented-control-item {
+    padding: 6px 9px;
+    font-size: 12px;
+  }
+  .rating-dock {
+    max-width: 100%;
+    padding: 10px 10px;
+    border-radius: 16px;
+  }
+  .rating-btn-card {
+    padding: 9px 3px;
+    min-width: 0;
+    font-size: 11px;
+  }
+  .rating-btn-card .rating-interval-hint,
+  .rating-btn-card small {
+    font-size: 9px;
+  }
+
   .flip-card-front, .flip-card-back {
     padding: 24px 16px !important;
   }
