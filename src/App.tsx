@@ -1,16 +1,23 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, lazy, Suspense } from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import { useFlashcardStore } from './store/useFlashcardStore';
 
-// Layout
+// Layout (eager — it's the app shell)
 import { MainLayout } from './components/layout/MainLayout';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
-// Pages
-import { DashboardPage } from './pages/DashboardPage';
-import { ClassViewPage } from './pages/ClassViewPage';
-import { StudySessionPage } from './pages/StudySessionPage';
-import AIGeneratePage from './pages/AIGeneratePage';
+// Pages are route-split so heavy leaves (AI generator, importers, analytics,
+// prism/marked) don't inflate the initial bundle.
+const DashboardPage = lazy(() => import('./pages/DashboardPage').then(m => ({ default: m.DashboardPage })));
+const ClassViewPage = lazy(() => import('./pages/ClassViewPage').then(m => ({ default: m.ClassViewPage })));
+const StudySessionPage = lazy(() => import('./pages/StudySessionPage').then(m => ({ default: m.StudySessionPage })));
+const AIGeneratePage = lazy(() => import('./pages/AIGeneratePage'));
+
+const PageFallback = () => (
+  <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'center', justifyContent: 'center', background: '#09090b', color: '#a1a1aa' }}>
+    Loading…
+  </div>
+);
 
 const App: React.FC = () => {
   const store = useFlashcardStore();
@@ -34,17 +41,19 @@ const App: React.FC = () => {
   return (
     <ErrorBoundary>
       <HashRouter>
-        <Routes>
-          <Route path="/" element={<MainLayout />}>
-            <Route index element={<DashboardPage />} />
-            <Route path="class/:classId" element={<ClassViewPage />} />
-            <Route path="ai-generate" element={<AIGeneratePage />} />
-          </Route>
+        <Suspense fallback={<PageFallback />}>
+          <Routes>
+            <Route path="/" element={<MainLayout />}>
+              <Route index element={<DashboardPage />} />
+              <Route path="class/:classId" element={<ClassViewPage />} />
+              <Route path="ai-generate" element={<AIGeneratePage />} />
+            </Route>
 
-          {/* Immersion Study Session routes (No sidebar) */}
-          <Route path="/study/class/:classId" element={<StudySessionPage />} />
-          <Route path="/study/deck/:deckId" element={<StudySessionPage />} />
-        </Routes>
+            {/* Immersion Study Session routes (No sidebar) */}
+            <Route path="/study/class/:classId" element={<StudySessionPage />} />
+            <Route path="/study/deck/:deckId" element={<StudySessionPage />} />
+          </Routes>
+        </Suspense>
       </HashRouter>
     </ErrorBoundary>
   );
