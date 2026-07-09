@@ -8,11 +8,30 @@ interface AnkiImporterProps {
   onComplete?: () => void;
 }
 
-// Define global extensions for type safety when loading dynamically
+// Minimal typings for the dynamically CDN-loaded JSZip and sql.js globals,
+// covering only the surface this importer uses.
+interface AnkiZipEntry {
+  async(type: 'text'): Promise<string>;
+  async(type: 'arraybuffer'): Promise<ArrayBuffer>;
+  async(type: 'uint8array'): Promise<Uint8Array>;
+}
+interface AnkiZip {
+  file(path: string): AnkiZipEntry | null;
+}
+interface SqlJsResult {
+  columns: string[];
+  values: unknown[][];
+}
+interface SqlJsDatabase {
+  exec(sql: string): SqlJsResult[];
+}
+interface SqlJsStatic {
+  Database: new (data: Uint8Array) => SqlJsDatabase;
+}
 declare global {
   interface Window {
-    JSZip: any;
-    initSqlJs: any;
+    JSZip: { loadAsync(data: Blob | ArrayBuffer): Promise<AnkiZip> };
+    initSqlJs: (config?: { locateFile?: (file: string) => string }) => Promise<SqlJsStatic>;
   }
 }
 
@@ -189,7 +208,7 @@ export const AnkiImporter: React.FC<AnkiImporterProps> = ({ classId, onComplete 
         if (hasDecksTable.length > 0) {
           const decksRes = ankiDb.exec("SELECT id, name FROM decks");
           if (decksRes.length > 0 && decksRes[0].values) {
-            decksRes[0].values.forEach(([id, name]: any) => {
+            decksRes[0].values.forEach(([id, name]) => {
               decksMap[String(id)] = String(name);
             });
           }
@@ -251,9 +270,9 @@ export const AnkiImporter: React.FC<AnkiImporterProps> = ({ classId, onComplete 
         const rows = cardsRes[0].values;
         setProgressMsg(`Importing ${rows.length} cards in bulk transaction...`);
         
-        const cardsToInsert: any[] = [];
-        
-        rows.forEach(([did, flds]: any) => {
+        const cardsToInsert: Parameters<typeof bulkCreateCards>[0] = [];
+
+        rows.forEach(([did, flds]) => {
           // Split fields by Anki's \x1f Unit Separator
           const fields = String(flds).split('\x1f');
           const frontRaw = fields[0] || '';
@@ -308,12 +327,12 @@ export const AnkiImporter: React.FC<AnkiImporterProps> = ({ classId, onComplete 
         setTimeout(onComplete, 2200);
       }
 
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
       setLoading(false);
       setStatus({
         type: 'error',
-        message: err.message || 'An error occurred while loading or parsing the Anki .apkg file.',
+        message: err instanceof Error ? err.message : 'An error occurred while loading or parsing the Anki .apkg file.',
       });
     }
   };

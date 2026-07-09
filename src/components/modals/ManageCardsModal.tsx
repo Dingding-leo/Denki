@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Trash2, Edit2, ChevronDown, ChevronRight, Check, Search, Bold, Italic, Code, Brackets } from 'lucide-react';
 import { useFlashcardStore } from '../../store/useFlashcardStore';
-import type { CardType } from '../../db/schema';
+import type { Card, CardType } from '../../db/schema';
 import { celebrate } from '../../services/celebrate';
 
 interface ManageCardsModalProps {
@@ -105,8 +105,8 @@ export const ManageCardsModal: React.FC<ManageCardsModalProps> = ({ classId, dec
     });
   };
 
-  const handleStartEdit = (card: any) => {
-    setEditingCardId(card.id);
+  const handleStartEdit = (card: Card) => {
+    setEditingCardId(card.id ?? null);
     setEditFront(card.front);
     setEditBack(card.back);
     setEditCardType(card.cardType);

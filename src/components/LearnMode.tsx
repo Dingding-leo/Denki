@@ -426,7 +426,7 @@ export const LearnMode: React.FC<LearnModeProps> = ({ onExit }) => {
                   return (
                     <button
                       key={opt.rating}
-                      onClick={() => handleRating(opt.rating as any)}
+                      onClick={() => handleRating(opt.rating as 1 | 2 | 3 | 4 | 5)}
                       className={opt.colorClass}
                       style={{
                         padding: '10px 4px',
