@@ -1,15 +1,16 @@
 {
   "name": "Denki",
   "short_name": "Denki",
-  "description": "Scientific Spaced Repetition & Cognitive Fatigue Tracker",
-  "start_url": "/",
+  "description": "A focused, local-first spaced repetition flashcard studio.",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#0a0e17",
   "theme_color": "#0a0e17",
   "orientation": "any",
   "icons": [
     {
-      "src": "/denki_logo.png",
+      "src": "denki_logo.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

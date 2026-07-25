@@ -75,8 +75,8 @@ const LandingPage: React.FC<{ hasClasses: boolean }> = ({ hasClasses }) => {
           }}>scientific spacing</span>
         </h1>
         <p style={{ fontSize: '1.2rem', color: '#8e8e93', maxWidth: 560, lineHeight: 1.7, marginBottom: 40 }}>
-          An open-source flashcard studio powered by FSRS 4.5.
-          Beautiful, local-first, and free forever. The Anki alternative you've been waiting for.
+          A focused, local-first flashcard studio powered by FSRS 4.5.
+          Build reliable review habits without an account, ads, or cloud lock-in.
         </p>
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center' }}>
           <a href="https://dingding-leo.github.io/Denki/" target="_blank" rel="noopener"
@@ -112,7 +112,7 @@ const LandingPage: React.FC<{ hasClasses: boolean }> = ({ hasClasses }) => {
             { icon: <Brain size={22} />, title: 'FSRS 4.5 Engine', desc: 'State-of-the-art spaced repetition. Reviews optimized for 90% recall. Study less, remember more.' },
             { icon: <Sparkles size={22} />, title: 'AI Card Generation', desc: 'Paste your notes and let AI create flashcards instantly. Supports OpenRouter, OpenAI, and any compatible API.' },
             { icon: <Zap size={22} />, title: 'Local-First & Offline', desc: 'All data stored in your browser via IndexedDB. Works 100% offline. Your data never leaves your device.' },
-            { icon: <PenTool size={22} />, title: 'Built-in Scratchpad', desc: 'Sketch diagrams, write formulas, or draw kanji directly on flashcards. No plugins needed.' },
+            { icon: <PenTool size={22} />, title: 'Built-in Scratchpad', desc: 'Sketch diagrams, work through formulas, or annotate difficult concepts beside your flashcards. No plugins needed.' },
             { icon: <Download size={22} />, title: 'Anki Import', desc: 'One-click migration from Anki. Drag and drop your .apkg files. Also supports CSV batch import.' },
             { icon: <Gamepad2 size={22} />, title: 'Speed Match Game', desc: 'Break up study sessions with an arcade-style matching game. Gamified learning that works.' },
             { icon: <Shield size={22} />, title: 'Open Source (MIT)', desc: 'Free forever. No tracking, no ads, no premium tiers. Community-driven development.' },

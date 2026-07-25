@@ -1,9 +1,10 @@
-const CACHE_NAME = 'denki-cache-v5';
+const CACHE_NAME = 'denki-cache-v6';
+const BASE_URL = new URL('./', self.location.href).pathname;
 const ASSETS_TO_CACHE = [
-  '/',
-  '/index.html',
-  '/manifest.webmanifest',
-  '/denki_logo.png'
+  BASE_URL,
+  `${BASE_URL}index.html`,
+  `${BASE_URL}manifest.webmanifest`,
+  `${BASE_URL}denki_logo.png`
 ];
 
 // 1. Install Event: Cache critical shell assets and immediately activate
@@ -15,13 +16,13 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// 2. Activate Event: Clean up ALL old caches and take control immediately
+// 2. Activate Event: Clean up only Denki's old caches and take control immediately
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cache) => {
-          if (cache !== CACHE_NAME) {
+          if (cache.startsWith('denki-cache-') && cache !== CACHE_NAME) {
             return caches.delete(cache);
           }
         })
@@ -53,7 +54,7 @@ self.addEventListener('fetch', (event) => {
         // Offline fallback: serve from cache
         return caches.match(event.request).then((cached) => {
           if (cached) return cached;
-          if (isNavigate) return caches.match('/');
+          if (isNavigate) return caches.match(BASE_URL);
         });
       })
     );
@@ -76,7 +77,7 @@ self.addEventListener('fetch', (event) => {
         return networkResponse;
       }).catch(() => {
         if (event.request.mode === 'navigate') {
-          return caches.match('/');
+          return caches.match(BASE_URL);
         }
       });
     })
