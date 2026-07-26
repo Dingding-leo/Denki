@@ -35,6 +35,7 @@ export const Toaster: React.FC = () => {
           <div
             key={t.id}
             role="status"
+            className="denki-toast"
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -51,7 +52,6 @@ export const Toaster: React.FC = () => {
               fontWeight: 500,
               pointerEvents: 'auto',
               animation: 'slideUpFade 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
-              maxWidth: '420px',
             }}
           >
             <Icon size={16} style={{ color, flexShrink: 0 }} />

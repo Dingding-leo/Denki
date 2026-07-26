@@ -48,6 +48,15 @@ export const createDeckSlice: StateCreator<
     return id;
   },
 
+  updateDeck: async (deckId, name, description) => {
+    const updated = await db.decks.update(deckId, { name, description });
+    if (updated === 0) throw new Error('Deck not found');
+    set({
+      decks: get().decks.map(d => (d.id === deckId ? { ...d, name, description } : d)),
+    });
+    triggerAutoSave();
+  },
+
   deleteDeck: async (deckId) => {
     const deck = await db.decks.get(deckId);
     if (!deck) return;

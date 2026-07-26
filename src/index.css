@@ -904,6 +904,12 @@ body {
   color: var(--text-primary);
 }
 
+/* Toast width lives here (not inline) so the mobile "stack flex containers"
+   attribute selector above never matches it and it stays a horizontal row. */
+.denki-toast {
+  max-width: min(420px, calc(100vw - 32px));
+}
+
 /* Respect users who prefer reduced motion (WCAG 2.3.3 / 2.2.2): neutralize the
    card flips, infinite pulses/gradients, hover-lifts and entrance animations.
    Confetti bursts are JS canvas and are guarded separately in code. */

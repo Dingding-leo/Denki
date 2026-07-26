@@ -63,6 +63,15 @@ export const createClassSlice: StateCreator<
     return id;
   },
 
+  updateClass: async (classId, name, description) => {
+    const updated = await db.classes.update(classId, { name, description });
+    if (updated === 0) throw new Error('Class not found');
+    set({
+      classes: get().classes.map(c => (c.id === classId ? { ...c, name, description } : c)),
+    });
+    triggerAutoSave();
+  },
+
   deleteClass: async (classId) => {
     await db.transaction('rw', [db.classes, db.decks, db.cards, db.reviews], async () => {
       await db.classes.delete(classId);

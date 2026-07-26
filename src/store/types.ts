@@ -55,6 +55,7 @@ export interface ClassSlice {
   activeClassId: number | null;
   loadClasses: () => Promise<void>;
   createClass: (name: string, description: string) => Promise<number>;
+  updateClass: (classId: number, name: string, description: string) => Promise<void>;
   deleteClass: (classId: number) => Promise<void>;
 }
 
@@ -63,6 +64,7 @@ export interface DeckSlice {
   activeDeckId: number | null;
   loadDecks: (classId?: number) => Promise<void>;
   createDeck: (classId: number, name: string, description: string) => Promise<number>;
+  updateDeck: (deckId: number, name: string, description: string) => Promise<void>;
   deleteDeck: (deckId: number) => Promise<void>;
   saveDeckNotes: (deckId: number, notes: string) => Promise<void>;
   resetDeckProgress: (deckId: number) => Promise<void>;

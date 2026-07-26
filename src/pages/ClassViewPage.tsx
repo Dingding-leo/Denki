@@ -4,6 +4,7 @@ import { Trash2, Play, Upload, Download, Edit2, RotateCcw, ChevronRight } from '
 import { useFlashcardStore } from '../store/useFlashcardStore';
 import { AnalyticsDashboard } from '../components/AnalyticsDashboard';
 import { ManageCardsModal } from '../components/modals/ManageCardsModal';
+import { EditEntityModal } from '../components/modals/EditEntityModal';
 import { exportDeckToCsv } from '../services/deckExport';
 import { ImportModal } from '../components/modals/ImportModal';
 import { celebrate } from '../services/celebrate';
@@ -22,6 +23,8 @@ export const ClassViewPage: React.FC = () => {
   
   const [managingDeckId, setManagingDeckId] = useState<number | null>(null);
   const [importingDeckId, setImportingDeckId] = useState<number | null>(null);
+  const [editingClass, setEditingClass] = useState(false);
+  const [editingDeck, setEditingDeck] = useState<{ id: number; name: string; description: string } | null>(null);
 
   useEffect(() => {
     // Sync to store for Analytics Dashboard
@@ -122,18 +125,35 @@ export const ClassViewPage: React.FC = () => {
             <p style={{ color: '#9ca3af', fontSize: '14px', marginTop: '6px', lineHeight: 1.4 }}>{activeClass.description}</p>
           </div>
           
-          <button
-            onClick={() => {
-              if (confirm("Are you sure you want to delete this CLASS? This will permanently delete all decks and cards under this class!")) {
-                store.deleteClass(activeClass.id || 0);
-                navigate('/');
-              }
-            }}
-            style={{ padding: '6px 12px', fontSize: '12px' }}
-            className="btn-premium-danger"
-          >
-            <Trash2 size={13} /> Delete Class
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={() => setEditingClass(true)}
+              style={{ padding: '6px 12px', fontSize: '12px' }}
+              className="btn-premium-secondary"
+              aria-label="Edit class name and description"
+            >
+              <Edit2 size={13} /> Edit
+            </button>
+            <button
+              onClick={async () => {
+                const ok = await confirmDialog({
+                  title: `Delete “${activeClass.name}”`,
+                  message: 'This permanently deletes the class with every deck, card and review inside it. This cannot be undone.',
+                  confirmLabel: 'Delete class',
+                  danger: true,
+                });
+                if (ok) {
+                  await store.deleteClass(activeClass.id || 0);
+                  toast('Class deleted', 'info');
+                  navigate('/');
+                }
+              }}
+              style={{ padding: '6px 12px', fontSize: '12px' }}
+              className="btn-premium-danger"
+            >
+              <Trash2 size={13} /> Delete Class
+            </button>
+          </div>
         </div>
 
         {/* Segmented Class Workspace tabs */}
@@ -220,6 +240,17 @@ export const ClassViewPage: React.FC = () => {
                     <div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                         <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#f3f4f6' }}>{deck.name}</h3>
+                        <div style={{ display: 'flex', gap: '2px' }}>
+                        <button
+                          onClick={() => deck.id && setEditingDeck({ id: deck.id, name: deck.name, description: deck.description })}
+                          style={{ background: 'transparent', border: 'none', color: '#8e8e93', cursor: 'pointer', opacity: 0.6, padding: '4px' }}
+                          title="Edit deck name and description"
+                          aria-label="Edit deck name and description"
+                          onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+                          onMouseLeave={e => e.currentTarget.style.opacity = '0.6'}
+                        >
+                          <Edit2 size={14} />
+                        </button>
                         <button
                           onClick={async () => {
                             if (!deck.id) return;
@@ -241,6 +272,7 @@ export const ClassViewPage: React.FC = () => {
                         >
                           <Trash2 size={15} />
                         </button>
+                        </div>
                       </div>
                       
                       <p style={{ fontSize: '12px', color: '#9ca3af', lineHeight: 1.4, marginBottom: '8px' }}>{deck.description}</p>
@@ -403,6 +435,34 @@ export const ClassViewPage: React.FC = () => {
           classId={activeClassId}
           deckId={importingDeckId}
           onClose={() => setImportingDeckId(null)}
+        />
+      )}
+
+      {editingClass && (
+        <EditEntityModal
+          title="Edit Class"
+          namePlaceholder="e.g. Dental Anatomy"
+          initialName={activeClass.name}
+          initialDescription={activeClass.description}
+          onSave={async (name, description) => {
+            await store.updateClass(activeClass.id || 0, name, description);
+            toast('Class updated');
+          }}
+          onClose={() => setEditingClass(false)}
+        />
+      )}
+
+      {editingDeck !== null && (
+        <EditEntityModal
+          title="Edit Deck"
+          namePlaceholder="e.g. Tooth Morphology"
+          initialName={editingDeck.name}
+          initialDescription={editingDeck.description}
+          onSave={async (name, description) => {
+            await store.updateDeck(editingDeck.id, name, description);
+            toast('Deck updated');
+          }}
+          onClose={() => setEditingDeck(null)}
         />
       )}
     </>
