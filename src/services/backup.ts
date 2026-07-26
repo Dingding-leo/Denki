@@ -173,4 +173,6 @@ export async function downloadBackup() {
   a.download = `denki-backup-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   URL.revokeObjectURL(url);
+  const { markBackupExported } = await import('./dataSafety');
+  markBackupExported();
 }

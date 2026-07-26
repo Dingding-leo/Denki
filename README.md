@@ -19,7 +19,7 @@ The product name is simply **Denki**. It is a general-purpose learning tool for 
 ## Features
 
 - **FSRS 4.5 scheduling** with adjustable retention and review settings.
-- **Local-first storage** through IndexedDB, with offline-ready PWA support.
+- **Local-first storage** through IndexedDB, with persistent-storage protection and offline-ready PWA support.
 - **Classes and decks** for organising material across subjects.
 - **Standard and cloze cards** with Markdown and syntax highlighting.
 - **Focused study sessions** with progress checkpoints and review summaries.
@@ -27,7 +27,7 @@ The product name is simply **Denki**. It is a general-purpose learning tool for 
 - **Anki and CSV imports** for bringing existing material across.
 - **Optional AI card generation** using a provider and API key chosen by the learner.
 - **Progress insights** including review history, streaks, and due-card statistics.
-- **Portable backups** through JSON export and restore.
+- **Portable backups** through JSON export and restore, with gentle weekly reminders.
 
 ## Privacy
 

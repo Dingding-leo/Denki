@@ -6,6 +6,7 @@ import { useFlashcardStore } from './store/useFlashcardStore';
 import { MainLayout } from './components/layout/MainLayout';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { GlobalUI } from './components/ui/GlobalUI';
+import { requestPersistentStorage, maybeNudgeBackup } from './services/dataSafety';
 
 // Pages are route-split so heavy leaves (AI generator, importers, analytics,
 // prism/marked) don't inflate the initial bundle.
@@ -29,6 +30,10 @@ const App: React.FC = () => {
       store.loadClasses(),
       store.loadDecks()
     ]).then(() => setIsInitializing(false));
+
+    // Data safety: shield IndexedDB from eviction and remind about stale backups
+    requestPersistentStorage();
+    maybeNudgeBackup();
   }, []);
 
   if (isInitializing) {
