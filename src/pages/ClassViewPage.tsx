@@ -7,6 +7,7 @@ import { ManageCardsModal } from '../components/modals/ManageCardsModal';
 import { exportDeckToCsv } from '../services/deckExport';
 import { ImportModal } from '../components/modals/ImportModal';
 import { celebrate } from '../services/celebrate';
+import { confirmDialog, toast } from '../store/uiStore';
 
 export const ClassViewPage: React.FC = () => {
   const { classId: routeClassId } = useParams();
@@ -220,9 +221,17 @@ export const ClassViewPage: React.FC = () => {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                         <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#f3f4f6' }}>{deck.name}</h3>
                         <button
-                          onClick={() => {
-                            if (deck.id && window.confirm("Are you sure you want to delete this DECK? This will permanently delete all cards in it!")) {
-                              store.deleteDeck(deck.id);
+                          onClick={async () => {
+                            if (!deck.id) return;
+                            const ok = await confirmDialog({
+                              title: `Delete “${deck.name}”`,
+                              message: 'This permanently deletes the deck and every card inside it, including all review history. This cannot be undone.',
+                              confirmLabel: 'Delete deck',
+                              danger: true,
+                            });
+                            if (ok) {
+                              await store.deleteDeck(deck.id);
+                              toast('Deck deleted', 'info');
                             }
                           }}
                           style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', opacity: 0.6, padding: '4px' }}
@@ -323,8 +332,16 @@ export const ClassViewPage: React.FC = () => {
 
                           <button
                             onClick={async () => {
-                              if (deck.id && window.confirm("Are you sure you want to reset all learning history and progress for this deck? This action cannot be undone.")) {
+                              if (!deck.id) return;
+                              const ok = await confirmDialog({
+                                title: `Reset progress for “${deck.name}”`,
+                                message: 'All learning history and scheduling for this deck will be erased — every card returns to New. This cannot be undone.',
+                                confirmLabel: 'Reset progress',
+                                danger: true,
+                              });
+                              if (ok) {
                                 await store.resetDeckProgress(deck.id);
+                                toast('Deck progress reset', 'info');
                               }
                             }}
                             style={{ width: '32px', height: '32px', padding: 0 }}

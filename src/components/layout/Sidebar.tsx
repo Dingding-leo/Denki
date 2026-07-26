@@ -1,9 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { NavLink, useNavigate, useParams } from 'react-router-dom';
-import { ChevronRight, ChevronLeft, Sparkles, LayoutDashboard, Plus, Settings } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Sparkles, LayoutDashboard, Plus, Settings, Search } from 'lucide-react';
 import { useFlashcardStore } from '../../store/useFlashcardStore';
+import { useUIStore } from '../../store/uiStore';
 import { CreateClassModal } from '../modals/CreateClassModal';
 import { SettingsModal } from '../modals/SettingsModal';
+
+const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
 export const Sidebar: React.FC = () => {
   const store = useFlashcardStore();
@@ -122,6 +125,38 @@ export const Sidebar: React.FC = () => {
 
         {/* Home Link */}
         <div style={{ padding: sidebarCollapsed ? '12px 6px' : '16px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          {/* Global search trigger (⌘K command palette) */}
+          <button
+            onClick={() => useUIStore.getState().setPaletteOpen(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              width: '100%',
+              padding: sidebarCollapsed ? '10px 0' : '9px 12px',
+              borderRadius: '8px',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              background: 'rgba(255, 255, 255, 0.03)',
+              color: '#8e8e93',
+              fontSize: '13px',
+              cursor: 'pointer',
+              justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
+              marginBottom: '8px',
+              transition: 'all 0.2s ease',
+            }}
+            className="hover-glow"
+            aria-label="Search classes, decks and cards"
+            title={`Search (${isMac ? '⌘' : 'Ctrl+'}K)`}
+          >
+            <Search size={15} style={{ flexShrink: 0 }} />
+            {!sidebarCollapsed && (
+              <>
+                <span style={{ flex: 1, textAlign: 'left' }}>Search…</span>
+                <kbd className="keycap-badge" style={{ fontSize: '9px' }}>{isMac ? '⌘K' : '^K'}</kbd>
+              </>
+            )}
+          </button>
+
           <NavLink
             to="/"
             style={({ isActive }) => ({

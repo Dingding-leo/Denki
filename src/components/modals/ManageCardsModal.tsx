@@ -3,6 +3,7 @@ import { X, Trash2, Edit2, ChevronDown, ChevronRight, Check, Search, Bold, Itali
 import { useFlashcardStore } from '../../store/useFlashcardStore';
 import type { Card, CardType } from '../../db/schema';
 import { celebrate } from '../../services/celebrate';
+import { confirmDialog, toast } from '../../store/uiStore';
 
 interface ManageCardsModalProps {
   classId: number;
@@ -437,9 +438,17 @@ export const ManageCardsModal: React.FC<ManageCardsModalProps> = ({ classId, dec
                         </span>
 
                         <button
-                          onClick={() => {
-                            if (card.id && window.confirm('Delete this card? This action cannot be undone.')) {
-                              store.deleteCard(card.id);
+                          onClick={async () => {
+                            if (!card.id) return;
+                            const ok = await confirmDialog({
+                              title: 'Delete card',
+                              message: 'Delete this card and its review history? This cannot be undone.',
+                              confirmLabel: 'Delete',
+                              danger: true,
+                            });
+                            if (ok) {
+                              await store.deleteCard(card.id);
+                              toast('Card deleted', 'info');
                             }
                           }}
                           style={{ 
@@ -606,13 +615,14 @@ export const ManageCardsModal: React.FC<ManageCardsModalProps> = ({ classId, dec
                                     const ratingVal = parseInt(e.target.value, 10);
                                     // Resetting to "Unseen (New)" deletes the card's entire
                                     // review history — guard it per AI_GUIDELINES §3.
-                                    if (
-                                      ratingVal === 0 &&
-                                      !window.confirm(
-                                        'Reset this card to New? This permanently deletes its review history and cannot be undone.',
-                                      )
-                                    ) {
-                                      return;
+                                    if (ratingVal === 0) {
+                                      const ok = await confirmDialog({
+                                        title: 'Reset card to New',
+                                        message: 'This permanently deletes the card’s review history and cannot be undone.',
+                                        confirmLabel: 'Reset card',
+                                        danger: true,
+                                      });
+                                      if (!ok) return;
                                     }
                                     await store.manuallySetCardConfidence(card.id, ratingVal);
                                   }}

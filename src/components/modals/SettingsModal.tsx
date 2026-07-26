@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Sliders, Volume2, RotateCcw, Download, Upload } from 'lucide-react';
 import { celebrate } from '../../services/celebrate';
 import { downloadBackup, importDatabase } from '../../services/backup';
+import { confirmDialog, toast } from '../../store/uiStore';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -49,12 +50,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
     onClose();
   };
 
-  const handleReset = () => {
-    if (window.confirm('Reset settings to system defaults?')) {
+  const handleReset = async () => {
+    const ok = await confirmDialog({
+      title: 'Reset to defaults',
+      message: 'Restore all preferences to their default values? Your decks and cards are not affected.',
+      confirmLabel: 'Reset',
+      danger: true,
+    });
+    if (ok) {
       setRetention(0.9);
       setEasyBonus(1.3);
       setHardMultiplier(1.2);
       setSpeechSpeed(1.0);
+      toast('Preferences restored to defaults', 'info');
     }
   };
 
@@ -64,15 +72,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
     const file = e.target.files?.[0];
     e.target.value = ''; // allow re-picking the same file later
     if (!file) return;
-    if (!window.confirm('Importing a backup REPLACES all current decks, cards and review history. Continue?')) {
-      return;
-    }
+    const ok = await confirmDialog({
+      title: 'Import backup',
+      message: 'Importing a backup REPLACES all current decks, cards and review history with the file’s contents. This cannot be undone. Continue?',
+      confirmLabel: 'Replace everything',
+      danger: true,
+    });
+    if (!ok) return;
     try {
       const snapshot = JSON.parse(await file.text());
       await importDatabase(snapshot);
       window.location.reload();
     } catch (err) {
-      window.alert('Import failed: ' + (err instanceof Error ? err.message : 'invalid backup file'));
+      toast('Import failed: ' + (err instanceof Error ? err.message : 'invalid backup file'), 'error');
     }
   };
 

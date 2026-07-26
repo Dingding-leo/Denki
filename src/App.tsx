@@ -5,6 +5,7 @@ import { useFlashcardStore } from './store/useFlashcardStore';
 // Layout (eager — it's the app shell)
 import { MainLayout } from './components/layout/MainLayout';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { GlobalUI } from './components/ui/GlobalUI';
 
 // Pages are route-split so heavy leaves (AI generator, importers, analytics,
 // prism/marked) don't inflate the initial bundle.
@@ -41,6 +42,7 @@ const App: React.FC = () => {
   return (
     <ErrorBoundary>
       <HashRouter>
+        <GlobalUI />
         <Suspense fallback={<PageFallback />}>
           <Routes>
             <Route path="/" element={<MainLayout />}>
