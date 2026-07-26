@@ -1,4 +1,5 @@
 import { db } from '../db';
+import { markBackupExported } from './dataSafety';
 
 const BACKUP_ENDPOINT = '/api/backup';
 const DEBOUNCE_MS = 2000; // Save 2 seconds after last change
@@ -173,6 +174,5 @@ export async function downloadBackup() {
   a.download = `denki-backup-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   URL.revokeObjectURL(url);
-  const { markBackupExported } = await import('./dataSafety');
   markBackupExported();
 }
