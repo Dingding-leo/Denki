@@ -1,6 +1,30 @@
 import type { StateCreator } from 'zustand';
 import { db } from '../../db';
+import { loadNewCardsPerDay, countNewIntroducedToday, newCardAllowance } from '../../services/studyLimits';
 import type { FlashcardState, StatsSlice, ClassStats, DeckStats, GlobalStats } from '../types';
+
+/**
+ * Due count for one deck with the daily new-card limit applied, so badges
+ * match what a study session will actually queue: all due reviews plus at
+ * most today's remaining new-card allowance.
+ */
+async function cappedDeckDueCount(
+  deckId: number,
+  now: Date,
+  introduced: Map<number, number>,
+  limit: number,
+): Promise<number> {
+  const rawDue = await db.cards
+    .where('[deckId+due]')
+    .between([deckId, new Date(0)], [deckId, now])
+    .count();
+  if (limit <= 0) return rawDue;
+
+  const newCount = await db.cards.where('[deckId+state]').equals([deckId, 0]).count();
+  const dueReviews = Math.max(0, rawDue - newCount);
+  const allowance = newCardAllowance(deckId, introduced, limit);
+  return dueReviews + Math.min(newCount, allowance);
+}
 
 export const createStatsSlice: StateCreator<
   FlashcardState,
@@ -17,12 +41,17 @@ export const createStatsSlice: StateCreator<
   loadClassStats: async (classId) => {
     const total = await db.cards.where('classId').equals(classId).count();
     const now = new Date();
-    
-    // Count due cards: due <= now
-    const dueCount = await db.cards
-      .where('[classId+due]')
-      .between([classId, new Date(0)], [classId, now])
-      .count();
+
+    // Due count = sum of per-deck due counts with the daily new-card limit
+    // applied, so the class badge agrees with the deck badges and the queue.
+    const limit = loadNewCardsPerDay();
+    const introduced = limit > 0 ? await countNewIntroducedToday() : new Map<number, number>();
+    const classDecks = await db.decks.where('classId').equals(classId).toArray();
+    let dueCount = 0;
+    for (const deck of classDecks) {
+      if (deck.id === undefined) continue;
+      dueCount += await cappedDeckDueCount(deck.id, now, introduced, limit);
+    }
 
     // Count mastered cards: state = 2 (Review)
     const masteredCount = await db.cards
@@ -30,7 +59,7 @@ export const createStatsSlice: StateCreator<
       .equals([classId, 2])
       .count();
 
-    const decksCount = await db.decks.where('classId').equals(classId).count();
+    const decksCount = classDecks.length;
     
     const masteryPct = total > 0 ? Math.round((masteredCount / total) * 100) : 0;
 
@@ -62,16 +91,15 @@ export const createStatsSlice: StateCreator<
     const classDecks = await db.decks.where('classId').equals(classId).toArray();
     const now = new Date();
     const newDeckStats: Record<number, DeckStats> = { ...get().deckStats };
+    const limit = loadNewCardsPerDay();
+    const introduced = limit > 0 ? await countNewIntroducedToday() : new Map<number, number>();
 
     for (const deck of classDecks) {
       if (deck.id === undefined) continue;
 
       const total = await db.cards.where('deckId').equals(deck.id).count();
-      
-      const dueCount = await db.cards
-        .where('[deckId+due]')
-        .between([deck.id, new Date(0)], [deck.id, now])
-        .count();
+
+      const dueCount = await cappedDeckDueCount(deck.id, now, introduced, limit);
 
       const masteredCount = await db.cards
         .where('[deckId+state]')

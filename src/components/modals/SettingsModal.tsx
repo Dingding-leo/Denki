@@ -3,6 +3,7 @@ import { X, Sliders, Volume2, RotateCcw, Download, Upload } from 'lucide-react';
 import { celebrate } from '../../services/celebrate';
 import { downloadBackup, importDatabase } from '../../services/backup';
 import { confirmDialog, toast } from '../../store/uiStore';
+import { NEW_CARDS_PER_DAY_KEY, DEFAULT_NEW_CARDS_PER_DAY, loadNewCardsPerDay } from '../../services/studyLimits';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -13,6 +14,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
   const [easyBonus, setEasyBonus] = useState(1.3);
   const [hardMultiplier, setHardMultiplier] = useState(1.2);
   const [speechSpeed, setSpeechSpeed] = useState(1.0);
+  const [newCardsPerDay, setNewCardsPerDay] = useState(DEFAULT_NEW_CARDS_PER_DAY);
 
   useEffect(() => {
     const r = localStorage.getItem('denki-fsrs-retention');
@@ -24,6 +26,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
     if (eb) setEasyBonus(parseFloat(eb));
     if (hm) setHardMultiplier(parseFloat(hm));
     if (ss) setSpeechSpeed(parseFloat(ss));
+    setNewCardsPerDay(loadNewCardsPerDay());
 
     // ESC key closes modal
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -39,6 +42,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
     localStorage.setItem('denki-fsrs-easy-bonus', String(easyBonus));
     localStorage.setItem('denki-fsrs-hard-multiplier', String(hardMultiplier));
     localStorage.setItem('denki-speech-speed', String(speechSpeed));
+    localStorage.setItem(NEW_CARDS_PER_DAY_KEY, String(Math.max(0, Math.floor(newCardsPerDay) || 0)));
 
     celebrate({
       particleCount: 30,
@@ -62,6 +66,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
       setEasyBonus(1.3);
       setHardMultiplier(1.2);
       setSpeechSpeed(1.0);
+      setNewCardsPerDay(DEFAULT_NEW_CARDS_PER_DAY);
       toast('Preferences restored to defaults', 'info');
     }
   };
@@ -178,6 +183,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
                   className="input-premium"
                 />
               </div>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', color: '#8e8e93', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                New Cards Per Day
+              </label>
+              <input
+                type="number"
+                min="0"
+                max="999"
+                step="1"
+                value={newCardsPerDay}
+                onChange={e => setNewCardsPerDay(parseInt(e.target.value, 10) || 0)}
+                className="input-premium"
+              />
+              <p style={{ fontSize: '11px', color: '#636366', marginTop: '4px', lineHeight: 1.3 }}>
+                Max new cards each deck introduces per day. Keeps daily workload sustainable — reviews are never limited. 0 = unlimited.
+              </p>
             </div>
           </div>
         </div>

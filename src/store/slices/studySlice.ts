@@ -4,7 +4,55 @@ import type { Card } from '../../db/schema';
 import { reviewCard } from '../../services/scheduler';
 import { loadSchedulerParams } from '../../services/schedulerParams';
 import { triggerAutoSave } from '../../services/backup';
+import { loadNewCardsPerDay, countNewIntroducedToday, newCardAllowance } from '../../services/studyLimits';
+import { toast } from '../uiStore';
 import type { FlashcardState, StudySlice } from '../types';
+
+const isNewCard = (card: Card) => card.state === 0 || !card.lastReviewed;
+
+/**
+ * Enforce the daily new-card limit: keep every due review, but only as many
+ * new cards per deck as today's remaining allowance permits. Returns the
+ * capped list and how many new cards were held back for tomorrow.
+ */
+async function applyNewCardLimit(cards: Card[]): Promise<{ cards: Card[]; heldBack: number }> {
+  const limit = loadNewCardsPerDay();
+  if (limit <= 0) return { cards, heldBack: 0 };
+
+  const introduced = await countNewIntroducedToday();
+  const remainingByDeck = new Map<number, number>();
+  const kept: Card[] = [];
+  let heldBack = 0;
+
+  // Cards arrive in creation order after the caller's sort; process in id
+  // order here so the oldest new cards are introduced first.
+  const sorted = [...cards].sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
+  for (const card of sorted) {
+    if (!isNewCard(card)) {
+      kept.push(card);
+      continue;
+    }
+    const remaining =
+      remainingByDeck.get(card.deckId) ?? newCardAllowance(card.deckId, introduced, limit);
+    if (remaining > 0) {
+      remainingByDeck.set(card.deckId, remaining - 1);
+      kept.push(card);
+    } else {
+      remainingByDeck.set(card.deckId, 0);
+      heldBack++;
+    }
+  }
+  return { cards: kept, heldBack };
+}
+
+const notifyHeldBack = (heldBack: number) => {
+  if (heldBack > 0) {
+    toast(
+      `Daily new-card limit reached — ${heldBack} new card${heldBack === 1 ? '' : 's'} saved for tomorrow`,
+      'info',
+    );
+  }
+};
 
 // Guards rateCard/undoLastRate so two concurrent mutations can't read the same
 // pre-await session snapshot and desync the in-memory queue/history from the DB.
@@ -26,6 +74,7 @@ export const createStudySlice: StateCreator<
     let filteredCards = deckCards;
     const isCram = forceCram || deckCards.length > 0 && deckCards.every(c => c.due === undefined);
     
+    let heldBack = 0;
     if (!forceCram) {
       filteredCards = deckCards.filter(card => {
         // If it's a new card (no lastReviewed or state is 0), it's due
@@ -33,6 +82,7 @@ export const createStudySlice: StateCreator<
         // Otherwise, check if due date is in the past
         return new Date(card.due).getTime() <= now.getTime();
       });
+      ({ cards: filteredCards, heldBack } = await applyNewCardLimit(filteredCards));
     }
 
     // Build weighted queue containing exactly 1 copy of each card for FSRS session order
@@ -56,6 +106,7 @@ export const createStudySlice: StateCreator<
         history: [],
       },
     });
+    notifyHeldBack(heldBack);
   },
 
   startClassStudySession: async (classId, forceCram = false) => {
@@ -65,11 +116,13 @@ export const createStudySlice: StateCreator<
     let filteredCards = classCards;
     const isCram = forceCram;
 
+    let heldBack = 0;
     if (!forceCram) {
       filteredCards = classCards.filter(card => {
         if (!card.lastReviewed || card.state === 0) return true;
         return new Date(card.due).getTime() <= now.getTime();
       });
+      ({ cards: filteredCards, heldBack } = await applyNewCardLimit(filteredCards));
     }
 
     // Build weighted queue containing exactly 1 copy of each card for FSRS session order
@@ -93,6 +146,7 @@ export const createStudySlice: StateCreator<
         history: [],
       },
     });
+    notifyHeldBack(heldBack);
   },
 
   rateCard: async (rating) => {
