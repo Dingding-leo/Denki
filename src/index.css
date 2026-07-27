@@ -58,6 +58,23 @@ body {
 
 /* Background meshes removed per redesign plan */
 
+/* Keep the four dashboard metrics balanced. The previous auto-fit grid made
+   three columns at the Denki.app window width, leaving one orphaned card and a
+   large empty area on the right. */
+.analytics-metrics-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.analytics-metrics-grid > .card-deck-premium {
+  min-width: 0;
+}
+
+@media (min-width: 1440px) {
+  .analytics-metrics-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
 /* Premium Scrollbars */
 ::-webkit-scrollbar {
   width: 8px;
@@ -631,6 +648,10 @@ body {
     height: auto !important;
     overflow-y: visible !important;
   }
+
+  .analytics-metrics-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Denki Clean UI additions */
@@ -923,4 +944,3 @@ body {
     scroll-behavior: auto !important;
   }
 }
-

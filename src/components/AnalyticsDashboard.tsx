@@ -31,9 +31,8 @@ export const AnalyticsDashboard: React.FC = () => {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '30px', padding: '10px 0' }}>
       
       {/* Metric Cards Grid */}
-      <div style={{
+      <div className="analytics-metrics-grid" style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
         gap: '20px',
       }}>
         {/* Metric 1 */}
