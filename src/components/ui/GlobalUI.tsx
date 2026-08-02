@@ -4,6 +4,7 @@ import { ConfirmDialogHost } from './ConfirmDialogHost';
 import { CommandPalette } from '../CommandPalette';
 import { ShortcutsModal } from '../modals/ShortcutsModal';
 import { useUIStore } from '../../store/uiStore';
+import { useFlashcardStore } from '../../store/useFlashcardStore';
 
 const isTypingTarget = (target: EventTarget | null) => {
   if (!(target instanceof HTMLElement)) return false;
@@ -35,9 +36,13 @@ export const GlobalUI: React.FC = () => {
         return;
       }
 
-      // "?" opens the shortcut reference — only outside text fields
+      // "?" opens the shortcut reference — only outside text fields. During a
+      // study session the page-level handler owns keyboard input; opening the
+      // modal here would steal focus from the flashcard and leave the session
+      // in a half-open state.
       if (e.key === '?' && !e.metaKey && !e.ctrlKey && !e.altKey && !isTypingTarget(e.target)) {
         if (paletteOpen || pendingConfirm) return;
+        if (useFlashcardStore.getState().session) return;
         e.preventDefault();
         setShortcutsOpen(!shortcutsOpen);
       }

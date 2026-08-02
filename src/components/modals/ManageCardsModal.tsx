@@ -198,6 +198,8 @@ export const ManageCardsModal: React.FC<ManageCardsModalProps> = ({ classId, dec
         {/* Close Button */}
         <button
           onClick={onClose}
+          aria-label="Close"
+          title="Close"
           style={{
             position: 'absolute',
             top: '20px', right: '20px',

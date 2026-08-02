@@ -45,6 +45,8 @@ export const ImportModal: React.FC<ImportModalProps> = ({ classId, deckId, onClo
       }}>
         <button
           onClick={onClose}
+          aria-label="Close"
+          title="Close"
           style={{
             position: 'absolute',
             top: '16px', right: '16px',

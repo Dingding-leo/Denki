@@ -67,6 +67,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
       setHardMultiplier(1.2);
       setSpeechSpeed(1.0);
       setNewCardsPerDay(DEFAULT_NEW_CARDS_PER_DAY);
+      // Persist immediately so the reset isn't silently lost if the modal is
+      // closed with X/Cancel instead of Apply Changes.
+      localStorage.setItem('denki-fsrs-retention', String(0.9));
+      localStorage.setItem('denki-fsrs-easy-bonus', String(1.3));
+      localStorage.setItem('denki-fsrs-hard-multiplier', String(1.2));
+      localStorage.setItem('denki-speech-speed', String(1.0));
+      localStorage.setItem(NEW_CARDS_PER_DAY_KEY, String(DEFAULT_NEW_CARDS_PER_DAY));
       toast('Preferences restored to defaults', 'info');
     }
   };
@@ -125,6 +132,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
           <button
             type="button"
             onClick={onClose}
+            aria-label="Close"
+            title="Close"
             style={{ background: 'transparent', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: '4px' }}
           >
             <X size={18} />

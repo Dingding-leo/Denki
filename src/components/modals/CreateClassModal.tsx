@@ -42,6 +42,8 @@ export const CreateClassModal: React.FC<CreateClassModalProps> = ({ onClose, onC
       }}>
         <button
           onClick={onClose}
+          aria-label="Close"
+          title="Close"
           style={{
             position: 'absolute',
             top: '16px', right: '16px',

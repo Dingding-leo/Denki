@@ -11,9 +11,11 @@ export const ConfirmDialogHost: React.FC = () => {
   const pending = useUIStore(s => s.pendingConfirm);
   const resolveConfirm = useUIStore(s => s.resolveConfirm);
   const confirmBtnRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!pending) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
     confirmBtnRef.current?.focus();
 
     // Capture phase + stopPropagation: while the dialog is open it owns
@@ -25,13 +27,38 @@ export const ConfirmDialogHost: React.FC = () => {
         e.preventDefault();
         resolveConfirm(false);
       } else if (e.key === 'Enter') {
+        // Enter only confirms when the dialog itself is the focus target. If the
+        // user is typing in a field (a confirm can open over a form), a bare
+        // Enter must not confirm a destructive action by accident.
+        const target = e.target as HTMLElement | null;
+        if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) {
+          return;
+        }
         e.stopPropagation();
         e.preventDefault();
         resolveConfirm(true);
+      } else if (e.key === 'Tab') {
+        // Keep Tab cycling within the dialog's two buttons.
+        const dialog = dialogRef.current;
+        if (!dialog) return;
+        const focusable = dialog.querySelectorAll<HTMLElement>('button');
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown, true);
-    return () => window.removeEventListener('keydown', handleKeyDown, true);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, true);
+      previousFocus?.focus();
+    };
   }, [pending, resolveConfirm]);
 
   if (!pending) return null;
@@ -55,6 +82,7 @@ export const ConfirmDialogHost: React.FC = () => {
       }}
     >
       <div
+        ref={dialogRef}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
