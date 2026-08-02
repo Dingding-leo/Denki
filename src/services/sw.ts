@@ -1,21 +1,32 @@
 /**
  * Service worker lifecycle manager.
  *
- * The SW is ONLY registered in production (built assets). In dev it is actively
- * unregistered and its caches cleared — a stale SW cached from a previous
- * session will otherwise serve a dead `index.html` whose hashed/lazy module URLs
- * no longer exist after the dev server restarts, producing the "Failed to fetch
- * dynamically imported module" crash.
+ * The SW is ONLY registered in production web deploys (built assets). It is
+ * actively disabled in two cases:
+ *   - Dev server (`vite dev`): a stale SW cached from a previous session would
+ *     serve a dead `index.html` whose hashed/lazy module URLs no longer exist
+ *     after the dev server restarts, producing the "Failed to fetch dynamically
+ *     imported module" crash. We never register, and sweep stale registrations.
+ *   - Tauri desktop: the app runs on a custom `tauri://` protocol where SWs are
+ *     unsupported and offline caching is handled by the OS/bundled assets.
  *
- * In production, `skipWaiting` + `clients.claim` (public/sw.js) means a newly
+ * In production web, `skipWaiting` + `clients.claim` (public/sw.js) means a newly
  * deployed SW takes over immediately. That alone can strand a user on a freshly
  * activated shell while old hashed chunks are still in flight, so we surface a
  * one-time "reload to update" prompt instead of silently reloading.
  */
 import { toast } from '../store/uiStore';
 
+/** True when running inside the Tauri desktop shell (custom protocol, no HTTP). */
+const isTauri = (): boolean =>
+  typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
 export function initServiceWorker() {
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+
+  // Inside the Tauri desktop shell there is no HTTP origin to cache — skip SW
+  // entirely (the bundled app already works offline).
+  if (isTauri()) return;
 
   if (import.meta.env.DEV) {
     // Dev: never register. Sweep any stale registration + caches left over from

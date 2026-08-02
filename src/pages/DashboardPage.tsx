@@ -2,7 +2,7 @@ import { Sparkles } from 'lucide-react';
 import { useEffect } from 'react';
 import { useFlashcardStore } from '../store/useFlashcardStore';
 import { AnalyticsDashboard } from '../components/AnalyticsDashboard';
-import LandingPage from './LandingPage';
+import EmptyStateHome from '../components/EmptyStateHome';
 import { celebrate } from '../services/celebrate';
 
 export const DashboardPage: React.FC = () => {
@@ -130,7 +130,7 @@ export const DashboardPage: React.FC = () => {
       </div>
       
       {store.classes.length === 0 ? (
-        <LandingPage hasClasses={false} />
+        <EmptyStateHome />
       ) : (
         <AnalyticsDashboard />
       )}

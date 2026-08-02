@@ -31,6 +31,10 @@ dist-ssr
 # Backups
 denki-backup.json
 
+# Tauri desktop build artifacts
+src-tauri/target/
+src-tauri/gen/
+
 # Local skill / agent tooling artifacts
 .agents/
 skills-lock.json
