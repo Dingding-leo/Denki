@@ -417,7 +417,7 @@ export const ClassViewPage: React.FC = () => {
         {/* CLASS STATISTICS DASHBOARD */}
         {classTab === 'analytics' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <AnalyticsDashboard />
+            <AnalyticsDashboard scope="class" />
           </div>
         )}
       </div>

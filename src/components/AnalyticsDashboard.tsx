@@ -2,7 +2,12 @@ import React from 'react';
 import { Award, Calendar, BarChart2, CheckCircle2, TrendingUp, Layers } from 'lucide-react';
 import { useFlashcardStore } from '../store/useFlashcardStore';
 
-export const AnalyticsDashboard: React.FC = () => {
+interface AnalyticsDashboardProps {
+  /** 'global' = all classes (Dashboard). 'class' = one class's stats (ClassView analytics tab). */
+  scope?: 'global' | 'class';
+}
+
+export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ scope = 'global' }) => {
   const globalStats = useFlashcardStore(state => state.globalStats);
   const decks = useFlashcardStore(state => state.decks);
 
@@ -17,6 +22,7 @@ export const AnalyticsDashboard: React.FC = () => {
   const { totalReviews, currentStreak, maxStreak, avgRecallRate, heatmapData, workloadForecast, cardStates } = globalStats;
   const metrics = { currentStreak, maxStreak, totalReviews, avgRecallRate };
   const totalCards = cardStates.newCount + cardStates.learningCount + cardStates.reviewCount;
+  const streakLabel = scope === 'class' ? 'Streak (this class)' : 'Active Streak';
 
   // Heatmap helper for square color classes
   const getHeatmapColor = (count: number) => {
@@ -41,7 +47,7 @@ export const AnalyticsDashboard: React.FC = () => {
             <Award size={24} />
           </div>
           <div>
-            <p style={{ fontSize: '13px', color: '#8e8e93', fontWeight: 500 }}>Active Streak</p>
+            <p style={{ fontSize: '13px', color: '#8e8e93', fontWeight: 500 }}>{streakLabel}</p>
             <h3 style={{ fontSize: '24px', fontWeight: 800, color: '#f3f4f6', marginTop: '2px' }}>
               {metrics.currentStreak} <span style={{ fontSize: '14px', fontWeight: 500, color: '#9ca3af' }}>days</span>
             </h3>

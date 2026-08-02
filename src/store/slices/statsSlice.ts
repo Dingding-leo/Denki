@@ -120,29 +120,11 @@ export const createStatsSlice: StateCreator<
 
   loadStats: async (classId) => {
     const now = new Date();
-    
-    // 1. Calculate Core Metrics
-    let totalReviews: number;
-    let positiveReviewsCount: number;
 
-    if (classId) {
-      totalReviews = await db.reviews.where('classId').equals(classId).count();
-      positiveReviewsCount = await db.reviews
-        .where('classId')
-        .equals(classId)
-        .and((r) => r.rating >= 3)
-        .count();
-    } else {
-      totalReviews = await db.reviews.count();
-      positiveReviewsCount = await db.reviews
-        .where('rating')
-        .aboveOrEqual(3)
-        .count();
-    }
-
-    const avgRecallRate = totalReviews > 0 ? Math.round((positiveReviewsCount / totalReviews) * 100) : 100;
-
-    // 2. Fetch last 12 months reviews for Streak and Heatmap calculations
+    // 2. Fetch last 12 months reviews for the heatmap, streak, and recall rate.
+    //    A single window + single pass keeps the "Retention Accuracy" metric on
+    //    the same scope as the heatmap/streak it sits beside (previously the
+    //    recall rate was all-time while the heatmap was 12 months).
     const oneYearAgo = new Date();
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
     oneYearAgo.setHours(0, 0, 0, 0);
@@ -159,6 +141,14 @@ export const createStatsSlice: StateCreator<
         .above(oneYearAgo)
         .toArray();
     }
+
+    // 1. Core metrics from the SAME review window as the heatmap (not all-time).
+    const totalReviews = reviews.length;
+    let positiveReviewsCount = 0;
+    for (const r of reviews) {
+      if (r.rating >= 3) positiveReviewsCount++;
+    }
+    const avgRecallRate = totalReviews > 0 ? Math.round((positiveReviewsCount / totalReviews) * 100) : 100;
 
     // One local-time YYYY-MM-DD key used everywhere so the streak and heatmap
     // agree (previously the streak used local toDateString() while the heatmap
@@ -237,10 +227,45 @@ export const createStatsSlice: StateCreator<
       heatmapData.push(week);
     }
 
-    // 3. Workload Forecast (7-day counts)
+    // 3. Workload Forecast (7-day counts). The "Today" bucket applies the daily
+    //    new-card limit so the headline number matches what a study session will
+    //    actually queue. Sessions cap new cards PER DECK (applyNewCardLimit), so
+    //    the correct Today count is: due reviews + Σ over decks of
+    //    min(deck's new cards, deck's remaining allowance). Per-deck state-0
+    //    counts and allowances are computed ONCE (hoisted out of the loop) to
+    //    avoid N+1 queries per day. Future buckets never include new cards (they
+    //    are created due-now and only get a future due after being rated).
     const workloadForecast: { dayName: string; count: number }[] = [];
     const forecastToday = new Date();
     forecastToday.setHours(0, 0, 0, 0);
+
+    const limit = loadNewCardsPerDay();
+
+    // Precompute per-deck state-0 counts and allowances for the "Today" cap.
+    // newCountByDeck: deckId -> number of state-0 cards.
+    const newCountByDeck = new Map<number, number>();
+    let allowanceByDeck: Map<number, number> | null = null;
+    if (limit > 0) {
+      const introduced = await countNewIntroducedToday();
+      allowanceByDeck = new Map<number, number>();
+      for (const [deckId, introducedCount] of introduced) {
+        allowanceByDeck.set(deckId, Math.max(0, limit - introducedCount));
+      }
+      // Also seed allowance for decks not in today's introductions (full limit).
+      const allDeckIds = classId
+        ? (await db.decks.where('classId').equals(classId).toArray()).map((d) => d.id).filter((id): id is number => id !== undefined)
+        : (await db.decks.toArray()).map((d) => d.id).filter((id): id is number => id !== undefined);
+      for (const id of allDeckIds) {
+        if (!allowanceByDeck.has(id)) allowanceByDeck.set(id, limit);
+      }
+      // Count state-0 cards per deck (only needed for the capped "Today" bucket).
+      const state0 = await db.cards.where('state').equals(0).toArray();
+      for (const c of state0) {
+        if (c.deckId !== undefined) {
+          newCountByDeck.set(c.deckId, (newCountByDeck.get(c.deckId) ?? 0) + 1);
+        }
+      }
+    }
 
     for (let i = 0; i < 7; i++) {
       const start = new Date(forecastToday.getTime() + i * 24 * 60 * 60 * 1000);
@@ -255,11 +280,42 @@ export const createStatsSlice: StateCreator<
           .where('[classId+due]')
           .between([classId, lowerBound], [classId, end])
           .count();
+
+        if (i === 0 && limit > 0) {
+          // Separate state-0 (new) cards from reviews so the cap applies only to
+          // introductions. Count reviews as rawDue minus new, capped per deck.
+          const classDecks = await db.decks.where('classId').equals(classId).toArray();
+          let dueReviews = count;
+          let cappedNew = 0;
+          for (const deck of classDecks) {
+            if (deck.id === undefined) continue;
+            const deckNew = newCountByDeck.get(deck.id) ?? 0;
+            const deckAllow = allowanceByDeck?.get(deck.id) ?? 0;
+            dueReviews -= deckNew;
+            cappedNew += Math.min(deckNew, deckAllow);
+          }
+          count = Math.max(0, dueReviews) + cappedNew;
+        }
       } else {
         count = await db.cards
           .where('due')
           .between(lowerBound, end)
           .count();
+
+        if (i === 0 && limit > 0) {
+          // Same per-deck capping across ALL decks for the global dashboard.
+          const allDecks = await db.decks.toArray();
+          let dueReviews = count;
+          let cappedNew = 0;
+          for (const deck of allDecks) {
+            if (deck.id === undefined) continue;
+            const deckNew = newCountByDeck.get(deck.id) ?? 0;
+            const deckAllow = allowanceByDeck?.get(deck.id) ?? 0;
+            dueReviews -= deckNew;
+            cappedNew += Math.min(deckNew, deckAllow);
+          }
+          count = Math.max(0, dueReviews) + cappedNew;
+        }
       }
 
       const dayName = i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : start.toLocaleDateString('en-US', { weekday: 'short' });

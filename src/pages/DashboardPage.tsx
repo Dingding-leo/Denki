@@ -1,4 +1,5 @@
 import { Sparkles } from 'lucide-react';
+import { useEffect } from 'react';
 import { useFlashcardStore } from '../store/useFlashcardStore';
 import { AnalyticsDashboard } from '../components/AnalyticsDashboard';
 import LandingPage from './LandingPage';
@@ -6,6 +7,13 @@ import { celebrate } from '../services/celebrate';
 
 export const DashboardPage: React.FC = () => {
   const store = useFlashcardStore();
+
+  // The dashboard always shows GLOBAL stats. Refresh on mount (and whenever the
+  // page remounts after a study session, which sits outside MainLayout) so a
+  // session in one class can't leave class-scoped stats on the global view.
+  useEffect(() => {
+    useFlashcardStore.getState().loadStats(null);
+  }, []);
 
   const seedDefaultDecks = async () => {
     // 1. Create Computer Science class
