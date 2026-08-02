@@ -52,6 +52,25 @@ export async function generateFlashcards(
     throw new AIError('Content cannot be empty.');
   }
 
+  // Reject non-HTTPS endpoints except loopback. The API key is a paid billing
+  // credential and the endpoint is configurable (the UI invites any
+  // OpenAI-compatible URL); sending it over plaintext HTTP on a shared network
+  // makes it trivially interceptable. Local model servers (Ollama, LM Studio)
+  // run on http://localhost and never leave the machine, so loopback is allowed.
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(apiUrl);
+  } catch {
+    throw new AIError('The configured API endpoint is not a valid URL.');
+  }
+  const isLoopback =
+    parsedUrl.hostname === 'localhost' ||
+    parsedUrl.hostname === '127.0.0.1' ||
+    parsedUrl.hostname === '::1';
+  if (parsedUrl.protocol !== 'https:' && !isLoopback) {
+    throw new AIError('The API endpoint must use HTTPS (or be a local server). Refusing to send your API key over plaintext HTTP.');
+  }
+
   const MAX_CHARS = 30000;
   if (text.length > MAX_CHARS) {
     throw new AIError(`Content is too long (${text.length} chars). Please trim it under ${MAX_CHARS} characters.`);
@@ -110,7 +129,15 @@ ${text}`;
       throw new AIError('Invalid format returned by AI (expected a JSON array of cards).');
     }
 
-    return toFlashcards(items);
+    // Cap the number of cards we'll accept so a runaway provider response (or a
+    // prompt-injected instruction) can't bloat the database with thousands of
+    // rows. The 30k-char cap only guards input.
+    const MAX_CARDS = 200;
+    const cards = toFlashcards(items.slice(0, MAX_CARDS));
+    if (items.length > MAX_CARDS) {
+      console.warn(`[Denki AI] Provider returned ${items.length} cards; keeping the first ${MAX_CARDS}.`);
+    }
+    return cards;
   } catch (err: unknown) {
     if (err instanceof AIError) throw err;
     if (err instanceof DOMException && err.name === 'AbortError') {

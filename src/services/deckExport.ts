@@ -1,8 +1,14 @@
 import { db } from '../db';
 
-/** Quote a CSV field when it contains a comma, quote, or newline (RFC 4180). */
+/**
+ * Quote a CSV field when it contains a comma, quote, or newline (RFC 4180), and
+ * neutralize spreadsheet formula injection: cells starting with `=`, `+`, `-`,
+ * or `@` are prefixed with a single quote so Excel/Sheets treat them as text
+ * instead of executing them when the exported file is opened.
+ */
 function csvField(value: string): string {
-  return /[",\n\r]/.test(value) ? '"' + value.replace(/"/g, '""') + '"' : value;
+  const safe = /^[=+\-@]/.test(value) ? "'" + value : value;
+  return /[",\n\r]/.test(safe) ? '"' + safe.replace(/"/g, '""') + '"' : safe;
 }
 
 interface ExportableCard {

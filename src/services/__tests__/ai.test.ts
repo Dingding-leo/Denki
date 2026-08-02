@@ -101,4 +101,35 @@ describe('generateFlashcards', () => {
     });
     await expect(generateFlashcards('some text', 'key')).rejects.toThrow(/invalid api key/);
   });
+
+  it('rejects a plaintext http endpoint to protect the API key', async () => {
+    const fetchSpy = vi.fn();
+    globalThis.fetch = fetchSpy;
+    await expect(
+      generateFlashcards('text', 'key', 'http://192.168.1.5:9999/v1/chat/completions'),
+    ).rejects.toThrow(/HTTPS/);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('allows loopback http endpoints (local Ollama/LM Studio)', async () => {
+    mockContent('[{"question": "Q", "answer": "A"}]');
+    const result = await generateFlashcards('text', 'key', 'http://localhost:11434/v1/chat/completions');
+    expect(result).toHaveLength(1);
+    // Also verify the request actually went to the loopback URL.
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'http://localhost:11434/v1/chat/completions',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('rejects an invalid endpoint URL', async () => {
+    await expect(generateFlashcards('text', 'key', 'not a url')).rejects.toThrow(/not a valid URL/);
+  });
+
+  it('caps the number of accepted cards from a runaway provider response', async () => {
+    const many = Array.from({ length: 500 }, (_, i) => ({ question: `Q${i}`, answer: `A${i}` }));
+    mockContent(JSON.stringify(many));
+    const result = await generateFlashcards('some text', 'key');
+    expect(result.length).toBeLessThanOrEqual(200);
+  });
 });

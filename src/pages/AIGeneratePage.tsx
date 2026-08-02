@@ -161,6 +161,10 @@ const AIGeneratePage: React.FC = () => {
         <label style={{ display: 'block', marginBottom: 12, fontWeight: 600 }}>
           Paste lecture notes, textbook excerpts, or any text:
         </label>
+        <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: 12, lineHeight: 1.4 }}>
+          The text you paste is sent to your configured AI provider to generate cards — it leaves this device.
+          Content is not stored on any server, but please avoid pasting anything sensitive.
+        </p>
         <textarea
           value={text}
           onChange={e => setText(e.target.value)}

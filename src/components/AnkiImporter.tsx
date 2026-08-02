@@ -2,6 +2,22 @@ import React, { useRef, useState } from 'react';
 import { Upload, HelpCircle, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
 import { useFlashcardStore } from '../store/useFlashcardStore';
 import { celebrate } from '../services/celebrate';
+import DOMPurify from 'dompurify';
+
+/**
+ * Sanitize raw HTML extracted from an .apkg file before it is stored in a card.
+ * Shared .apkg decks are a real supply-chain vector (trojanized decks exist), so
+ * strip scripts and event handlers at import time as defense-in-depth on top of
+ * the renderer's escaping. Style attributes are kept so legitimate Anki styling
+ * (colored text, layout) survives; event handlers are the actual XSS surface.
+ */
+function sanitizeAnkiHtml(html: string): string {
+  return DOMPurify.sanitize(html, {
+    USE_PROFILES: { html: true },
+    FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form'],
+    FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover'],
+  });
+}
 
 interface AnkiImporterProps {
   classId: number;
@@ -280,9 +296,11 @@ export const AnkiImporter: React.FC<AnkiImporterProps> = ({ classId, onComplete 
           
           if (!frontRaw) return;
 
-          // Replace image and sound paths with inline Base64 data URLs
-          const front = replaceMediaInString(frontRaw, mediaLookup);
-          const back = replaceMediaInString(backRaw, mediaLookup);
+          // Replace image and sound paths with inline Base64 data URLs, then
+          // sanitize the result so trojanized shared decks can't plant scripts
+          // or event handlers in stored card content.
+          const front = sanitizeAnkiHtml(replaceMediaInString(frontRaw, mediaLookup));
+          const back = sanitizeAnkiHtml(replaceMediaInString(backRaw, mediaLookup));
 
           // Map deck ID or fallback to the first created deck
           let targetDeckId = deckMapping[String(did)];
