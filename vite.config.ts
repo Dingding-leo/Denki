@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { denkiBackupPlugin } from './vite-plugin-backup'
+import { denkiPrecachePlugin } from './vite-plugin-precache'
 
 // The GitHub Pages deploy serves the app from the /Denki/ subpath, so assets
 // must be base-prefixed there. Local dev, `vite preview`, and the Docker image
@@ -9,5 +10,5 @@ const base = process.env.GITHUB_ACTIONS ? '/Denki/' : '/'
 
 export default defineConfig({
   base,
-  plugins: [react(), denkiBackupPlugin()],
+  plugins: [react(), denkiBackupPlugin(), denkiPrecachePlugin()],
 })

@@ -20,15 +20,6 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
     <title>Denki — Local-First Spaced Repetition Studio</title>
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('%BASE_URL%sw.js')
-            .then(reg => console.log('Denki Service Worker registered:', reg.scope))
-            .catch(err => console.error('Denki Service Worker registration failed:', err));
-        });
-      }
-    </script>
   </head>
   <body>
     <div id="root"></div>
