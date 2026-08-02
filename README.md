@@ -52,6 +52,21 @@ For a containerised build:
 docker compose up --build
 ```
 
+### Desktop app (macOS)
+
+Denki can also be built as a native macOS app with [Tauri](https://tauri.app) (requires Rust). This produces `Denki.app` and an installer `.dmg`:
+
+```bash
+npm run tauri:build
+```
+
+The app bundle is written to `src-tauri/target/release/bundle/macos/Denki.app`. To update a built app after pulling new changes:
+
+```bash
+./scripts/update-denki.sh            # pull, rebuild, relaunch
+./scripts/update-denki.sh --force    # rebuild even with no new commits
+```
+
 ## Validation
 
 ```bash
@@ -70,6 +85,7 @@ Pushes to `main` run the same checks in GitHub Actions and publish the productio
 - Dexie and IndexedDB
 - React Router
 - Vitest and Testing Library
+- Tauri 2 (optional macOS desktop build)
 
 ## Contributing
 
