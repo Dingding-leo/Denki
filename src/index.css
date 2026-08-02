@@ -121,7 +121,7 @@ body {
   height: 100%;
   transform-style: preserve-3d;
   -webkit-transform-style: preserve-3d;
-  transition: transform 0.65s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .perspective-container.flipped .flip-card-inner {
@@ -146,22 +146,19 @@ body {
 
 /* WebKit (Tauri's WKWebView) can drop `backface-visibility` on clipped
    elements, which makes the front and back faces overlap when flipped. These
-   visibility toggles are direction-aware fallbacks: the face you're flipping
-   AWAY from stays visible during the 0.65s rotation (so you see its back), then
-   hides; the face you're flipping TO appears immediately. If backface-visibility
-   works these are no-ops; if it doesn't, they guarantee only one face is visible
-   once the flip completes. */
+   visibility toggles swap the faces INSTANTLY on flip (no lingering front text
+   during the rotation). If backface-visibility works these are no-ops. */
 .flip-card-front {
   visibility: visible;
   transition: visibility 0s;
 }
 .flip-card-back {
   visibility: hidden;
-  transition: visibility 0s 0.65s;
+  transition: visibility 0s;
 }
 .perspective-container.flipped .flip-card-front {
   visibility: hidden;
-  transition: visibility 0s 0.65s;
+  transition: visibility 0s;
 }
 .perspective-container.flipped .flip-card-back {
   visibility: visible;
