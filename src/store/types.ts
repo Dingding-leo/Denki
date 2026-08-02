@@ -5,7 +5,9 @@ export interface StudySessionHistoryEntry {
   card: Card;            // Stored state of the card BEFORE it was rated
   rating: Rating;        // Rating given
   reviewLogId?: number;  // IndexedDB review log id to delete on rollback
-  insertedIdx?: number;  // Index in queue where it was reinserted (if rated 1 or 2)
+  queueSnapshot: Card[]; // Exact session queue at rating time — undo restores this verbatim
+  index: number;         // Session currentIndex at rating time
+  completedCount: number; // Session completedCount at rating time
 }
 
 export interface StudySession {

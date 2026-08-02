@@ -230,15 +230,20 @@ export const createCardSlice: StateCreator<
           lastRating: rating,
         });
 
-        // Add a new manual review log entry
+        // Add a new manual review log entry. Unlike reviewCard (which logs the
+        // PRE-review stability), this log records the POST-set stability. For a
+        // New card the pre-set stability is 0, and countNewIntroducedToday counts
+        // stability===0 logs as session "introductions" — but a manual confidence
+        // set is not a session introduction, so the log must carry a non-zero
+        // stability or it would burn today's new-card allowance.
         await db.reviews.add({
           cardId,
           deckId: card.deckId,
           classId: card.classId,
           reviewedAt: new Date(),
           rating,
-          stability: card.stability,
-          difficulty: card.difficulty,
+          stability, // post-set stability — never 0, so never counted as an introduction
+          difficulty,
           elapsedDays: 0.0001,
           scheduledDays,
         });
@@ -282,8 +287,15 @@ export const createCardSlice: StateCreator<
           continue;
         }
 
-        const front = row[0].trim();
-        const back = row[1].trim();
+        // Strip the leading apostrophe that deckExport adds to neutralize
+        // spreadsheet formula injection, so Denki's own export → import round-trip
+        // doesn't leave a literal `'` on cards that start with = + - @. Only strip
+        // when it's exactly the neutralizer pattern (`'` + one of the formula
+        // chars) so a legitimate apostrophe-led field is untouched.
+        const stripFormulaPrefix = (s: string) =>
+          /^'[=+\-@]/.test(s) ? s.slice(1) : s;
+        const front = stripFormulaPrefix(row[0].trim());
+        const back = stripFormulaPrefix(row[1].trim());
         const rawType = row[2]?.trim().toLowerCase();
         
         let cardType: CardType = 'standard';

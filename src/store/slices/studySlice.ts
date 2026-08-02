@@ -58,6 +58,25 @@ const notifyHeldBack = (heldBack: number) => {
 // pre-await session snapshot and desync the in-memory queue/history from the DB.
 let isMutatingSession = false;
 
+// Cap in-session re-insertions of a low-rated card so a repeatedly-failed card
+// can't grow the queue without bound (each re-insert also writes another review
+// log to the DB). After the cap the card is left to FSRS's own due date.
+const MAX_REINSERTIONS = 3;
+
+// Coalesce per-rating stats refreshes. Running the full analytics recompute
+// (loadClassStats + loadDeckStats + loadStats — ~13 IndexedDB queries plus a
+// 12-month aggregation) on every single rating is the main mid-session jank
+// source. Instead, refresh ~1s after the last rating in a burst so sidebar
+// badges and the streak settle shortly after the session pauses or ends.
+let statsRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleStatsRefresh(run: () => Promise<void>) {
+  if (statsRefreshTimer) clearTimeout(statsRefreshTimer);
+  statsRefreshTimer = setTimeout(() => {
+    statsRefreshTimer = null;
+    run().catch(console.warn);
+  }, 1000);
+}
+
 export const createStudySlice: StateCreator<
   FlashcardState,
   [],
@@ -189,7 +208,12 @@ export const createStudySlice: StateCreator<
           }
         });
       } catch (err) {
+        // The review was NOT persisted — do not advance the session or report
+        // success. A quota/storage failure here silently drops the review if we
+        // keep going (the card stays due, the log never exists, undo is broken).
         console.error('Failed to save card review:', err);
+        toast('Failed to save this review — please try again', 'error');
+        return;
       }
 
       // Refresh database buffers for 'cards' in memory (if managing card view is active)
@@ -210,24 +234,36 @@ export const createStudySlice: StateCreator<
       const nextIndex = currentIndex + 1;
       const nextCompleted = completedCount + 1;
 
-      let insertedIdx: number | undefined;
+      // How many times this card has already been re-inserted this session
+      // (counting this rating's entry below). History holds the pre-rating card,
+      // so match by card id.
       if (rating <= 2) {
-        const remaining = newQueue.length - nextIndex;
-        let insertDistance: number;
-        if (rating === 1) insertDistance = 3;                                            // 3 cards later
-        else insertDistance = Math.max(5, Math.floor(remaining * 0.15));                 // ~15% into remaining
+        const priorReinserts = history.filter((h) => h.card.id === currentCard.id).length;
+        const canReinsert = priorReinserts < MAX_REINSERTIONS;
 
-        const insertIdx = Math.min(newQueue.length, nextIndex + insertDistance);
-        newQueue.splice(insertIdx, 0, updatedCard);
-        insertedIdx = insertIdx;
+        if (canReinsert) {
+          const remaining = newQueue.length - nextIndex;
+          let insertDistance: number;
+          if (rating === 1) insertDistance = 3;                                          // 3 cards later
+          else insertDistance = Math.max(5, Math.floor(remaining * 0.15));               // ~15% into remaining
+
+          const insertIdx = Math.min(newQueue.length, nextIndex + insertDistance);
+          newQueue.splice(insertIdx, 0, updatedCard);
+        }
       }
 
-      // Record this rating action to history for undo capabilities
+      // Record this rating action to history for undo capabilities. The queue,
+      // index and completion count are snapshotted here so undo can restore the
+      // exact prior session state (position-independent of later re-insertions).
+      // The snapshot must be the PRE-mutation queue (`queue`, not `newQueue`),
+      // so undo lands back on the state right before this rating.
       const historyEntry = {
         card: { ...currentCard }, // Shallow copy to preserve state
         rating,
         reviewLogId: logId,
-        insertedIdx,
+        queueSnapshot: queue,
+        index: currentIndex,
+        completedCount: nextCompleted - 1,
       };
 
       set({
@@ -240,14 +276,15 @@ export const createStudySlice: StateCreator<
         },
       });
 
-      // Update statistics asynchronously (fire-and-forget to avoid blocking the UI)
-      Promise.all([
-        get().loadClassStats(currentCard.classId),
-        get().loadDeckStats(currentCard.classId),
+      // Refresh statistics after a short coalescing delay so a rapid sequence of
+      // ratings doesn't recompute the whole analytics layer per card.
+      scheduleStatsRefresh(async () => {
+        await get().loadClassStats(currentCard.classId);
+        await get().loadDeckStats(currentCard.classId);
         // Scope the streak/global stats to the class being studied, not whatever
         // class is selected in the nav (which may differ for a deck session).
-        get().loadStats(currentCard.classId),
-      ]).catch(console.warn);
+        await get().loadStats(currentCard.classId);
+      });
 
       triggerAutoSave();
     } finally {
@@ -262,7 +299,7 @@ export const createStudySlice: StateCreator<
     if (!state.session) return;
 
     const sessionRef = state.session;
-    const { history, queue, currentIndex, completedCount } = sessionRef;
+    const { history } = sessionRef;
     if (!history || history.length === 0) return;
 
     isMutatingSession = true;
@@ -271,11 +308,15 @@ export const createStudySlice: StateCreator<
       const lastEntry = history[history.length - 1];
       const newHistory = history.slice(0, -1);
 
-      // Rollback the card database record and delete the review log
+      // Rollback the card database record and delete the review log. Only
+      // restore rows that actually have an id — rating a card without an id
+      // never persisted it (rateCard guards on `currentCard.id`), so `put` here
+      // would otherwise create a brand-new row that was never rated.
       try {
         await db.transaction('rw', [db.cards, db.reviews], async () => {
-          // Restore card to its previous state
-          await db.cards.put(lastEntry.card);
+          if (lastEntry.card.id) {
+            await db.cards.put(lastEntry.card);
+          }
           // Delete review log
           if (lastEntry.reviewLogId) {
             await db.reviews.delete(lastEntry.reviewLogId);
@@ -294,32 +335,30 @@ export const createStudySlice: StateCreator<
       // Bail if the session ended or was replaced during the awaits.
       if (get().session !== sessionRef) return;
 
-      // Remove the reinserted card from the queue if it was inserted
-      const newQueue = [...queue];
-      if (lastEntry.insertedIdx !== undefined) {
-        newQueue.splice(lastEntry.insertedIdx, 1);
-      }
-
-      // Restore the card at the previous index to its original state
-      const prevIndex = currentIndex - 1;
-      newQueue[prevIndex] = lastEntry.card;
+      // Restore the exact queue, index and completion state captured when this
+      // card was rated. Using a full snapshot (instead of re-deriving insertion
+      // index / currentIndex-1) keeps undo correct even when the card was
+      // re-inserted for a low rating and later cards were rated around it.
+      const queueSnapshot = lastEntry.queueSnapshot;
+      const prevIndex = lastEntry.index;
+      const prevCompleted = lastEntry.completedCount;
 
       set({
         session: {
           ...sessionRef,
-          queue: newQueue,
+          queue: queueSnapshot,
           currentIndex: prevIndex,
-          completedCount: Math.max(0, completedCount - 1),
+          completedCount: prevCompleted,
           history: newHistory,
         },
       });
 
-      // Update stats asynchronously (fire-and-forget)
-      Promise.all([
-        get().loadClassStats(lastEntry.card.classId),
-        get().loadDeckStats(lastEntry.card.classId),
-        get().loadStats(lastEntry.card.classId),
-      ]).catch(console.warn);
+      // Refresh stats after a short coalescing delay (see scheduleStatsRefresh).
+      scheduleStatsRefresh(async () => {
+        await get().loadClassStats(lastEntry.card.classId);
+        await get().loadDeckStats(lastEntry.card.classId);
+        await get().loadStats(lastEntry.card.classId);
+      });
 
       triggerAutoSave();
     } finally {
@@ -356,6 +395,12 @@ export const createStudySlice: StateCreator<
   },
 
   endStudySession: () => {
+    // Drop any pending coalesced stats refresh so it can't fire a class-scoped
+    // loadStats over the global dashboard after the user has left the session.
+    if (statsRefreshTimer) {
+      clearTimeout(statsRefreshTimer);
+      statsRefreshTimer = null;
+    }
     set({ session: null });
   },
 });

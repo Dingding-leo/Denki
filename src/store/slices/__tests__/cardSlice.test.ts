@@ -35,4 +35,12 @@ describe('importFromCSV', () => {
     const cards = await db.cards.where('deckId').equals(deckId).toArray();
     expect(cards[0].cardType).toBe('cloze');
   });
+
+  it('strips the formula-neutralizer apostrophe so export → import round-trips', async () => {
+    const { classId, deckId } = await setup();
+    // Simulate a Denki-exported row: deckExport prefixes formula-leading cells with '.
+    await useFlashcardStore.getState().importFromCSV(classId, deckId, "'- bullet item,A\n'+2+2,B\n'@mention,C");
+    const cards = await db.cards.where('deckId').equals(deckId).toArray();
+    expect(cards.map((c) => c.front).sort()).toEqual(['+2+2', '- bullet item', '@mention']);
+  });
 });
