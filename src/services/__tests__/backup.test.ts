@@ -49,4 +49,55 @@ describe('backup export/import round-trip', () => {
       importDatabase({ version: db.verno + 1, data: { classes: [], decks: [], cards: [], reviews: [] } }),
     ).rejects.toThrow(/newer than/);
   });
+
+  it('refuses to import cards missing required fields instead of wiping the database', async () => {
+    // Seed a real card so we can assert it survives a bad import attempt.
+    const classId = (await db.classes.add({ name: 'C', description: '', createdAt: new Date() })) as number;
+    const deckId = (await db.decks.add({ classId, name: 'D', description: '', createdAt: new Date() })) as number;
+    await db.cards.add({
+      classId,
+      deckId,
+      front: 'existing',
+      back: 'card',
+      cardType: 'standard',
+      createdAt: new Date(),
+      state: 0,
+      stability: 0,
+      difficulty: 0,
+      elapsedDays: 0,
+      scheduledDays: 0,
+      due: new Date(),
+    } as Card);
+
+    // A card row that survives JSON round-trip but is missing `state`/`stability`.
+    const badSnapshot = {
+      version: db.verno,
+      data: {
+        classes: [{ id: classId, name: 'C', description: '', createdAt: new Date().toISOString() }],
+        decks: [{ id: deckId, classId, name: 'D', description: '', createdAt: new Date().toISOString() }],
+        cards: [
+          {
+            id: 1,
+            classId,
+            deckId,
+            front: 'q',
+            back: 'a',
+            cardType: 'standard',
+            createdAt: new Date().toISOString(),
+            due: new Date().toISOString(),
+            // state, stability missing
+          },
+        ],
+        reviews: [],
+      },
+    };
+
+    await expect(importDatabase(badSnapshot as never)).rejects.toThrow(/invalid card/);
+
+    // The seeded data must still be present — the clear happened after validation.
+    expect(await db.classes.count()).toBe(1);
+    expect(await db.decks.count()).toBe(1);
+    expect(await db.cards.count()).toBe(1);
+    expect((await db.cards.toArray())[0].front).toBe('existing');
+  });
 });

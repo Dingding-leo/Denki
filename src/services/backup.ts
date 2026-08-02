@@ -1,8 +1,14 @@
 import { db } from '../db';
+import type { Card } from '../db/schema';
 import { markBackupExported } from './dataSafety';
 
 const BACKUP_ENDPOINT = '/api/backup';
 const DEBOUNCE_MS = 2000; // Save 2 seconds after last change
+
+// The filesystem backup endpoint only exists under `vite dev` (vite-plugin-backup).
+// On GitHub Pages / Docker / preview the endpoint 404s, so auto-save is gated to
+// dev to avoid a pointless failed fetch after every mutation.
+const BACKUP_ENABLED = import.meta.env.DEV === true;
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -67,6 +73,24 @@ export async function importDatabase(snapshot: BackupSnapshot) {
   const cards = reviveDates(snapshot.data.cards, ['createdAt', 'due', 'lastReviewed']);
   const reviews = reviveDates(snapshot.data.reviews, ['reviewedAt']);
 
+  // The import below CLEARS every table. Validate row shapes before touching
+  // anything so a structurally-invalid-but-parseable file can't wipe the
+  // database. Cards are the most load-bearing: a row missing `state`/`due`/
+  // `front` would flow into the study queue and crash reviewCard at rating time.
+  const isValidCard = (c: unknown): c is Card =>
+    !!c &&
+    typeof (c as Card).front === 'string' &&
+    typeof (c as Card).back === 'string' &&
+    typeof (c as Card).state === 'number' &&
+    (c as Card).due instanceof Date &&
+    typeof (c as Card).stability === 'number';
+  const validCards = cards.filter(isValidCard);
+  if (validCards.length !== cards.length) {
+    throw new Error(
+      `Backup contains ${cards.length - validCards.length} invalid card(s); refusing to import to protect your data.`,
+    );
+  }
+
   await db.transaction('rw', [db.classes, db.decks, db.cards, db.reviews], async () => {
     await db.classes.clear();
     await db.decks.clear();
@@ -75,16 +99,17 @@ export async function importDatabase(snapshot: BackupSnapshot) {
 
     if (classes.length) await db.classes.bulkAdd(classes as never[]);
     if (decks.length) await db.decks.bulkAdd(decks as never[]);
-    if (cards.length) await db.cards.bulkAdd(cards as never[]);
+    if (validCards.length) await db.cards.bulkAdd(validCards as never[]);
     if (reviews.length) await db.reviews.bulkAdd(reviews as never[]);
   });
 }
 
 /**
  * Save the database snapshot to the filesystem via the Vite plugin endpoint.
- * Called automatically after every data mutation, debounced.
+ * Called automatically after every data mutation, debounced. No-op outside dev.
  */
 async function saveToFilesystem() {
+  if (!BACKUP_ENABLED) return;
   try {
     const snapshot = await exportDatabase();
     const res = await fetch(BACKUP_ENDPOINT, {

@@ -7,6 +7,7 @@ import { MainLayout } from './components/layout/MainLayout';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { GlobalUI } from './components/ui/GlobalUI';
 import { requestPersistentStorage, maybeNudgeBackup } from './services/dataSafety';
+import { restoreFromBackupIfNeeded } from './services/backup';
 
 // Pages are route-split so heavy leaves (AI generator, importers, analytics,
 // prism/marked) don't inflate the initial bundle.
@@ -26,10 +27,21 @@ const App: React.FC = () => {
   const [isInitializing, setIsInitializing] = useState(true);
 
   useEffect(() => {
-    Promise.all([
-      store.loadClasses(),
-      store.loadDecks()
-    ]).then(() => setIsInitializing(false));
+    (async () => {
+      try {
+        // If IndexedDB is empty (first run, eviction, "clear site data"),
+        // restore the dev/filesystem backup before anything else loads.
+        await restoreFromBackupIfNeeded();
+        await Promise.all([
+          store.loadClasses(),
+          store.loadDecks(),
+        ]);
+      } catch (err) {
+        console.error('Failed to initialize Denki:', err);
+      } finally {
+        setIsInitializing(false);
+      }
+    })();
 
     // Data safety: shield IndexedDB from eviction and remind about stale backups
     requestPersistentStorage();
