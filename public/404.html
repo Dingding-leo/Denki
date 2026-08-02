@@ -4,10 +4,14 @@
   <meta charset="utf-8">
   <title>Denki</title>
   <script>
-    // SPA redirect for GitHub Pages
-    // Store the attempted path and redirect to root
-    sessionStorage.setItem('redirect', location.pathname + location.search + location.hash);
-    location.replace('/Denki/');
+    // SPA fallback for GitHub Pages (which only serves a 404 for unknown paths).
+    // Store the attempted deep link so the app can restore it after boot, then
+    // redirect to the app root using a RELATIVE path so any deployment root
+    // (GitHub Pages at /Denki/, a custom domain at /, Docker at /) works.
+    try {
+      sessionStorage.setItem('denki-redirect', location.pathname + location.search + location.hash);
+    } catch (e) { /* sessionStorage unavailable — just land on the app root */ }
+    location.replace('./');
   </script>
 </head>
 <body></body>
