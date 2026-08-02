@@ -19,6 +19,8 @@ function shuffleArray<T>(array: T[]): T[] {
 interface MatchGameProps {
   deckId: number;
   onExit?: () => void;
+  /** Called to leave the game and return to the review session (not exit it). */
+  onExitToSession?: () => void;
 }
 
 interface MatchItem {
@@ -30,9 +32,106 @@ interface MatchItem {
   state: 'idle' | 'selected' | 'matched' | 'mismatched';
 }
 
-export const MatchGame: React.FC<MatchGameProps> = ({ deckId, onExit }) => {
-  const store = useFlashcardStore();
-  const deckName = store.decks.find(d => d.id === deckId)?.name || 'Deck';
+// Memoized tile: the match grid re-renders on every 100ms timer tick and click,
+// so precomputing the tile's HTML once and only re-rendering when its own
+// state/content changes avoids re-parsing markdown for every tile, every tick.
+const MatchTile = React.memo(
+  ({
+    item,
+    onClick,
+  }: {
+    item: MatchItem;
+    onClick: (id: string) => void;
+  }) => {
+    const isSelected = item.state === 'selected';
+    const isMatched = item.state === 'matched';
+    const isMismatched = item.state === 'mismatched';
+
+    const cardStyle: React.CSSProperties = {
+      background: 'rgba(255, 255, 255, 0.02)',
+      border: '1px solid rgba(255, 255, 255, 0.08)',
+      borderRadius: '12px',
+      padding: '20px',
+      minHeight: '120px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      textAlign: 'center',
+      cursor: 'pointer',
+      userSelect: 'none',
+      backdropFilter: 'blur(10px)',
+      transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s ease-out',
+      fontSize: '14px',
+      color: '#d1d5db',
+      lineHeight: 1.4,
+      overflow: 'hidden',
+      wordBreak: 'break-word',
+      boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+    };
+
+    if (isSelected) {
+      cardStyle.background = 'rgba(129, 140, 248, 0.08)';
+      cardStyle.border = '2px solid #818cf8';
+      cardStyle.color = '#f3f4f6';
+      cardStyle.transform = 'scale(1.03) translateZ(10px)';
+      cardStyle.boxShadow = '0 0 20px rgba(129, 140, 248, 0.35)';
+    }
+    if (isMatched) {
+      cardStyle.opacity = 0;
+      cardStyle.pointerEvents = 'none';
+      cardStyle.transform = 'scale(0.9)';
+    }
+    if (isMismatched) {
+      cardStyle.background = 'rgba(239, 68, 68, 0.08)';
+      cardStyle.border = '2px solid #ef4444';
+      cardStyle.color = '#fca5a5';
+      cardStyle.boxShadow = '0 0 20px rgba(239, 68, 68, 0.35)';
+    }
+
+    // Precompute HTML once per item — markdown is parsed here, not on every tick.
+    // `item` is reference-stable (React.memo only re-renders this tile when its
+    // own item object changes), so it is the correct memo dependency.
+    const contentHTML = React.useMemo(
+      () => renderContent(item.content, item.isCloze, true),
+      [item],
+    );
+
+    return (
+      <div
+        key={item.id}
+        onClick={() => onClick(item.id)}
+        role="button"
+        tabIndex={0}
+        aria-label={item.content.replace(/[<>&]/g, '').slice(0, 80) || 'Match card'}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onClick(item.id);
+          }
+        }}
+        className={isMismatched ? 'match-card-shake' : ''}
+        style={cardStyle}
+      >
+        <div
+          style={{
+            maxHeight: '100%',
+            overflowY: 'auto',
+            width: '100%',
+          }}
+          dangerouslySetInnerHTML={{
+            __html: contentHTML,
+          }}
+        />
+      </div>
+    );
+  },
+);
+MatchTile.displayName = 'MatchTile';
+
+export const MatchGame: React.FC<MatchGameProps> = ({ deckId, onExit, onExitToSession }) => {
+  const deckName = useFlashcardStore(
+    (state) => state.decks.find(d => d.id === deckId)?.name || 'Deck',
+  );
 
   // Keep a ref to the latest deck cards loaded from the database
   const deckCardsRef = useRef<Card[]>([]);
@@ -48,6 +147,7 @@ export const MatchGame: React.FC<MatchGameProps> = ({ deckId, onExit }) => {
   const [loading, setLoading] = useState<boolean>(true);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const mismatchResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startTimeRef = useRef<number>(0);
   const penaltyRef = useRef<number>(0);
 
@@ -68,19 +168,28 @@ export const MatchGame: React.FC<MatchGameProps> = ({ deckId, onExit }) => {
     return () => {
       cancelled = true;
       stopTimer();
+      if (mismatchResetRef.current) {
+        clearTimeout(mismatchResetRef.current);
+        mismatchResetRef.current = null;
+      }
     };
   }, [deckId]);
 
-  // Allow Escape to leave a game in progress (the page-level Esc handler only
-  // runs in review mode, so without this the active grid can't be exited by key).
+  // Allow Escape to leave the game grid and return to the review session. The
+  // page-level Esc handler only runs in review mode, so without this the active
+  // grid can't be exited by key.
   useEffect(() => {
     if (!isActive) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onExit?.();
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onExitToSession?.();
+        setIsActive(false);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [isActive, onExit]);
+  }, [isActive, onExitToSession]);
 
   // Start the timer when game is active
   useEffect(() => {
@@ -96,6 +205,20 @@ export const MatchGame: React.FC<MatchGameProps> = ({ deckId, onExit }) => {
     }
     return () => stopTimer();
   }, [isActive]);
+
+  // On the lobby/victory screens (not playing), Escape returns to the study
+  // session — the only way a keyboard-only user can leave the lobby.
+  useEffect(() => {
+    if (isActive || isCompleted) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onExitToSession?.();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isActive, isCompleted, onExitToSession]);
 
   const stopTimer = () => {
     if (timerRef.current) {
@@ -204,8 +327,9 @@ export const MatchGame: React.FC<MatchGameProps> = ({ deckId, onExit }) => {
       setTime(prev => parseFloat((prev + 1.5).toFixed(1)));
 
       // Reset cards to idle after 500ms
-      setTimeout(() => {
-        setItems(prev => prev.map(item => 
+      if (mismatchResetRef.current) clearTimeout(mismatchResetRef.current);
+      mismatchResetRef.current = setTimeout(() => {
+        setItems(prev => prev.map(item =>
           (item.state === 'mismatched')
             ? { ...item, state: 'idle' }
             : item
@@ -517,86 +641,9 @@ export const MatchGame: React.FC<MatchGameProps> = ({ deckId, onExit }) => {
           minHeight: '400px',
           perspective: '1000px',
         }}>
-          {items.map(item => {
-            const isSelected = item.state === 'selected';
-            const isMatched = item.state === 'matched';
-            const isMismatched = item.state === 'mismatched';
-
-            let cardStyle: React.CSSProperties = {
-              background: 'rgba(255, 255, 255, 0.02)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              borderRadius: '12px',
-              padding: '20px',
-              minHeight: '120px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              textAlign: 'center',
-              cursor: 'pointer',
-              userSelect: 'none',
-              backdropFilter: 'blur(10px)',
-              transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s ease-out',
-              fontSize: '14px',
-              color: '#d1d5db',
-              lineHeight: 1.4,
-              overflow: 'hidden',
-              wordBreak: 'break-word',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-            };
-
-            // Selected card style
-            if (isSelected) {
-              cardStyle = {
-                ...cardStyle,
-                background: 'rgba(129, 140, 248, 0.08)',
-                border: '2px solid #818cf8',
-                color: '#f3f4f6',
-                transform: 'scale(1.03) translateZ(10px)',
-                boxShadow: '0 0 20px rgba(129, 140, 248, 0.35)',
-              };
-            }
-
-            // Matched card style - disappear elegantly
-            if (isMatched) {
-              cardStyle = {
-                ...cardStyle,
-                opacity: 0,
-                pointerEvents: 'none',
-                transform: 'scale(0.9)',
-              };
-            }
-
-            // Mismatched style - red flash
-            if (isMismatched) {
-              cardStyle = {
-                ...cardStyle,
-                background: 'rgba(239, 68, 68, 0.08)',
-                border: '2px solid #ef4444',
-                color: '#fca5a5',
-                boxShadow: '0 0 20px rgba(239, 68, 68, 0.35)',
-              };
-            }
-
-            return (
-              <div
-                key={item.id}
-                onClick={() => handleItemClick(item.id)}
-                className={isMismatched ? 'match-card-shake' : ''}
-                style={cardStyle}
-              >
-                <div 
-                  style={{
-                    maxHeight: '100%',
-                    overflowY: 'auto',
-                    width: '100%',
-                  }}
-                  dangerouslySetInnerHTML={{
-                    __html: renderContent(item.content, item.isCloze, true)
-                  }}
-                />
-              </div>
-            );
-          })}
+          {items.map(item => (
+            <MatchTile key={item.id} item={item} onClick={handleItemClick} />
+          ))}
         </div>
       )}
     </div>

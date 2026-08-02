@@ -58,21 +58,18 @@ body {
 
 /* Background meshes removed per redesign plan */
 
-/* Keep the four dashboard metrics balanced. The previous auto-fit grid made
-   three columns at the Denki.app window width, leaving one orphaned card and a
-   large empty area on the right. */
+/* Keep the four dashboard metrics balanced. A container-adaptive auto-fit grid
+   gives 4 columns when the capped container (~1000px) fits four 200px cards +
+   gaps, and degrades to 3/2 gracefully on narrower layouts. This avoids the
+   previous hard breakpoints (a 1440px viewport rule never fired on the capped
+   container, leaving 2 oversized columns; a @container rule is a no-op because
+   it can't style the container element itself). */
 .analytics-metrics-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 }
 
 .analytics-metrics-grid > .card-deck-premium {
   min-width: 0;
-}
-
-@media (min-width: 1440px) {
-  .analytics-metrics-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
 }
 
 /* Premium Scrollbars */

@@ -9,8 +9,7 @@ interface LearnModeProps {
 }
 
 export const LearnMode: React.FC<LearnModeProps> = ({ onExit }) => {
-  const store = useFlashcardStore();
-  const session = store.session;
+  const session = useFlashcardStore(s => s.session);
 
   const [inputVal, setInputVal] = useState('');
   const [checked, setChecked] = useState(false);
@@ -74,38 +73,6 @@ export const LearnMode: React.FC<LearnModeProps> = ({ onExit }) => {
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, []); // Stable: all mutable state accessed via refs
 
-  if (!session) return null;
-
-  const currentCard = session.queue[session.currentIndex];
-  if (!currentCard) {
-    return (
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '50px 20px',
-        textAlign: 'center',
-        minHeight: '400px',
-        background: 'rgba(255,255,255,0.01)',
-        border: '1px solid rgba(255,255,255,0.05)',
-        borderRadius: '16px',
-        backdropFilter: 'blur(20px)',
-      }}>
-        <Sparkles size={48} style={{ color: '#10b981', marginBottom: '16px', filter: 'drop-shadow(0 0 10px rgba(16, 185, 129, 0.3))' }} />
-        <h3 style={{ fontSize: '22px', fontWeight: 800, color: '#f3f4f6', marginBottom: '8px' }}>Session Complete!</h3>
-        <p style={{ color: '#9ca3af', fontSize: '14px', maxWidth: '380px', lineHeight: 1.5, marginBottom: '24px' }}>
-          Amazing work! You've gone through the active recall queue.
-        </p>
-        {onExit && (
-          <button className="btn-primary" onClick={onExit} style={{ padding: '10px 24px' }}>
-            Exit Learn Mode
-          </button>
-        )}
-      </div>
-    );
-  }
-
   // Normalize string for fuzzy comparison
   const normalize = (str: string): string => {
     return str
@@ -158,7 +125,7 @@ export const LearnMode: React.FC<LearnModeProps> = ({ onExit }) => {
 
   const handleRating = async (rating: 1 | 2 | 3 | 4 | 5) => {
     // Save review rating directly
-    await store.rateCard(rating);
+    await useFlashcardStore.getState().rateCard(rating);
     
     // Reset state for next card
     setInputVal('');
@@ -187,8 +154,8 @@ export const LearnMode: React.FC<LearnModeProps> = ({ onExit }) => {
     }
   };
 
-  // Keep the refs (declared above the early returns) current with this render's
-  // state and handlers, for the stable global keydown listener.
+  // Refs (declared above the early returns) current with this render's state
+  // and handlers, for the stable global keydown listener.
   checkedRef.current = checked;
   isCorrectRef.current = isCorrect;
   overrideAllowedRef.current = overrideAllowed;
@@ -196,6 +163,60 @@ export const LearnMode: React.FC<LearnModeProps> = ({ onExit }) => {
   handleRatingRef.current = handleRating;
   handleOverrideRef.current = handleOverride;
   onExitRef.current = onExit;
+
+  // Memoize the markdown parses BEFORE any early return so the hook order stays
+  // unconditional (a hook after an early return is a rules-of-hooks violation
+  // that crashes when the queue empties). Typing in the answer textarea
+  // re-renders per keystroke, so these keep ~11 regex passes off the hot path.
+  // `memoCard` is a reference-stable card object from the session queue, so it
+  // is the correct memo dependency (content only changes with the card itself).
+  const memoCard = session?.queue[session?.currentIndex ?? 0];
+  const frontHTML = React.useMemo(
+    () => (memoCard ? renderContent(memoCard.front, memoCard.cardType === 'cloze', false) : ''),
+    [memoCard],
+  );
+  const answerHTML = React.useMemo(
+    () =>
+      memoCard
+        ? memoCard.cardType === 'cloze'
+          ? renderContent(memoCard.front, true, true)
+          : renderContent(memoCard.back, false, true)
+        : '',
+    [memoCard],
+  );
+
+  if (!session) return null;
+
+  const currentCard = session.queue[session.currentIndex];
+
+  if (!currentCard) {
+    return (
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '50px 20px',
+        textAlign: 'center',
+        minHeight: '400px',
+        background: 'rgba(255,255,255,0.01)',
+        border: '1px solid rgba(255,255,255,0.05)',
+        borderRadius: '16px',
+        backdropFilter: 'blur(20px)',
+      }}>
+        <Sparkles size={48} style={{ color: '#10b981', marginBottom: '16px', filter: 'drop-shadow(0 0 10px rgba(16, 185, 129, 0.3))' }} />
+        <h3 style={{ fontSize: '22px', fontWeight: 800, color: '#f3f4f6', marginBottom: '8px' }}>Session Complete!</h3>
+        <p style={{ color: '#9ca3af', fontSize: '14px', maxWidth: '380px', lineHeight: 1.5, marginBottom: '24px' }}>
+          Amazing work! You've gone through the active recall queue.
+        </p>
+        {onExit && (
+          <button className="btn-primary" onClick={onExit} style={{ padding: '10px 24px' }}>
+            Exit Learn Mode
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', width: '100%', maxWidth: '720px', margin: '0 auto' }}>
@@ -255,7 +276,7 @@ export const LearnMode: React.FC<LearnModeProps> = ({ onExit }) => {
               marginTop: '8px',
             }}
             dangerouslySetInnerHTML={{
-              __html: renderContent(currentCard.front, currentCard.cardType === 'cloze', false)
+              __html: frontHTML
             }}
           />
         </div>
@@ -389,9 +410,7 @@ export const LearnMode: React.FC<LearnModeProps> = ({ onExit }) => {
                   <div 
                     style={{ fontSize: '14px', color: '#f3f4f6', marginTop: '8px', lineHeight: 1.4 }}
                     dangerouslySetInnerHTML={{
-                      __html: currentCard.cardType === 'cloze' 
-                        ? renderContent(currentCard.front, true, true) 
-                        : renderContent(currentCard.back, false, true)
+                      __html: answerHTML
                     }}
                   />
                 </div>

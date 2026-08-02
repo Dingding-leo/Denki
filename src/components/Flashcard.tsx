@@ -50,9 +50,14 @@ export const Flashcard: React.FC<FlashcardProps> = ({ card, isFlipped, onFlip, a
     setShowScratchpad(false);
   }
 
-  // Trigger code highlighting on flip or card change
+  // Trigger code highlighting on flip or card change. Scoped to this card's DOM
+  // instead of Prism.highlightAll(), which re-scans the entire document (the
+  // study session can hold several markdown/code subtrees).
   useEffect(() => {
-    Prism.highlightAll();
+    if (!containerRef.current) return;
+    containerRef.current.querySelectorAll('pre code[class*="language-"]').forEach((el) => {
+      if (el instanceof HTMLElement) Prism.highlightElement(el);
+    });
   }, [card.id, isFlipped]);
 
   // Helper function to synthesize speech
@@ -148,8 +153,19 @@ export const Flashcard: React.FC<FlashcardProps> = ({ card, isFlipped, onFlip, a
     return '1.75rem';
   };
 
-  const cardFrontHTML = renderContent(card.front, card.cardType === 'cloze', isFlipped);
-  const cardBackHTML = renderContent(card.back, false, true);
+  // Memoize the markdown parse: renderContent is ~11 regex passes over both
+  // faces, and this component re-renders on every store write / notepad
+  // keystroke while the card is on screen. The component is keyed by card id
+  // (remounted per card), so the card reference is stable per mount and the
+  // memo only recomputes when content or flip state changes.
+  const cardFrontHTML = React.useMemo(
+    () => renderContent(card.front, card.cardType === 'cloze', isFlipped),
+    [card.front, card.cardType, isFlipped],
+  );
+  const cardBackHTML = React.useMemo(
+    () => renderContent(card.back, false, true),
+    [card.back],
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%', margin: '0 auto' }}>
@@ -252,6 +268,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({ card, isFlipped, onFlip, a
                   padding: 0,
                 }}
                 className="btn-premium-secondary"
+                aria-label="Pronounce text"
                 title="Pronounce English Text"
               >
                 <Volume2 size={14} />

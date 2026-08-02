@@ -9,20 +9,20 @@ import { SettingsModal } from '../modals/SettingsModal';
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
 export const Sidebar: React.FC = () => {
-  const store = useFlashcardStore();
+  const classes = useFlashcardStore(s => s.classes);
+  const classStats = useFlashcardStore(s => s.classStats);
+  const currentStreak = useFlashcardStore(s => s.currentStreak);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showClassModal, setShowClassModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  
+
   const navigate = useNavigate();
   const { classId: routeClassId } = useParams();
   const activeClassId = routeClassId ? parseInt(routeClassId, 10) : null;
 
-  const currentStreak = store.currentStreak;
- 
   const classesWithMastery = useMemo(() => {
-    return store.classes.map(cls => {
-      const stats = store.classStats[cls.id || 0] || {
+    return classes.map(cls => {
+      const stats = classStats[cls.id || 0] || {
         total: 0,
         dueCount: 0,
         masteryPct: 0,
@@ -36,7 +36,7 @@ export const Sidebar: React.FC = () => {
         decksCount: stats.decksCount,
       };
     });
-  }, [store.classes, store.classStats]);
+  }, [classes, classStats]);
 
   return (
     <>

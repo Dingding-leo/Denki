@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useShallow } from 'zustand/react/shallow';
 import { BookOpen, Volume2, Keyboard, Eye, ArrowLeft, X } from 'lucide-react';
 import { useFlashcardStore } from '../store/useFlashcardStore';
 import { Flashcard } from '../components/Flashcard';
@@ -16,7 +17,19 @@ import { loadSchedulerParams } from '../services/schedulerParams';
 export const StudySessionPage: React.FC = () => {
   const { classId, deckId } = useParams();
   const navigate = useNavigate();
-  const store = useFlashcardStore();
+  // Select only the slices this page renders so a stats refresh (classStats /
+  // deckStats / globalStats) doesn't re-render the whole study session.
+  const store = useFlashcardStore(useShallow((s) => ({
+    session: s.session,
+    decks: s.decks,
+    classes: s.classes,
+    currentStreak: s.currentStreak,
+    startClassStudySession: s.startClassStudySession,
+    startStudySession: s.startStudySession,
+    rateCard: s.rateCard,
+    undoLastRate: s.undoLastRate,
+    endStudySession: s.endStudySession,
+  })));
   
   const [studyMode, setStudyMode] = useState<'review' | 'match' | 'learn'>('review');
   const [isFlipped, setIsFlipped] = useState(false);
@@ -371,6 +384,7 @@ export const StudySessionPage: React.FC = () => {
           <MatchGame
             deckId={store.session.deckId}
             onExit={handleExitStudy}
+            onExitToSession={() => setStudyMode('review')}
           />
         ) : studyMode === 'learn' ? (
           <LearnMode
