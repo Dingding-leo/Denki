@@ -1,25 +1,21 @@
 import React, { useState } from 'react';
-import { Sparkles, GraduationCap, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { useFlashcardStore } from '../store/useFlashcardStore';
 
-/**
- * Empty-state home shown when the user has no classes yet. Replaces the public
- * marketing landing page inside the app: a fresh install should point the user
- * straight at creating their first class and adding cards — not at a demo page.
- */
+/** A first-run cover spread that leads directly into creating a real class. */
 const EmptyStateHome: React.FC = () => {
-  const createClass = useFlashcardStore((s) => s.createClass);
+  const createClass = useFlashcardStore((state) => state.createClass);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [creating, setCreating] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     if (!name.trim() || creating) return;
+
     setCreating(true);
     try {
       const id = await createClass(name.trim(), description.trim());
-      // Navigate into the new class workspace.
       window.location.hash = `#/class/${id}`;
     } finally {
       setCreating(false);
@@ -27,75 +23,53 @@ const EmptyStateHome: React.FC = () => {
   };
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'center', justifyContent: 'center', padding: '32px' }}>
-      <div style={{ maxWidth: 480, width: '100%', textAlign: 'center' }}>
-        <div style={{
-          width: 64, height: 64, borderRadius: 18, margin: '0 auto 24px',
-          background: 'linear-gradient(135deg, #6366f1, #a855f7)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff'
-        }}>
-          <GraduationCap size={32} />
-        </div>
+    <div className="zine-empty-state">
+      <section className="zine-empty-cover" aria-labelledby="first-class-heading">
+        <p className="zine-caption">Vol. 01 / Build your archive</p>
+        <h2 id="first-class-heading">Start with one class.</h2>
+        <p>
+          A class is the folder for a subject. Add decks inside it, write or import cards, then let Denki schedule the next review.
+          Everything stays on this device.
+        </p>
+      </section>
 
-        <h1 style={{ fontSize: '1.8rem', fontWeight: 800, marginBottom: 8 }}>
-          Start a study class
-        </h1>
-        <p style={{ color: '#8e8e93', fontSize: '0.95rem', lineHeight: 1.6, marginBottom: 32 }}>
-          Create your first class to begin building flashcards. Everything is stored
-          locally on this device — no account needed.
+      <section className="zine-empty-form">
+        <p className="zine-section-kicker">New file / 001</p>
+        <h3>Create a class</h3>
+        <p className="zine-page-deck">
+          Name the subject plainly. You can change the title and description later.
         </p>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12, textAlign: 'left' }}>
-          <div>
-            <label style={{ display: 'block', fontSize: '0.8rem', color: '#8e8e93', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Class name
-            </label>
+        <form onSubmit={handleSubmit}>
+          <label>
+            <span className="zine-field-label">Class name / required</span>
             <input
               autoFocus
               value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Dental Anatomy"
-              style={{
-                width: '100%', padding: '12px 14px', borderRadius: 10,
-                background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-                color: '#f3f4f6', fontSize: '0.95rem', outline: 'none',
-              }}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="e.g. Dental anatomy"
             />
-          </div>
-          <div>
-            <label style={{ display: 'block', fontSize: '0.8rem', color: '#8e8e93', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Description <span style={{ color: '#6b7280', textTransform: 'none' }}>(optional)</span>
-            </label>
+          </label>
+
+          <label>
+            <span className="zine-field-label">Margin note / optional</span>
             <input
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="What will you study?"
-              style={{
-                width: '100%', padding: '12px 14px', borderRadius: 10,
-                background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-                color: '#f3f4f6', fontSize: '0.95rem', outline: 'none',
-              }}
+              onChange={(event) => setDescription(event.target.value)}
+              placeholder="What belongs in this class?"
             />
-          </div>
+          </label>
+
           <button
             type="submit"
             disabled={!name.trim() || creating}
-            style={{
-              marginTop: 8, padding: '14px 24px', borderRadius: 12,
-              background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
-              color: '#fff', border: 'none', fontWeight: 700, fontSize: '0.95rem',
-              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              opacity: name.trim() ? 1 : 0.5,
-            }}
+            className="btn-premium-primary"
           >
-            {creating ? 'Creating…' : (
-              <>
-                <Sparkles size={16} /> Create class <ArrowRight size={16} />
-              </>
-            )}
+            {creating ? 'Filing…' : 'Create the first file'}
+            {!creating && <ArrowRight size={15} aria-hidden="true" />}
           </button>
         </form>
-      </div>
+      </section>
     </div>
   );
 };
