@@ -1,137 +1,125 @@
 import React from 'react';
-import { Award, Calendar, BarChart2, CheckCircle2, TrendingUp, Layers } from 'lucide-react';
 import { useFlashcardStore } from '../store/useFlashcardStore';
 
 interface AnalyticsDashboardProps {
-  /** 'global' = all classes (Dashboard). 'class' = one class's stats (ClassView analytics tab). */
+  /** 'global' = all classes. 'class' = the currently selected class. */
   scope?: 'global' | 'class';
 }
 
+const HEATMAP_COLORS = ['#25231f', '#5d2d24', '#9f3f2d', '#dc5b3b', '#f1ead9'] as const;
+
+function heatmapColor(count: number): string {
+  if (count === 0) return HEATMAP_COLORS[0];
+  if (count <= 3) return HEATMAP_COLORS[1];
+  if (count <= 8) return HEATMAP_COLORS[2];
+  if (count <= 15) return HEATMAP_COLORS[3];
+  return HEATMAP_COLORS[4];
+}
+
 export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ scope = 'global' }) => {
-  const globalStats = useFlashcardStore(state => state.globalStats);
-  const decks = useFlashcardStore(state => state.decks);
+  const globalStats = useFlashcardStore((state) => state.globalStats);
+  const decks = useFlashcardStore((state) => state.decks);
 
   if (!globalStats) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '60px 0', color: '#9ca3af', fontSize: '14px' }}>
-        <h4>Computing statistics...</h4>
+      <div className="zine-sheet" role="status">
+        <p className="zine-section-kicker">Archive desk</p>
+        <h3 className="zine-sheet-title">Counting marks in the margins…</h3>
       </div>
     );
   }
 
-  const { totalReviews, currentStreak, maxStreak, avgRecallRate, heatmapData, workloadForecast, cardStates } = globalStats;
-  const metrics = { currentStreak, maxStreak, totalReviews, avgRecallRate };
-  const totalCards = cardStates.newCount + cardStates.learningCount + cardStates.reviewCount;
-  const streakLabel = scope === 'class' ? 'Streak (this class)' : 'Active Streak';
+  const {
+    totalReviews,
+    currentStreak,
+    maxStreak,
+    avgRecallRate,
+    heatmapData,
+    workloadForecast,
+    cardStates,
+  } = globalStats;
 
-  // Heatmap helper for square color classes
-  const getHeatmapColor = (count: number) => {
-    if (count === 0) return 'rgba(255, 255, 255, 0.03)';
-    if (count <= 3) return 'rgba(99, 102, 241, 0.25)'; // Light Indigo
-    if (count <= 8) return 'rgba(99, 102, 241, 0.5)';  // Medium Indigo
-    if (count <= 15) return 'rgba(99, 102, 241, 0.75)'; // Dark Indigo
-    return '#6366f1'; // Full neon Indigo
-  };
+  const totalCards = cardStates.newCount + cardStates.learningCount + cardStates.reviewCount;
+  const maxForecast = Math.max(...workloadForecast.map((day) => day.count), 1);
+  const streakLabel = scope === 'class' ? 'This class / current run' : 'Current study run';
+
+  const metrics = [
+    {
+      index: '01',
+      label: streakLabel,
+      value: currentStreak,
+      unit: currentStreak === 1 ? 'day in sequence' : 'days in sequence',
+    },
+    {
+      index: '02',
+      label: 'Review archive',
+      value: totalReviews,
+      unit: 'review marks / last 12 months',
+    },
+    {
+      index: '03',
+      label: 'Recall on record',
+      value: `${avgRecallRate}%`,
+      unit: 'ratings of 3 or higher',
+    },
+    {
+      index: '04',
+      label: 'Cards on file',
+      value: totalCards,
+      unit: `${decks.length} ${decks.length === 1 ? 'deck' : 'decks'} in this view`,
+    },
+  ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '30px', padding: '10px 0' }}>
-      
-      {/* Metric Cards Grid */}
-      <div className="analytics-metrics-grid" style={{
-        display: 'grid',
-        gap: '20px',
-      }}>
-        {/* Metric 1 */}
-        <div className="card-deck-premium" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '20px' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(99, 102, 241, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366f1' }}>
-            <Award size={24} />
-          </div>
+    <div className="zine-analytics">
+      <section aria-labelledby="desk-numbers-heading">
+        <div className="zine-section-heading">
+          <span className="zine-section-number">01</span>
+          <h2 id="desk-numbers-heading">Desk numbers</h2>
+        </div>
+
+        <div className="zine-metrics-grid">
+          {metrics.map((metric) => (
+            <article className="zine-metric" key={metric.index}>
+              <div className="zine-metric-index">
+                <span>No. {metric.index}</span>
+                <span>{metric.label}</span>
+              </div>
+              <div>
+                <div className="zine-metric-value">{metric.value}</div>
+                <p className="zine-metric-unit">{metric.unit}</p>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="zine-sheet" aria-labelledby="study-archive-heading">
+        <header className="zine-sheet-header">
           <div>
-            <p style={{ fontSize: '13px', color: '#8e8e93', fontWeight: 500 }}>{streakLabel}</p>
-            <h3 style={{ fontSize: '24px', fontWeight: 800, color: '#f3f4f6', marginTop: '2px' }}>
-              {metrics.currentStreak} <span style={{ fontSize: '14px', fontWeight: 500, color: '#9ca3af' }}>days</span>
-            </h3>
+            <p className="zine-section-kicker">02 / Attendance archive</p>
+            <h2 className="zine-sheet-title" id="study-archive-heading">365 days of study marks</h2>
           </div>
-        </div>
+          <p className="zine-sheet-note">Longest uninterrupted run<br />{maxStreak} days</p>
+        </header>
 
-        {/* Metric 2 */}
-        <div className="card-deck-premium" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '20px' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(16, 185, 129, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981' }}>
-            <Calendar size={24} />
-          </div>
-          <div>
-            <p style={{ fontSize: '13px', color: '#8e8e93', fontWeight: 500 }}>Total Reviews</p>
-            <h3 style={{ fontSize: '24px', fontWeight: 800, color: '#f3f4f6', marginTop: '2px' }}>
-              {metrics.totalReviews} <span style={{ fontSize: '14px', fontWeight: 500, color: '#9ca3af' }}>logs</span>
-            </h3>
-          </div>
-        </div>
-
-        {/* Metric 3 */}
-        <div className="card-deck-premium" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '20px' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(59, 130, 246, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3b82f6' }}>
-            <TrendingUp size={24} />
-          </div>
-          <div>
-            <p style={{ fontSize: '13px', color: '#8e8e93', fontWeight: 500 }}>Retention Accuracy</p>
-            <h3 style={{ fontSize: '24px', fontWeight: 800, color: '#f3f4f6', marginTop: '2px' }}>
-              {metrics.avgRecallRate}%
-            </h3>
-          </div>
-        </div>
-
-        {/* Metric 4 */}
-        <div className="card-deck-premium" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '20px' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(245, 158, 11, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b' }}>
-            <Layers size={24} />
-          </div>
-          <div>
-            <p style={{ fontSize: '13px', color: '#8e8e93', fontWeight: 500 }}>Total Cards</p>
-            <h3 style={{ fontSize: '24px', fontWeight: 800, color: '#f3f4f6', marginTop: '2px' }}>
-              {totalCards} <span style={{ fontSize: '14px', fontWeight: 500, color: '#9ca3af' }}>in {decks.length} decks</span>
-            </h3>
-          </div>
-        </div>
-      </div>
-
-      {/* GitHub Style Streaks Heatmap */}
-      <div className="card-deck-premium" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <CheckCircle2 size={18} style={{ color: '#6366f1' }} />
-            <h4 style={{ fontSize: '16px', fontWeight: 700, color: '#f3f4f6' }}>Study Calendar (Last 12 Months)</h4>
-          </div>
-          <span style={{ fontSize: '12px', color: '#9ca3af', fontWeight: 500 }}>Max Streak: {metrics.maxStreak} days</span>
-        </div>
-
-        {/* Scrollable Heatmap Wrap */}
-        <div style={{ overflowX: 'auto', paddingBottom: '10px', display: 'flex', gap: '4px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', fontSize: '10px', color: '#6b7280', paddingRight: '8px', height: '90px' }}>
+        <div className="zine-heatmap-wrap">
+          <div className="zine-heatmap-days" aria-hidden="true">
             <span>Mon</span>
             <span>Wed</span>
             <span>Fri</span>
           </div>
 
-          <div style={{ display: 'flex', gap: '3px' }}>
-            {heatmapData.map((week, wIdx) => (
-              <div key={wIdx} style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                {week.map((day, dIdx) => (
+          <div className="zine-heatmap" aria-label="Review activity over the last twelve months">
+            {heatmapData.map((week, weekIndex) => (
+              <div className="zine-heatmap-week" key={weekIndex}>
+                {week.map((day) => (
                   <div
-                    key={dIdx}
-                    style={{
-                      width: '10px',
-                      height: '10px',
-                      borderRadius: '3px',
-                      backgroundColor: getHeatmapColor(day.count),
-                      transition: 'transform 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
-                    }}
+                    className="zine-heatmap-cell"
+                    key={day.date}
+                    style={{ backgroundColor: heatmapColor(day.count) }}
                     title={`${day.date}: ${day.count} reviews`}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.transform = 'scale(1.3)';
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.transform = 'scale(1)';
-                    }}
+                    aria-label={`${day.date}: ${day.count} reviews`}
                   />
                 ))}
               </div>
@@ -139,116 +127,77 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ scope = 
           </div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#6b7280' }}>
-          <span>Less</span>
-          <div style={{ width: '8px', height: '8px', borderRadius: '2px', backgroundColor: 'rgba(255,255,255,0.03)' }} />
-          <div style={{ width: '8px', height: '8px', borderRadius: '2px', backgroundColor: 'rgba(99, 102, 241, 0.25)' }} />
-          <div style={{ width: '8px', height: '8px', borderRadius: '2px', backgroundColor: 'rgba(99, 102, 241, 0.5)' }} />
-          <div style={{ width: '8px', height: '8px', borderRadius: '2px', backgroundColor: 'rgba(99, 102, 241, 0.75)' }} />
-          <div style={{ width: '8px', height: '8px', borderRadius: '2px', backgroundColor: '#6366f1' }} />
-          <span>More</span>
+        <div className="zine-legend" aria-label="Heatmap intensity legend">
+          <span>Quiet</span>
+          {HEATMAP_COLORS.map((color) => (
+            <span className="zine-legend-swatch" style={{ backgroundColor: color }} key={color} />
+          ))}
+          <span>Heavy</span>
         </div>
-      </div>
+      </section>
 
-      {/* Two Column Section for Workloads & Mastery States */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-        gap: '20px',
-      }}>
-        {/* Forecasts SVG Chart */}
-        <div className="card-deck-premium" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <BarChart2 size={18} style={{ color: '#6366f1' }} />
-            <h4 style={{ fontSize: '16px', fontWeight: 700, color: '#f3f4f6' }}>7-Day Workload Forecast</h4>
-          </div>
-          
-          <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', height: '140px', padding: '10px 0' }}>
-            {workloadForecast.map((bar, idx) => {
-              // Find max bar height for scaling
-              const maxCount = Math.max(...workloadForecast.map(w => w.count), 1);
-              const heightPct = (bar.count / maxCount) * 100;
-              
+      <div className="zine-sheet-grid">
+        <section className="zine-sheet is-paper" aria-labelledby="workload-heading">
+          <header className="zine-sheet-header">
+            <div>
+              <p className="zine-section-kicker">03 / Next seven days</p>
+              <h2 className="zine-sheet-title" id="workload-heading">Workload proof</h2>
+            </div>
+            <p className="zine-sheet-note">Overdue cards fold<br />into today</p>
+          </header>
+
+          <div className="zine-bars">
+            {workloadForecast.map((day) => {
+              const height = day.count === 0 ? 4 : Math.max(12, (day.count / maxForecast) * 145);
               return (
-                <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, gap: '8px' }}>
-                  <span style={{ fontSize: '11px', fontWeight: 700, color: bar.count > 0 ? '#a5b4fc' : '#6b7280' }}>
-                    {bar.count}
-                  </span>
-                  
-                  {/* Bar */}
-                  <div style={{
-                    width: '60%',
-                    maxWidth: '24px',
-                    height: `${Math.max(4, heightPct * 0.9)}px`,
-                    background: bar.count > 0 ? 'linear-gradient(to top, #3b82f6, #6366f1)' : 'rgba(255, 255, 255, 0.05)',
-                    borderRadius: '6px 6px 0 0',
-                    transition: 'height 0.5s ease',
-                    boxShadow: bar.count > 0 ? '0 0 10px rgba(99, 102, 241, 0.2)' : 'none',
-                  }} />
-                  
-                  <span style={{ fontSize: '10px', color: '#9ca3af', textTransform: 'capitalize', fontWeight: 500 }}>
-                    {bar.dayName}
-                  </span>
+                <div className="zine-bar-column" key={day.dayName}>
+                  <span className="zine-bar-value">{day.count}</span>
+                  <div
+                    className="zine-bar"
+                    style={{ height: `${height}px` }}
+                    title={`${day.dayName}: ${day.count} cards`}
+                  />
+                  <span className="zine-bar-label">{day.dayName}</span>
                 </div>
               );
             })}
           </div>
-        </div>
+        </section>
 
-        {/* Card Mastery Levels */}
-        <div className="card-deck-premium" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Layers size={18} style={{ color: '#10b981' }} />
-            <h4 style={{ fontSize: '16px', fontWeight: 700, color: '#f3f4f6' }}>Card Mastery Breakdown</h4>
+        <section className="zine-sheet" aria-labelledby="card-state-heading">
+          <header className="zine-sheet-header">
+            <div>
+              <p className="zine-section-kicker">04 / Card states</p>
+              <h2 className="zine-sheet-title" id="card-state-heading">What is sticking</h2>
+            </div>
+            <p className="zine-sheet-note">{totalCards} cards<br />total</p>
+          </header>
+
+          <div className="zine-mastery-strip" aria-label="Card-state proportions">
+            <div style={{ width: `${cardStates.reviewPct}%` }} title={`${cardStates.reviewCount} review cards`} />
+            <div style={{ width: `${cardStates.learningPct}%` }} title={`${cardStates.learningCount} learning cards`} />
+            <div style={{ width: `${cardStates.newPct}%` }} title={`${cardStates.newCount} new cards`} />
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', justifyContent: 'center', flex: 1 }}>
-            {/* Progress Segment */}
-            <div style={{
-              height: '16px',
-              borderRadius: '8px',
-              background: 'rgba(255,255,255,0.03)',
-              overflow: 'hidden',
-              display: 'flex',
-              boxShadow: '0 2px 5px rgba(0,0,0,0.2) inset',
-            }}>
-              <div style={{ width: `${cardStates.reviewPct}%`, background: 'linear-gradient(90deg, #10b981, #059669)' }} title={`Review Mastery: ${cardStates.reviewCount} cards`} />
-              <div style={{ width: `${cardStates.learningPct}%`, background: 'linear-gradient(90deg, #3b82f6, #6366f1)' }} title={`Learning: ${cardStates.learningCount} cards`} />
-              <div style={{ width: `${cardStates.newPct}%`, backgroundColor: 'rgba(255,255,255,0.08)' }} title={`New: ${cardStates.newCount} cards`} />
+          <div className="zine-stat-list">
+            <div className="zine-stat-row">
+              <span className="zine-stat-dot" style={{ color: 'var(--zine-highlight)' }} />
+              <span>Review state / established</span>
+              <strong>{cardStates.reviewCount} · {cardStates.reviewPct}%</strong>
             </div>
-
-            {/* Labels */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981' }} />
-                  <span style={{ color: '#d1d5db' }}>Mastered (Review state)</span>
-                </div>
-                <span style={{ fontWeight: 600, color: '#f3f4f6' }}>{cardStates.reviewCount} <span style={{ fontSize: '11px', color: '#9ca3af' }}>({cardStates.reviewPct}%)</span></span>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#3b82f6' }} />
-                  <span style={{ color: '#d1d5db' }}>Learning / Relearning</span>
-                </div>
-                <span style={{ fontWeight: 600, color: '#f3f4f6' }}>{cardStates.learningCount} <span style={{ fontSize: '11px', color: '#9ca3af' }}>({cardStates.learningPct}%)</span></span>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.2)' }} />
-                  <span style={{ color: '#d1d5db' }}>Brand New</span>
-                </div>
-                <span style={{ fontWeight: 600, color: '#f3f4f6' }}>{cardStates.newCount} <span style={{ fontSize: '11px', color: '#9ca3af' }}>({cardStates.newPct}%)</span></span>
-              </div>
+            <div className="zine-stat-row">
+              <span className="zine-stat-dot" style={{ color: 'var(--zine-accent)' }} />
+              <span>Learning or relearning</span>
+              <strong>{cardStates.learningCount} · {cardStates.learningPct}%</strong>
+            </div>
+            <div className="zine-stat-row">
+              <span className="zine-stat-dot" style={{ color: 'var(--zine-dim)' }} />
+              <span>New / not introduced</span>
+              <strong>{cardStates.newCount} · {cardStates.newPct}%</strong>
             </div>
           </div>
-        </div>
+        </section>
       </div>
-
     </div>
   );
 };
-
-// Cleaned up unused variables
