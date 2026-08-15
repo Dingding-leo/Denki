@@ -4,21 +4,11 @@ import { Sidebar } from './Sidebar';
 
 export const MainLayout: React.FC = () => {
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', width: '100vw', background: 'var(--bg-primary)' }}>
+    <div className="zine-app-shell">
       <Sidebar />
-
-      {/* MAIN SCREEN WORKSPACE */}
-      <main style={{
-        flex: 1,
-        padding: '40px',
-        overflowY: 'auto',
-        display: 'flex',
-        flexDirection: 'column',
-        position: 'relative',
-      }}>
+      <main className="zine-main">
         <Outlet />
       </main>
-
     </div>
   );
 };
