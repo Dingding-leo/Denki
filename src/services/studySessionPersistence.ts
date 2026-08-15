@@ -10,6 +10,7 @@ interface PersistedStudySession {
   savedAt: number;
   deckId?: number;
   classId?: number;
+  isGlobal?: boolean;
   queueCardIds: number[];
   currentIndex: number;
   completedCount: number;
@@ -21,6 +22,7 @@ interface PersistedStudySession {
 export interface StudySessionScope {
   deckId?: number;
   classId?: number;
+  isGlobal?: boolean;
 }
 
 function getStorage(): Storage | null {
@@ -52,12 +54,14 @@ function isValidSnapshot(value: unknown): value is PersistedStudySession {
     isFiniteNonNegativeInteger(snapshot.totalCards) &&
     (snapshot.deckId === undefined || (Number.isInteger(snapshot.deckId) && snapshot.deckId > 0)) &&
     (snapshot.classId === undefined || (Number.isInteger(snapshot.classId) && snapshot.classId > 0)) &&
+    (snapshot.isGlobal === undefined || typeof snapshot.isGlobal === 'boolean') &&
     (snapshot.isCram === undefined || typeof snapshot.isCram === 'boolean') &&
-    (snapshot.deckId !== undefined || snapshot.classId !== undefined)
+    (snapshot.deckId !== undefined || snapshot.classId !== undefined || snapshot.isGlobal === true)
   );
 }
 
 function scopeMatches(snapshot: PersistedStudySession, scope: StudySessionScope): boolean {
+  if (scope.isGlobal) return snapshot.isGlobal === true;
   if (scope.deckId !== undefined) return snapshot.deckId === scope.deckId;
   if (scope.classId !== undefined) return snapshot.classId === scope.classId;
   return false;
@@ -81,6 +85,7 @@ export function persistStudySession(session: StudySession): void {
     savedAt: Date.now(),
     deckId: session.deckId,
     classId: session.classId,
+    isGlobal: session.isGlobal,
     queueCardIds: queueCardIds as number[],
     currentIndex: session.currentIndex,
     completedCount: session.completedCount,
@@ -150,9 +155,11 @@ export async function restorePersistedStudySession(
     }
 
     const queue = cards.map((card) => card!);
-    const queueMatchesScope = scope.deckId !== undefined
-      ? queue.every((card) => card.deckId === scope.deckId)
-      : queue.every((card) => card.classId === scope.classId);
+    const queueMatchesScope = scope.isGlobal
+      ? true
+      : scope.deckId !== undefined
+        ? queue.every((card) => card.deckId === scope.deckId)
+        : queue.every((card) => card.classId === scope.classId);
 
     if (!queueMatchesScope) {
       clearPersistedStudySession();
@@ -162,6 +169,7 @@ export async function restorePersistedStudySession(
     return {
       deckId: snapshot.deckId,
       classId: snapshot.classId,
+      isGlobal: snapshot.isGlobal,
       queue,
       currentIndex: snapshot.currentIndex,
       completedCount: Math.min(snapshot.completedCount, queue.length),

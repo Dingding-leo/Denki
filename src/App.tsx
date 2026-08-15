@@ -68,6 +68,7 @@ const App: React.FC = () => {
             </Route>
 
             {/* Immersion Study Session routes (No sidebar) */}
+            <Route path="/study/all" element={<StudySessionPage />} />
             <Route path="/study/class/:classId" element={<StudySessionPage />} />
             <Route path="/study/deck/:deckId" element={<StudySessionPage />} />
           </Routes>

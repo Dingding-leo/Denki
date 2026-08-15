@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, GraduationCap, Layers, FileText, LayoutDashboard, Sparkles, Keyboard, CornerDownLeft } from 'lucide-react';
+import { Search, GraduationCap, Layers, FileText, LayoutDashboard, Sparkles, Keyboard, CornerDownLeft, Play } from 'lucide-react';
 import { db } from '../db';
 import type { Class, Deck, Card } from '../db/schema';
 import { useUIStore } from '../store/uiStore';
@@ -74,6 +74,14 @@ const PaletteInner: React.FC<{ close: () => void }> = ({ close }) => {
         title: 'Go to Dashboard',
         section: 'Actions',
         action: () => { close(); navigate('/'); },
+      },
+      {
+        key: 'action-today',
+        icon: <Play size={15} />,
+        title: "Review Today's Queue",
+        subtitle: 'Mix every due card across your library',
+        section: 'Actions',
+        action: () => { close(); navigate('/study/all'); },
       },
       {
         key: 'action-ai',

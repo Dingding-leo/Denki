@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useFlashcardStore } from '../store/useFlashcardStore';
 import { AnalyticsDashboard } from '../components/AnalyticsDashboard';
+import { TodayQueueCard } from '../components/TodayQueueCard';
 import EmptyStateHome from '../components/EmptyStateHome';
 import { celebrate } from '../services/celebrate';
 
@@ -133,7 +134,10 @@ export const DashboardPage: React.FC = () => {
           <EmptyStateHome />
         </>
       ) : (
-        <AnalyticsDashboard />
+        <>
+          <TodayQueueCard />
+          <AnalyticsDashboard />
+        </>
       )}
     </section>
   );

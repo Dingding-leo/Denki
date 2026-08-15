@@ -25,6 +25,7 @@ export const StudySessionPage: React.FC = () => {
     classes: s.classes,
     currentStreak: s.currentStreak,
     startClassStudySession: s.startClassStudySession,
+    startGlobalStudySession: s.startGlobalStudySession,
     startStudySession: s.startStudySession,
     rateCard: s.rateCard,
     undoLastRate: s.undoLastRate,
@@ -55,6 +56,8 @@ export const StudySessionPage: React.FC = () => {
       void actions.startClassStudySession(Number.parseInt(classId, 10), false);
     } else if (deckId) {
       void actions.startStudySession(Number.parseInt(deckId, 10), false);
+    } else {
+      void actions.startGlobalStudySession(false);
     }
   }, [classId, deckId]);
 
@@ -164,6 +167,24 @@ export const StudySessionPage: React.FC = () => {
 
   const { queue, currentIndex, completedCount, history, isCram } = store.session;
   const currentStreak = store.currentStreak;
+  const currentSessionCard = queue[currentIndex];
+  const currentDeck = currentSessionCard
+    ? store.decks.find((deck) => deck.id === currentSessionCard.deckId)
+    : undefined;
+  const currentClass = currentSessionCard
+    ? store.classes.find((studyClass) => studyClass.id === currentSessionCard.classId)
+    : undefined;
+  const currentSource = [currentClass?.name, currentDeck?.name].filter(Boolean).join(' › ');
+  const sessionTitle = store.session.isGlobal
+    ? "Today's Mixed Review"
+    : store.session.deckId
+      ? store.decks.find((deck) => deck.id === store.session?.deckId)?.name ?? 'Deck'
+      : store.classes.find((studyClass) => studyClass.id === store.session?.classId)?.name ?? 'Study Session';
+  const sessionSubtitle = isCram
+    ? 'Cram session · all active cards'
+    : store.session.isGlobal
+      ? currentSource || 'Randomized across your library'
+      : 'Spaced Repetition';
 
   // Compute intervals for FSRS transparency when card is flipped. Uses the
   // user's saved params and a fixed (no-fuzz) RNG so previews stay stable across
@@ -211,12 +232,10 @@ export const StudySessionPage: React.FC = () => {
           </button>
           <div style={{ textAlign: 'left' }}>
             <h3 style={{ fontSize: '15px', fontWeight: 800, color: '#ffffff', lineHeight: 1.2 }}>
-              {store.session.deckId 
-                ? store.decks.find(d => d.id === store.session?.deckId)?.name 
-                : store.classes.find(c => c.id === store.session?.classId)?.name || 'Study Session'}
+              {sessionTitle}
             </h3>
             <span style={{ fontSize: '9px', color: '#8e8e93', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.8px' }}>
-              {isCram ? 'Cram Session' : 'Spaced Repetition'}
+              {sessionSubtitle}
             </span>
           </div>
         </div>
@@ -385,16 +404,18 @@ export const StudySessionPage: React.FC = () => {
             <BookOpen size={48} style={{ color: '#818cf8' }} />
             {store.session.totalCards === 0 ? (
               <>
-                <h2 className="gradient-text" style={{ fontSize: '22px', fontWeight: 800 }}>This Deck Is Empty</h2>
+                <h2 className="gradient-text" style={{ fontSize: '22px', fontWeight: 800 }}>{store.session.isGlobal ? 'Your Library Is Empty' : 'This Deck Is Empty'}</h2>
                 <p style={{ color: '#9ca3af', fontSize: '14px', lineHeight: 1.5, maxWidth: '400px' }}>
-                  There are no cards here yet. Head back and add some cards to start studying.
+                  {store.session.isGlobal
+                    ? 'There are no cards in your library yet. Create or import a deck to begin.'
+                    : 'There are no cards here yet. Head back and add some cards to start studying.'}
                 </p>
               </>
             ) : (
               <>
                 <h2 className="gradient-text" style={{ fontSize: '22px', fontWeight: 800 }}>No Cards Due Today! 🎉</h2>
                 <p style={{ color: '#9ca3af', fontSize: '14px', lineHeight: 1.5, maxWidth: '400px' }}>
-                  You have completed all scheduled spaced reviews for this deck. Would you like to Cram study all cards anyway?
+                  You have completed all scheduled spaced reviews {store.session.isGlobal ? 'across your library' : 'for this deck'}. Would you like to Cram study all cards anyway?
                 </p>
               </>
             )}
@@ -402,7 +423,9 @@ export const StudySessionPage: React.FC = () => {
               {store.session.totalCards > 0 && (
                 <button
                   onClick={() => {
-                    if (classId) {
+                    if (store.session?.isGlobal) {
+                      store.startGlobalStudySession(true);
+                    } else if (classId) {
                       store.startClassStudySession(parseInt(classId, 10), true);
                     } else if (deckId) {
                       store.startStudySession(parseInt(deckId, 10), true);
