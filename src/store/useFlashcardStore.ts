@@ -40,6 +40,7 @@ useFlashcardStore.subscribe((state) => {
 // always start fresh rather than reviving a normal review session.
 const startDeckSession = useFlashcardStore.getState().startStudySession;
 const startClassSession = useFlashcardStore.getState().startClassStudySession;
+const startGlobalSession = useFlashcardStore.getState().startGlobalStudySession;
 
 useFlashcardStore.setState({
   startStudySession: async (deckId, forceCram = false) => {
@@ -71,5 +72,21 @@ useFlashcardStore.setState({
     }
 
     await startClassSession(classId, forceCram);
+  },
+  startGlobalStudySession: async (forceCram = false) => {
+    if (!forceCram) {
+      const current = useFlashcardStore.getState().session;
+      if (current?.isGlobal) return;
+
+      const restored = await restorePersistedStudySession({ isGlobal: true });
+      if (restored) {
+        await useFlashcardStore.getState().loadDecks();
+        useFlashcardStore.setState({ session: restored });
+        toast('Resumed your previous mixed review', 'info');
+        return;
+      }
+    }
+
+    await startGlobalSession(forceCram);
   },
 });

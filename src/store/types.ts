@@ -13,11 +13,12 @@ export interface StudySessionHistoryEntry {
 export interface StudySession {
   deckId?: number;        // Selected deck ID (if studying specific deck)
   classId?: number;       // Selected class ID (if studying entire class)
+  isGlobal?: boolean;       // Mixed queue across the entire library
   queue: Card[];
   currentIndex: number;
   completedCount: number;
   initialQueueSize: number;
-  totalCards: number;     // Total cards in the deck/class (pre due-filter) — distinguishes "empty deck" from "nothing due"
+  totalCards: number;     // Total cards in the active scope (pre due-filter) — distinguishes "empty" from "nothing due"
   isCram?: boolean;       // If studying all cards instead of strictly due ones
   history: StudySessionHistoryEntry[];
 }
@@ -87,6 +88,7 @@ export interface StudySlice {
   session: StudySession | null;
   startStudySession: (deckId: number, forceCram?: boolean) => Promise<void>;
   startClassStudySession: (classId: number, forceCram?: boolean) => Promise<void>;
+  startGlobalStudySession: (forceCram?: boolean) => Promise<void>;
   rateCard: (rating: Rating) => Promise<void>;
   undoLastRate: () => Promise<void>;
   previousCard: () => void;

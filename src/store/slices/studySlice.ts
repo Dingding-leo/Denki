@@ -159,6 +159,43 @@ export const createStudySlice: StateCreator<
     notifyHeldBack(heldBack);
   },
 
+  startGlobalStudySession: async (forceCram = false) => {
+    const allCards = await db.cards.toArray();
+    const now = new Date();
+
+    let filteredCards = allCards;
+    let heldBack = 0;
+    if (!forceCram) {
+      filteredCards = allCards.filter((card) => {
+        if (!card.lastReviewed || card.state === 0) return true;
+        return new Date(card.due).getTime() <= now.getTime();
+      });
+      ({ cards: filteredCards, heldBack } = await applyNewCardLimit(filteredCards));
+    }
+
+    // A fresh daily queue is mixed across the whole library. buildStudyQueue
+    // shuffles cards and breaks avoidable same-deck runs.
+    const weightedQueue = buildStudyQueue(filteredCards);
+
+    // Class pages may leave the store's deck list scoped to one class. Restore
+    // the complete deck index so a mixed session can label every card source.
+    await get().loadDecks();
+
+    set({
+      session: {
+        isGlobal: true,
+        queue: weightedQueue,
+        currentIndex: 0,
+        completedCount: 0,
+        initialQueueSize: weightedQueue.length,
+        totalCards: allCards.length,
+        isCram: forceCram,
+        history: [],
+      },
+    });
+    notifyHeldBack(heldBack);
+  },
+
   rateCard: async (rating) => {
     // Serialize rating mutations: drop a concurrent second call so two rapid
     // ratings can't both read the same snapshot and desync the queue/history
@@ -271,7 +308,7 @@ export const createStudySlice: StateCreator<
         await get().loadDeckStats(currentCard.classId);
         // Scope the streak/global stats to the class being studied, not whatever
         // class is selected in the nav (which may differ for a deck session).
-        await get().loadStats(currentCard.classId);
+        await get().loadStats(sessionRef.isGlobal ? null : currentCard.classId);
       });
 
       triggerAutoSave();
@@ -345,7 +382,7 @@ export const createStudySlice: StateCreator<
       scheduleStatsRefresh(async () => {
         await get().loadClassStats(lastEntry.card.classId);
         await get().loadDeckStats(lastEntry.card.classId);
-        await get().loadStats(lastEntry.card.classId);
+        await get().loadStats(sessionRef.isGlobal ? null : lastEntry.card.classId);
       });
 
       triggerAutoSave();

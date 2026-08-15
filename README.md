@@ -22,6 +22,7 @@ The product name is simply **Denki**. It is a general-purpose learning tool for 
 - **Local-first storage** through IndexedDB, with persistent-storage protection and offline-ready PWA support.
 - **Classes and decks** for organising material across subjects.
 - **Standard and cloze cards** with Markdown and syntax highlighting.
+- **One daily mixed queue** that randomises all due cards across the library, plus focused deck and class sessions.
 - **Focused study sessions** with progress checkpoints and review summaries.
 - **Built-in scratchpad** for diagrams, equations, and working notes.
 - **Anki and CSV imports** for bringing existing material across.
