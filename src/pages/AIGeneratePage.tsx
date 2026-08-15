@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { CheckCircle, KeyRound, Loader2, Scissors, Trash2, Upload } from 'lucide-react';
 import { generateFlashcards, type Flashcard as AIFlashcard } from '../services/ai';
 import { useFlashcardStore } from '../store/useFlashcardStore';
-import type { Deck } from '../db/schema';
 
 const AIGeneratePage: React.FC = () => {
   const [text, setText] = useState('');
@@ -15,28 +14,26 @@ const AIGeneratePage: React.FC = () => {
   const [importing, setImporting] = useState(false);
   const [selectedClassId, setSelectedClassId] = useState<number | null>(null);
   const [selectedDeckId, setSelectedDeckId] = useState<number | null>(null);
-  const [decks, setDecks] = useState<Deck[]>([]);
 
   const classes = useFlashcardStore((state) => state.classes);
+  const allDecks = useFlashcardStore((state) => state.decks);
   const loadClasses = useFlashcardStore((state) => state.loadClasses);
   const loadDecks = useFlashcardStore((state) => state.loadDecks);
   const bulkCreateCards = useFlashcardStore((state) => state.bulkCreateCards);
+
+  const decks = React.useMemo(
+    () => selectedClassId === null
+      ? []
+      : allDecks.filter((deck) => deck.classId === selectedClassId),
+    [allDecks, selectedClassId],
+  );
 
   React.useEffect(() => {
     void loadClasses();
   }, [loadClasses]);
 
   React.useEffect(() => {
-    setSelectedDeckId(null);
-    if (!selectedClassId) {
-      setDecks([]);
-      return;
-    }
-
-    void loadDecks(selectedClassId).then(() => {
-      const store = useFlashcardStore.getState();
-      setDecks(store.decks.filter((deck) => deck.classId === selectedClassId));
-    });
+    if (selectedClassId !== null) void loadDecks(selectedClassId);
   }, [selectedClassId, loadDecks]);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -249,7 +246,10 @@ const AIGeneratePage: React.FC = () => {
                 <span className="zine-field-label">Class</span>
                 <select
                   value={selectedClassId ?? ''}
-                  onChange={(event) => setSelectedClassId(event.target.value ? Number(event.target.value) : null)}
+                  onChange={(event) => {
+                    setSelectedClassId(event.target.value ? Number(event.target.value) : null);
+                    setSelectedDeckId(null);
+                  }}
                 >
                   <option value="">Choose class…</option>
                   {classes.map((studyClass) => (
