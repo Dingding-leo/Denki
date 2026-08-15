@@ -1,0 +1,325 @@
+/* Component-specific editorial layouts layered over the shared zine system. */
+
+/* ---------- Card Lab ---------- */
+
+.zine-card-lab {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.zine-lab-panel {
+  margin: 0 !important;
+  border-top: 7px solid var(--zine-accent) !important;
+}
+
+.zine-lab-form,
+.zine-form-label {
+  display: flex;
+  flex-direction: column;
+}
+
+.zine-lab-form {
+  gap: 15px;
+}
+
+.zine-form-label {
+  gap: 7px;
+  min-width: 0;
+  color: var(--zine-paper-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.zine-card-lab input,
+.zine-card-lab textarea,
+.zine-card-lab select {
+  width: 100%;
+  color: var(--zine-paper) !important;
+  background: #0d0d0b !important;
+  border: 1px solid rgba(241, 234, 217, 0.55) !important;
+  border-radius: 0 !important;
+  outline: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  box-shadow: none !important;
+}
+
+.zine-card-lab input,
+.zine-card-lab select {
+  min-height: 40px;
+  padding: 9px 10px;
+}
+
+.zine-card-lab textarea {
+  min-height: 104px;
+  padding: 12px;
+  resize: vertical;
+}
+
+.zine-card-lab input:focus,
+.zine-card-lab textarea:focus,
+.zine-card-lab select:focus {
+  border-color: var(--zine-highlight) !important;
+  box-shadow: 4px 4px 0 var(--zine-accent) !important;
+}
+
+.zine-card-lab select:disabled {
+  opacity: 0.45;
+}
+
+.zine-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.zine-toolbar.is-end {
+  justify-content: flex-end;
+  margin-top: 0;
+}
+
+.zine-file-button input {
+  display: none;
+}
+
+.zine-inline-alert {
+  padding: 12px 14px;
+  border: 2px solid currentColor;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  box-shadow: 4px 4px 0 #000;
+}
+
+.zine-inline-alert.is-success {
+  color: var(--zine-highlight);
+  background: rgba(220, 255, 88, 0.08);
+}
+
+.zine-inline-alert.is-error {
+  margin-top: 16px;
+  color: #ff9b83;
+  background: rgba(255, 91, 56, 0.09);
+}
+
+.zine-draft-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 22px;
+  align-items: flex-end;
+  margin-bottom: 18px;
+  padding-bottom: 16px;
+  border-bottom: 3px solid var(--zine-paper);
+}
+
+.zine-draft-header h2 {
+  margin-top: 5px;
+  font-family: var(--font-display);
+  font-size: 28px;
+  letter-spacing: -0.05em;
+  text-transform: uppercase;
+}
+
+.zine-filing-controls {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(140px, 1fr) auto;
+  gap: 9px;
+  align-items: end;
+}
+
+.zine-filing-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.zine-draft-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.zine-card-draft {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 14px 0;
+  border-bottom: 1px dashed rgba(241, 234, 217, 0.46);
+}
+
+.zine-card-draft:last-child {
+  border-bottom: 0;
+}
+
+.zine-card-draft-index {
+  height: 52px;
+  display: grid;
+  place-items: center;
+  color: var(--zine-ink);
+  background: var(--zine-paper);
+  border: 2px solid var(--zine-paper);
+  font-family: var(--font-display);
+  font-size: 20px;
+  transform: rotate(-1deg);
+}
+
+.zine-remove-draft {
+  width: 38px;
+  height: 38px;
+  padding: 0 !important;
+}
+
+.spin {
+  animation: zine-spin 850ms steps(8, end) infinite;
+}
+
+@keyframes zine-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ---------- Class workspace / deck archive ---------- */
+
+.zine-main > div[style*="max-width: 1000px"] > div:first-child {
+  position: relative;
+  padding: 24px !important;
+  border: 2px solid rgba(241, 234, 217, 0.68) !important;
+  border-bottom-width: 7px !important;
+  background: var(--zine-panel) !important;
+  box-shadow: 8px 8px 0 #000;
+}
+
+.zine-main > div[style*="max-width: 1000px"] > div:first-child::before {
+  content: "ARCHIVE FILE";
+  position: absolute;
+  top: -12px;
+  left: 18px;
+  padding: 3px 7px;
+  color: var(--zine-ink);
+  background: var(--zine-highlight);
+  border: 1px solid var(--zine-paper);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.09em;
+}
+
+.zine-main > div[style*="max-width: 1000px"] > div:first-child h1 {
+  font-size: clamp(34px, 5vw, 62px) !important;
+  line-height: 0.9 !important;
+}
+
+.zine-main .card-deck-premium[style*="min-height: 210px"] {
+  min-height: 230px !important;
+  border-top: 6px solid var(--zine-accent) !important;
+}
+
+.zine-main .card-deck-premium[style*="min-height: 210px"]:nth-child(2n) {
+  transform: rotate(0.25deg);
+}
+
+.zine-main .card-deck-premium[style*="min-height: 210px"]:nth-child(3n) {
+  transform: rotate(-0.25deg);
+}
+
+/* Turn circular gradient progress ornaments into flat editorial stamps. */
+.zine-main .card-deck-premium svg circle[stroke^="url"] {
+  stroke: var(--zine-accent) !important;
+}
+
+/* ---------- Modal and palette surfaces ---------- */
+
+[role="dialog"] .glass-panel,
+[role="dialog"].glass-panel,
+.zine-main ~ div .glass-panel {
+  border-top: 7px solid var(--zine-accent) !important;
+}
+
+/* ---------- Match / Learn modes ---------- */
+
+.match-card-shake {
+  animation: zine-match-shake 260ms steps(3, end) !important;
+}
+
+@keyframes zine-match-shake {
+  0%, 100% { transform: translateX(0) rotate(0); }
+  33% { transform: translateX(-6px) rotate(-1deg); }
+  66% { transform: translateX(6px) rotate(1deg); }
+}
+
+.study-top-nav + div .glass-panel,
+.study-top-nav + div div[style*="backdropFilter"] {
+  border-radius: 0 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.study-top-nav + div h2,
+.study-top-nav + div h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.045em;
+  text-transform: uppercase;
+}
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 900px) {
+  .zine-draft-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .zine-filing-controls {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .zine-filing-controls .btn-primary {
+    grid-column: 1 / -1;
+  }
+
+  .zine-card-draft {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+
+  .zine-card-draft .zine-form-label {
+    grid-column: 2;
+  }
+
+  .zine-remove-draft {
+    grid-column: 1;
+    grid-row: 2;
+  }
+}
+
+@media (max-width: 600px) {
+  .zine-filing-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .zine-filing-controls .btn-primary {
+    grid-column: auto;
+  }
+
+  .zine-card-draft {
+    grid-template-columns: 1fr;
+  }
+
+  .zine-card-draft-index,
+  .zine-card-draft .zine-form-label,
+  .zine-remove-draft {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .zine-card-draft-index {
+    width: 52px;
+  }
+}
