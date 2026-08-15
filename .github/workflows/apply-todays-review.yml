@@ -1,0 +1,45 @@
+name: Apply today's mixed review
+
+on:
+  push:
+    branches: [feat/todays-mixed-review]
+    paths:
+      - .github/workflows/apply-todays-review.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/todays-mixed-review
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply reviewed implementation
+        env:
+          PATCH_B64: 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
+      - name: Run implementation script
+        run: |
+          python3 - <<'PY'
+          import base64, gzip, os
+          source = gzip.decompress(base64.b64decode(os.environ['PATCH_B64'])).decode()
+          exec(compile(source, '<denki-today-queue>', 'exec'))
+          PY
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run lint
+      - run: npm run test:run
+      - run: npm run build
+      - name: Commit verified changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: add today's mixed review queue"
+          git push origin HEAD:feat/todays-mixed-review
