@@ -1,0 +1,672 @@
+/*
+ * DENKI / EYE-COMFORT FOREST
+ * Final colour pass selected from the visual explorations: a darker forest
+ * canvas, warm low-glare paper, muted sage accents, and softer depth.
+ * Loaded after the zine styles so the editorial structure stays intact while
+ * the contrast becomes comfortable for longer study sessions.
+ */
+
+:root {
+  --eye-canvas: #0d1511;
+  --eye-panel: #121b16;
+  --eye-panel-raised: #17211a;
+  --eye-panel-soft: #1b261e;
+  --eye-line: #3a4439;
+  --eye-line-soft: #303a31;
+  --eye-paper: #b6b09f;
+  --eye-paper-soft: #aaa594;
+  --eye-paper-dim: #918d80;
+  --eye-ink: #202720;
+  --eye-sage: #8c9b72;
+  --eye-sage-soft: #a4aa8c;
+  --eye-sage-deep: #6f7d5c;
+  --eye-warn: #a08b69;
+  --eye-danger: #9d6d60;
+
+  --zine-ink: var(--eye-canvas);
+  --zine-panel: var(--eye-panel);
+  --zine-panel-raised: var(--eye-panel-raised);
+  --zine-paper: var(--eye-paper);
+  --zine-paper-muted: var(--eye-paper-soft);
+  --zine-dim: #7f7d70;
+  --zine-accent: var(--eye-sage);
+  --zine-highlight: var(--eye-sage-soft);
+  --zine-blue: #829188;
+
+  --bg-primary: var(--eye-canvas);
+  --bg-secondary: var(--eye-panel);
+  --bg-tertiary: var(--eye-panel-raised);
+  --bg-card: var(--eye-panel);
+  --bg-glass: rgba(18, 27, 22, 0.96);
+  --border-glass: rgba(182, 176, 159, 0.24);
+  --border-active: var(--eye-sage);
+  --text-primary: var(--eye-paper);
+  --text-secondary: #979384;
+  --text-muted: #747568;
+  --text-main: var(--eye-paper);
+  --accent-color: var(--eye-sage);
+  --accent-glowing: rgba(140, 155, 114, 0.12);
+  --border: rgba(182, 176, 159, 0.24);
+  --shadow-premium: 0 10px 28px rgba(0, 0, 0, 0.22);
+  --shadow-neon: 0 0 0 2px rgba(140, 155, 114, 0.48);
+}
+
+html,
+body {
+  background: var(--eye-canvas) !important;
+}
+
+body {
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(182, 176, 159, 0.028) 1px, transparent 0),
+    repeating-linear-gradient(0deg, transparent 0 9px, rgba(255, 255, 255, 0.006) 9px 10px) !important;
+  background-size: 6px 6px, 100% 10px !important;
+}
+
+body::before {
+  opacity: 0.055 !important;
+  mix-blend-mode: soft-light;
+}
+
+::selection {
+  color: var(--eye-canvas);
+  background: var(--eye-sage-soft);
+}
+
+::-webkit-scrollbar-track {
+  background: var(--eye-canvas);
+  border-left-color: var(--eye-line-soft);
+}
+
+::-webkit-scrollbar-thumb {
+  background: #566052;
+  border-color: var(--eye-canvas);
+}
+
+*:focus-visible {
+  outline-color: var(--eye-sage-soft) !important;
+}
+
+/* ---------- Shell ---------- */
+
+.zine-main::before {
+  color: #75786c;
+  border-bottom-color: var(--eye-line);
+}
+
+.zine-sidebar,
+.zine-sidebar.is-collapsed {
+  color: var(--eye-paper-soft) !important;
+  background: linear-gradient(180deg, #141e18 0%, #111a15 100%) !important;
+  border-right: 1px solid var(--eye-line) !important;
+  box-shadow: inset -1px 0 rgba(182, 176, 159, 0.03);
+}
+
+.zine-sidebar-toggle {
+  color: var(--eye-paper-soft) !important;
+  background: var(--eye-panel-raised) !important;
+  border: 1px solid #5a6255 !important;
+  border-radius: 5px !important;
+  box-shadow: none !important;
+}
+
+.zine-brand,
+.zine-sidebar-primary,
+.zine-library-heading,
+.zine-sidebar-footer {
+  border-color: var(--eye-line-soft) !important;
+}
+
+.zine-brand-mark {
+  color: var(--eye-ink) !important;
+  background: #aaa991 !important;
+  border: 1px solid #6f7568 !important;
+  border-radius: 4px !important;
+  box-shadow: 3px 3px 0 #354037 !important;
+}
+
+.zine-brand-title {
+  color: #aaa698 !important;
+}
+
+.zine-brand-subtitle,
+.zine-brand-streak {
+  color: #868679 !important;
+}
+
+.zine-brand-streak {
+  color: #b5b19f !important;
+  background: transparent !important;
+  border-color: #596354 !important;
+  border-radius: 3px;
+}
+
+.zine-search,
+.zine-nav-link,
+.zine-class-link,
+.zine-settings-button {
+  color: #9d998a !important;
+}
+
+.zine-search {
+  background: rgba(255, 255, 255, 0.012) !important;
+  border: 1px solid #4c564a !important;
+  border-radius: 5px !important;
+}
+
+.zine-search:hover {
+  color: #b3ae9d !important;
+  background: #1a251d !important;
+}
+
+.zine-nav-link {
+  border-color: #303a31 !important;
+  border-radius: 5px !important;
+}
+
+.zine-nav-link:hover,
+.zine-nav-link.is-active {
+  color: #b6b09f !important;
+  background: #1a251d !important;
+  box-shadow: inset 0 0 0 1px #3f4b3e;
+}
+
+.zine-nav-link.is-active::after {
+  color: #9eaa81 !important;
+}
+
+.zine-shortcut {
+  border-color: #5d6659 !important;
+}
+
+.zine-library-heading {
+  color: #8c897c !important;
+}
+
+.zine-add-class {
+  color: #a6a291 !important;
+  background: #1c271f !important;
+  border: 1px solid #4a5548 !important;
+  border-radius: 4px !important;
+}
+
+.zine-class-link {
+  border-bottom-color: #303a31 !important;
+}
+
+.zine-class-link:hover,
+.zine-class-link.is-active {
+  color: #b6b09f !important;
+  background: #18231c !important;
+}
+
+.zine-class-index {
+  color: #a8a393 !important;
+  background: #151f19 !important;
+  border-color: #465145 !important;
+  border-radius: 4px !important;
+}
+
+.zine-class-link.is-active .zine-class-index,
+.zine-class-link:hover .zine-class-index {
+  color: #b8b3a2 !important;
+  background: #202c23 !important;
+}
+
+.zine-class-meta {
+  color: #727569 !important;
+  opacity: 1 !important;
+}
+
+.zine-due-stamp {
+  color: #b7b29f !important;
+  background: #4f5f47 !important;
+  border: 0 !important;
+  border-radius: 4px !important;
+}
+
+.zine-settings-button {
+  color: #aaa596 !important;
+  background: #151f19 !important;
+  border: 1px solid #465145 !important;
+  border-radius: 5px !important;
+}
+
+.zine-settings-button:hover {
+  color: #beb8a5 !important;
+  background: #1b271f !important;
+}
+
+/* ---------- Editorial hierarchy ---------- */
+
+.zine-page-header,
+.zine-masthead {
+  border-bottom-color: #62685d !important;
+}
+
+.zine-kicker,
+.zine-section-kicker,
+.zine-section-number {
+  color: #89956f !important;
+}
+
+.zine-page-title,
+.zine-main h1,
+.zine-main h2,
+.zine-main h3,
+.zine-main h4,
+.gradient-text,
+.green-gradient-text {
+  color: #aaa697 !important;
+}
+
+.zine-page-deck {
+  color: #7f8074 !important;
+}
+
+.zine-issue-stamp {
+  color: #252b24 !important;
+  background: #aeb19c !important;
+  border: 1px solid #777d6d !important;
+  border-radius: 3px !important;
+  box-shadow: 6px 6px 0 #4f584a !important;
+}
+
+.zine-section-heading {
+  border-bottom-color: #596056 !important;
+}
+
+/* ---------- Shared surfaces ---------- */
+
+.glass-panel,
+.card-deck-premium,
+.panel,
+.zine-sheet {
+  color: #a6a293 !important;
+  background: #131d17 !important;
+  border: 1px solid #39443a !important;
+  border-radius: 8px !important;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.18) !important;
+}
+
+.glass-panel:hover,
+.card-deck-premium:hover,
+.panel:hover {
+  transform: translateY(-1px) !important;
+  border-color: #4b584a !important;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22) !important;
+}
+
+.hover-lift:hover {
+  transform: translateY(-1px) !important;
+  border-color: #4b584a !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18) !important;
+}
+
+.badge-premium,
+.badge-premium-blue,
+.badge-premium-green,
+.badge-premium-amber {
+  color: #9b998b !important;
+  border-color: #555f52 !important;
+  border-radius: 4px !important;
+}
+
+.badge-premium-green { color: #a2aa8c !important; }
+.badge-premium-blue { color: #8f9a91 !important; }
+.badge-premium-amber { color: #a7997b !important; }
+
+.btn-premium-primary,
+.btn-primary,
+.btn-premium-success,
+.btn-premium-secondary,
+.btn-premium-danger,
+.ghost-btn {
+  border-radius: 5px !important;
+  box-shadow: none !important;
+}
+
+.btn-premium-primary,
+.btn-primary,
+.btn-premium-success {
+  color: #20271f !important;
+  background: #9da88a !important;
+  border: 1px solid #aeb49c !important;
+}
+
+.btn-premium-secondary,
+.ghost-btn {
+  color: #9c998b !important;
+  background: #17211a !important;
+  border-color: #465145 !important;
+}
+
+.btn-premium-danger {
+  color: #b9b19f !important;
+  background: #5d4540 !important;
+  border-color: #77594f !important;
+}
+
+.btn-premium-primary:hover:not(:disabled),
+.btn-primary:hover:not(:disabled),
+.btn-premium-success:hover:not(:disabled),
+.btn-premium-secondary:hover:not(:disabled),
+.btn-premium-danger:hover:not(:disabled),
+.ghost-btn:hover:not(:disabled) {
+  transform: translateY(-1px) !important;
+  box-shadow: none !important;
+}
+
+.input-premium,
+.textarea-premium,
+.notes-editor,
+select,
+.zine-card-lab input,
+.zine-card-lab textarea,
+.zine-card-lab select {
+  color: #aaa696 !important;
+  background: #0f1813 !important;
+  border-color: #3e493e !important;
+  border-radius: 5px !important;
+}
+
+.input-premium:focus,
+.textarea-premium:focus,
+.notes-editor:focus,
+select:focus,
+.zine-card-lab input:focus,
+.zine-card-lab textarea:focus,
+.zine-card-lab select:focus {
+  border-color: #718064 !important;
+  box-shadow: 0 0 0 2px rgba(140, 155, 114, 0.16) !important;
+}
+
+.segmented-control {
+  border-color: #475246 !important;
+  border-radius: 5px !important;
+  overflow: hidden;
+}
+
+.segmented-control-item {
+  color: #87887b !important;
+  border-right-color: #414b40 !important;
+}
+
+.segmented-control-item:hover,
+.segmented-control-item.active {
+  color: #b3ae9d !important;
+  background: #1d281f !important;
+}
+
+/* ---------- Dashboard ---------- */
+
+.zine-metric {
+  color: var(--eye-ink) !important;
+  background: #b3ad9c !important;
+  border: 1px solid #8c887b !important;
+  border-radius: 8px !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.17) !important;
+  transform: none !important;
+}
+
+.zine-metric:nth-child(2n) {
+  transform: none !important;
+}
+
+.zine-metric:nth-child(3n) {
+  color: #20271f !important;
+  background: #a9af95 !important;
+  border-color: #858d78 !important;
+  transform: none !important;
+}
+
+.zine-metric-index,
+.zine-metric-unit {
+  color: #343a32 !important;
+}
+
+.zine-metric-value {
+  color: #222922 !important;
+}
+
+.zine-sheet {
+  color: #a19d8e !important;
+  background: #141e18 !important;
+  border-color: #3d473d !important;
+  box-shadow: none !important;
+}
+
+.zine-sheet.is-paper {
+  color: #293027 !important;
+  background: #afa998 !important;
+  border-color: #8a8779 !important;
+}
+
+.zine-sheet-header {
+  border-bottom-color: #596056 !important;
+}
+
+.zine-heatmap-cell,
+.zine-legend-swatch {
+  border-color: #3f493f !important;
+}
+
+.zine-bar {
+  background: #80906d !important;
+  border-color: #66725b !important;
+}
+
+.zine-mastery-strip > div:nth-child(1) { background: #96a17f !important; }
+.zine-mastery-strip > div:nth-child(2) { background: #6f8062 !important; }
+.zine-mastery-strip > div:nth-child(3) { background: #555b51 !important; }
+
+/* ---------- Onboarding / empty state ---------- */
+
+.zine-empty-cover {
+  color: #252b24 !important;
+  background: #b2ad9c !important;
+  border-color: #8c887b !important;
+  border-radius: 8px !important;
+  box-shadow: 8px 8px 0 #4a5548 !important;
+}
+
+.zine-empty-cover::after {
+  color: #20271f !important;
+  background: #9da88a !important;
+  border-color: #65715b !important;
+}
+
+.zine-empty-form {
+  border-top-color: #7d8d69 !important;
+  background: #141e18 !important;
+  border-radius: 8px;
+  box-shadow: none !important;
+}
+
+/* ---------- Class / deck archive ---------- */
+
+.zine-main > div[style*="max-width: 1000px"] > div:first-child {
+  background: #141e18 !important;
+  border-color: #404a40 !important;
+  border-bottom-color: #65715b !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+}
+
+.zine-main > div[style*="max-width: 1000px"] > div:first-child::before {
+  color: #20271f !important;
+  background: #97a181 !important;
+  border-color: #6f7c62 !important;
+  border-radius: 3px;
+}
+
+.zine-main form.card-deck-premium,
+.zine-lab-panel {
+  border-top-color: #6e7d5f !important;
+}
+
+.zine-main .card-deck-premium[style*="min-height: 210px"] {
+  border-top-color: #6d7c5e !important;
+  transform: none !important;
+}
+
+/* ---------- Card Lab ---------- */
+
+.zine-inline-alert.is-success {
+  color: #9ba78a !important;
+  background: rgba(140, 155, 114, 0.07) !important;
+}
+
+.zine-inline-alert.is-error {
+  color: #ac8c83 !important;
+  background: rgba(157, 109, 96, 0.07) !important;
+}
+
+.zine-card-draft-index {
+  color: #252b24 !important;
+  background: #afa998 !important;
+  border-color: #898679 !important;
+  border-radius: 5px !important;
+  transform: none !important;
+}
+
+/* ---------- Study mode ---------- */
+
+.study-top-nav {
+  color: #a6a292 !important;
+  background: #101914 !important;
+  border-bottom: 1px solid #3c473c !important;
+  box-shadow: 0 3px 0 rgba(111, 125, 92, 0.42) !important;
+}
+
+.study-top-nav * {
+  color: #a6a292 !important;
+}
+
+.study-top-nav .btn-premium-secondary,
+.study-top-nav .btn-premium-danger {
+  color: #a19e8f !important;
+  background: #17211a !important;
+  border: 1px solid #4a5548 !important;
+  border-radius: 5px !important;
+  box-shadow: none !important;
+}
+
+.study-top-nav .segmented-control {
+  border-color: #465145 !important;
+}
+
+.study-top-nav .segmented-control-item {
+  color: #85877a !important;
+  border-right-color: #414b40 !important;
+}
+
+.study-top-nav .segmented-control-item.active {
+  color: #b1ac9b !important;
+  background: #1d281f !important;
+}
+
+.flip-card-front,
+.flip-card-back {
+  color: #20271f !important;
+  background-color: #b3ad9c !important;
+  background-image:
+    linear-gradient(rgba(32, 39, 31, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(32, 39, 31, 0.018) 1px, transparent 1px) !important;
+  border: 1px solid #8c887b !important;
+  border-radius: 8px !important;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2) !important;
+}
+
+.flip-card-back {
+  background-color: #a9af95 !important;
+}
+
+.flip-card-front .markdown-content,
+.flip-card-back .markdown-content,
+.flip-card-front .markdown-content *,
+.flip-card-back .markdown-content * {
+  color: #222922 !important;
+}
+
+.flip-card-front .badge-premium,
+.flip-card-back .badge-premium {
+  color: #30372f !important;
+  border-color: #6f7468 !important;
+}
+
+.flip-card-front span[style*="boxShadow"],
+.flip-card-back span[style*="boxShadow"] {
+  background: #718064 !important;
+}
+
+.rating-dock {
+  background: #afa998 !important;
+  border: 1px solid #888578 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.19) !important;
+}
+
+.rating-dock > span {
+  color: #343a32 !important;
+}
+
+.rating-btn-card,
+.rating-btn-1,
+.rating-btn-2,
+.rating-btn-3,
+.rating-btn-4,
+.rating-btn-5 {
+  color: #2d342c !important;
+  border: 1px solid #77786c !important;
+  border-radius: 5px !important;
+}
+
+.rating-btn-card:hover {
+  color: #b4af9e !important;
+  background: #28342a !important;
+  transform: translateY(-1px) !important;
+  box-shadow: none !important;
+}
+
+.notes-preview {
+  color: #9f9b8d !important;
+  background: #101914 !important;
+  border-color: #3d483d !important;
+  border-radius: 5px !important;
+}
+
+.markdown-content code {
+  color: #a3aa8e !important;
+  background: rgba(166, 174, 144, 0.06) !important;
+}
+
+.markdown-content blockquote {
+  border-left-color: #728064 !important;
+}
+
+.cloze-blank {
+  border-bottom-color: #758366 !important;
+  background: rgba(140, 155, 114, 0.08) !important;
+}
+
+.cloze-blank.revealed {
+  color: #20271f !important;
+  background: #a1aa8a !important;
+  border-bottom-color: #65715b !important;
+}
+
+@media (max-width: 768px) {
+  .zine-sidebar,
+  .zine-sidebar.is-collapsed {
+    border-bottom-color: #3b463b !important;
+  }
+
+  .study-top-nav {
+    box-shadow: 0 2px 0 rgba(111, 125, 92, 0.42) !important;
+  }
+
+  .rating-dock {
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18) !important;
+  }
+}
