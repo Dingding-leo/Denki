@@ -58,7 +58,7 @@ let runtimePromise: Promise<AnkiRuntime> | null = null;
 
 interface MediaReferenceIndex {
   isEmpty: boolean;
-  markdownAlternation: string;
+  filenameAlternation: string;
 }
 
 const mediaReferenceIndexCache = new WeakMap<object, MediaReferenceIndex>();
@@ -74,7 +74,7 @@ function getMediaReferenceIndex(mediaLookup: MediaLookup): MediaReferenceIndex {
   const filenames = Object.keys(mediaLookup).sort((a, b) => b.length - a.length);
   const index = {
     isEmpty: filenames.length === 0,
-    markdownAlternation: filenames.map(escapeRegex).join('|'),
+    filenameAlternation: filenames.map(escapeRegex).join('|'),
   };
   mediaReferenceIndexCache.set(mediaLookup, index);
   return index;
@@ -147,7 +147,7 @@ export function replaceAnkiMediaReferences(html: string, mediaLookup: MediaLooku
   );
 
   const markdownPattern = new RegExp(
-    `(!?\\[[^\\]]*\\]\\()(${mediaIndex.markdownAlternation})(\\))`,
+    `(!?\\[[^\\]]*\\]\\()(${mediaIndex.filenameAlternation})(\\))`,
     'g',
   );
   const withMarkdownLinks = withHtmlSources.replace(
@@ -156,7 +156,13 @@ export function replaceAnkiMediaReferences(html: string, mediaLookup: MediaLooku
       `${prefix}${lookupMedia(mediaLookup, reference) ?? reference}${suffix}`,
   );
 
-  return withMarkdownLinks.replace(/\[sound:([^\]]+)\]/gi, (match, reference: string) => {
+  // Build the sound matcher from the known media filenames. A generic
+  // "anything until ]" expression breaks valid filenames such as voice[1].mp3.
+  const soundPattern = new RegExp(
+    `\\[sound:(${mediaIndex.filenameAlternation})\\]`,
+    'g',
+  );
+  return withMarkdownLinks.replace(soundPattern, (match, reference: string) => {
     const dataUrl = lookupMedia(mediaLookup, reference);
     if (!dataUrl) return match;
     return `<audio controls preload="none" src="${dataUrl}" style="margin: 8px 0; max-width: 100%; display: block;"></audio>`;
