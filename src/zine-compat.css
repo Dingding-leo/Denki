@@ -1,0 +1,54 @@
+/* Final compatibility layer for legacy responsive rules in index.css. */
+
+@media (max-width: 768px) {
+  aside.zine-sidebar,
+  aside.zine-sidebar.is-collapsed {
+    width: 100% !important;
+    height: auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    flex-wrap: nowrap !important;
+    justify-content: flex-start !important;
+    padding: 0 !important;
+    border-right: 0 !important;
+    border-bottom: 3px solid var(--zine-ink) !important;
+  }
+
+  aside.zine-sidebar > header,
+  aside.zine-sidebar > nav,
+  aside.zine-sidebar > section,
+  aside.zine-sidebar > footer {
+    width: 100% !important;
+  }
+
+  main.zine-main {
+    width: 100% !important;
+    height: auto !important;
+    min-height: 100vh !important;
+    padding: 24px 16px 56px !important;
+    overflow: visible !important;
+  }
+
+  .zine-sidebar-primary {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  .zine-search {
+    grid-column: 1 / -1 !important;
+  }
+
+  .zine-empty-state,
+  .zine-sheet-grid,
+  .zine-page-header,
+  .zine-masthead {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+  }
+
+  .zine-card-draft,
+  .zine-draft-header,
+  .zine-filing-controls {
+    max-width: 100% !important;
+  }
+}
