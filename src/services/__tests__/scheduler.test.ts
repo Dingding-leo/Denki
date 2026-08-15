@@ -32,7 +32,7 @@ const mockCard = (o?: Partial<Card>): Card =>
 
 const review = (
   card: Card,
-  rating: 1 | 2 | 3 | 4 | 5,
+  rating: 1 | 2 | 3 | 4,
   now?: Date,
   params: SchedulerParams = DEFAULT_PARAMS,
 ) => reviewCard(card, rating, now ?? new Date('2026-01-01T00:00:00Z'), params, noFuzz);
@@ -52,22 +52,20 @@ describe('Denki Scheduler (real FSRS-4.5)', () => {
       expect(log.rating).toBe(1);
     });
 
-    it('produces a monotonically increasing interval across ratings 2 < 3 < 4 <= 5', () => {
+    it('produces a monotonically increasing interval across Hard < Good < Easy', () => {
       const hard = review(mockCard(), 2).updatedCard.scheduledDays;
       const good = review(mockCard(), 3).updatedCard.scheduledDays;
-      const veryWell = review(mockCard(), 4).updatedCard.scheduledDays;
-      const perfect = review(mockCard(), 5).updatedCard.scheduledDays;
+      const easy = review(mockCard(), 4).updatedCard.scheduledDays;
       expect(hard).toBeLessThan(good);
-      expect(good).toBeLessThan(veryWell);
-      expect(veryWell).toBeLessThanOrEqual(perfect);
+      expect(good).toBeLessThan(easy);
     });
 
     it('assigns higher difficulty to worse ratings', () => {
       const again = review(mockCard(), 1).updatedCard.difficulty;
       const good = review(mockCard(), 3).updatedCard.difficulty;
-      const perfect = review(mockCard(), 5).updatedCard.difficulty;
+      const easy = review(mockCard(), 4).updatedCard.difficulty;
       expect(again).toBeGreaterThan(good);
-      expect(good).toBeGreaterThan(perfect);
+      expect(good).toBeGreaterThan(easy);
     });
   });
 
@@ -137,12 +135,12 @@ describe('Denki Scheduler (real FSRS-4.5)', () => {
       expect(high).toBeGreaterThan(low);
     });
 
-    it('easyBonus lengthens the Easy (rating 5) interval', () => {
-      const low = review(reviewCardFixture(), 5, tenDaysLater, {
+    it('easyBonus lengthens the Easy (rating 4) interval', () => {
+      const low = review(reviewCardFixture(), 4, tenDaysLater, {
         ...DEFAULT_PARAMS,
         easyBonus: 1.0,
       }).updatedCard.scheduledDays;
-      const high = review(reviewCardFixture(), 5, tenDaysLater, {
+      const high = review(reviewCardFixture(), 4, tenDaysLater, {
         ...DEFAULT_PARAMS,
         easyBonus: 2.0,
       }).updatedCard.scheduledDays;
@@ -173,7 +171,7 @@ describe('Denki Scheduler (real FSRS-4.5)', () => {
         difficulty: 1,
         lastReviewed: new Date('2026-01-01T00:00:00Z'),
       });
-      const { updatedCard } = review(card, 5, new Date('2026-01-02T00:00:00Z'));
+      const { updatedCard } = review(card, 4, new Date('2026-01-02T00:00:00Z'));
       expect(updatedCard.scheduledDays).toBeLessThanOrEqual(36500);
     });
 

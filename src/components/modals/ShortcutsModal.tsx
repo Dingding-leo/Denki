@@ -23,7 +23,7 @@ const GROUPS: ShortcutGroup[] = [
     title: 'Study Session (Review)',
     shortcuts: [
       { keys: ['Space'], label: 'Flip the current card' },
-      { keys: ['1', '–', '5'], label: 'Rate recall (Again → Perfect)' },
+      { keys: ['1', '–', '4'], label: 'Rate recall (Again → Easy)' },
       { keys: ['Z'], label: 'Undo last rating' },
       { keys: ['Esc'], label: 'Exit the study session' },
     ],
@@ -32,7 +32,7 @@ const GROUPS: ShortcutGroup[] = [
     title: 'Learn Mode',
     shortcuts: [
       { keys: ['Space'], label: 'Reveal answer / continue' },
-      { keys: ['1', '–', '5'], label: 'Rate your answer' },
+      { keys: ['1', '–', '4'], label: 'Rate your answer' },
       { keys: ['Esc'], label: 'Back to session overview' },
     ],
   },

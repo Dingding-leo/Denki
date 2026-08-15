@@ -192,7 +192,7 @@ export const createCardSlice: StateCreator<
           lastRating: undefined,
         });
       } else {
-        // Explicit confidence set: 1, 2, 3, 4, or 5
+        // Explicit canonical confidence set: Again, Hard, Good, or Easy.
         let difficulty = 4.5;
         let stability = 0.15;
         let state = STATES.Review;
@@ -208,9 +208,6 @@ export const createCardSlice: StateCreator<
           difficulty = 4.5;
           stability = 0.15;
         } else if (rating === 4) {
-          difficulty = 3.0;
-          stability = 0.5;
-        } else if (rating === 5) {
           difficulty = 1.5;
           stability = 1.0;
         }

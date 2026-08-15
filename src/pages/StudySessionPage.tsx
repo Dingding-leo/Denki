@@ -10,9 +10,11 @@ import { StudyNotepad } from '../components/StudyNotepad';
 import { StudyProgressBar } from '../components/StudyProgressBar';
 import { StudyCheckpoint } from '../components/StudyCheckpoint';
 import { StudySessionSummary } from '../components/StudySessionSummary';
+import { CardMemorySnapshot } from '../components/CardMemorySnapshot';
 import { celebrate } from '../services/celebrate';
 import { reviewCard, formatInterval, type Rating } from '../services/scheduler';
 import { loadSchedulerParams } from '../services/schedulerParams';
+import { REVIEW_RATINGS } from '../services/reviewRatings';
 
 export const StudySessionPage: React.FC = () => {
   const { classId, deckId } = useParams();
@@ -133,7 +135,7 @@ export const StudySessionPage: React.FC = () => {
     }
 
     const rating = Number.parseInt(e.key, 10);
-    if (isFlipped && rating >= 1 && rating <= 5) {
+    if (isFlipped && rating >= 1 && rating <= 4) {
       e.preventDefault();
       await handleRateCard(rating);
       return;
@@ -166,11 +168,11 @@ export const StudySessionPage: React.FC = () => {
   // Compute intervals for FSRS transparency when card is flipped. Uses the
   // user's saved params and a fixed (no-fuzz) RNG so previews stay stable across
   // renders and match what rating the card will actually schedule.
-  let predictedIntervals: string[] = ['', '', '', '', ''];
+  let predictedIntervals: string[] = ['', '', '', ''];
   if (isFlipped && currentIndex < queue.length) {
     const currentCard = queue[currentIndex];
     const previewParams = loadSchedulerParams();
-    predictedIntervals = ([1, 2, 3, 4, 5] as Rating[]).map(rating => {
+    predictedIntervals = REVIEW_RATINGS.map(({ rating }) => {
       const { updatedCard } = reviewCard(currentCard, rating, new Date(), previewParams, () => 0.5);
       return formatInterval(updatedCard.scheduledDays);
     });
@@ -446,6 +448,10 @@ export const StudySessionPage: React.FC = () => {
             {/* Brainscape-Style Deck Mastery Stacked Progress Bar */}
             <div style={{ width: '100%', maxWidth: showNotes && studyMode === 'review' ? '1600px' : '880px', display: 'flex', flexDirection: 'column', gap: '8px', transition: 'max-width 0.3s ease' }}>
               <StudyProgressBar queue={queue} currentIndex={currentIndex} />
+              <CardMemorySnapshot
+                key={`memory-${queue[currentIndex]?.id ?? currentIndex}-${currentIndex}`}
+                card={queue[currentIndex]}
+              />
             </div>
 
             {/* Side-by-Side Flex Layout if showNotes is true */}
@@ -528,98 +534,40 @@ export const StudySessionPage: React.FC = () => {
                     How well did you know this?
                   </span>
                   
-                  <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
-                    {/* Rating 1 - Not at all */}
-                    <button
-                      onClick={() => handleRateCard(1)}
-                      className="rating-btn-card rating-btn-1"
-                      title="Not at all (1)"
-                    >
-                      <span style={{ fontSize: '11px', fontWeight: 800, opacity: 0.9, marginBottom: '2px', color: '#fca5a5' }}>{predictedIntervals[0]}</span>
-                      <span style={{ fontSize: '20px', fontWeight: 800 }}>1</span>
-                      <span style={{ fontSize: '10px', fontWeight: 700, opacity: 0.9 }}>Not at all</span>
-                      <kbd className="keycap-badge" style={{ marginTop: '4px' }}>1</kbd>
-                    </button>
+                  <div className="review-rating-grid">
+                    {REVIEW_RATINGS.map((option, index) => (
+                      <button
+                        key={option.rating}
+                        onClick={() => handleRateCard(option.rating)}
+                        className={`rating-btn-card rating-btn-${option.rating}`}
+                        title={`${option.label}: ${option.description} (${option.rating})`}
+                      >
+                        <span style={{ fontSize: '11px', fontWeight: 800, opacity: 0.9, marginBottom: '2px', color: option.color }}>
+                          {predictedIntervals[index]}
+                        </span>
+                        <span style={{ fontSize: '20px', fontWeight: 800 }}>{option.rating}</span>
+                        <span style={{ fontSize: '10px', fontWeight: 800, opacity: 0.95 }}>{option.label}</span>
+                        <span style={{ fontSize: '9px', fontWeight: 600, opacity: 0.72 }}>{option.description}</span>
+                        <kbd className="keycap-badge" style={{ marginTop: '4px' }}>{option.rating}</kbd>
+                      </button>
+                    ))}
+                  </div>
 
-                    {/* Rating 2 - Slightly */}
-                    <button
-                      onClick={() => handleRateCard(2)}
-                      className="rating-btn-card rating-btn-2"
-                      title="Slightly (2)"
-                    >
-                      <span style={{ fontSize: '11px', fontWeight: 800, opacity: 0.9, marginBottom: '2px', color: '#fcd34d' }}>{predictedIntervals[1]}</span>
-                      <span style={{ fontSize: '20px', fontWeight: 800 }}>2</span>
-                      <span style={{ fontSize: '10px', fontWeight: 700, opacity: 0.9 }}>Slightly</span>
-                      <kbd className="keycap-badge" style={{ marginTop: '4px' }}>2</kbd>
-                    </button>
-
-                    {/* Rating 3 - Moderately */}
-                    <button
-                      onClick={() => handleRateCard(3)}
-                      className="rating-btn-card rating-btn-3"
-                      title="Moderately (3)"
-                    >
-                      <span style={{ fontSize: '11px', fontWeight: 800, opacity: 0.9, marginBottom: '2px', color: '#fef08a' }}>{predictedIntervals[2]}</span>
-                      <span style={{ fontSize: '20px', fontWeight: 800 }}>3</span>
-                      <span style={{ fontSize: '10px', fontWeight: 700, opacity: 0.9 }}>Moderately</span>
-                      <kbd className="keycap-badge" style={{ marginTop: '4px' }}>3</kbd>
-                    </button>
-
-                    {/* Rating 4 - Very well */}
-                    <button
-                      onClick={() => handleRateCard(4)}
-                      className="rating-btn-card rating-btn-4"
-                      title="Very well (4)"
-                    >
-                      <span style={{ fontSize: '11px', fontWeight: 800, opacity: 0.9, marginBottom: '2px', color: '#6ee7b7' }}>{predictedIntervals[3]}</span>
-                      <span style={{ fontSize: '20px', fontWeight: 800 }}>4</span>
-                      <span style={{ fontSize: '10px', fontWeight: 700, opacity: 0.9 }}>Very Well</span>
-                      <kbd className="keycap-badge" style={{ marginTop: '4px' }}>4</kbd>
-                    </button>
-
-                    {/* Rating 5 - Perfectly */}
-                    <button
-                      onClick={() => handleRateCard(5)}
-                      className="rating-btn-card rating-btn-5"
-                      title="Perfectly (5)"
-                    >
-                      <span style={{ fontSize: '11px', fontWeight: 800, opacity: 0.9, marginBottom: '2px', color: '#93c5fd' }}>{predictedIntervals[4]}</span>
-                      <span style={{ fontSize: '20px', fontWeight: 800 }}>5</span>
-                      <span style={{ fontSize: '10px', fontWeight: 700, opacity: 0.9 }}>Perfectly</span>
-                      <kbd className="keycap-badge" style={{ marginTop: '4px' }}>5</kbd>
-                    </button>
-
-                    {/* Undo Button inside the dock */}
-                    {history.length > 0 && (
+                  {history.length > 0 && (
+                    <div className="rating-undo-row">
                       <button
                         onClick={async () => {
                           await store.undoLastRate();
                           setIsFlipped(false);
                         }}
-                        style={{
-                          flex: 0.8,
-                          background: 'rgba(255, 255, 255, 0.02)',
-                          border: '1px solid rgba(255, 255, 255, 0.05)',
-                          borderRadius: '12px',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '4px',
-                          padding: '12px 6px',
-                          color: '#9ca3af',
-                          transition: 'all 0.2s',
-                        }}
-                        className="hover-lift"
+                        className="rating-undo-button"
                         aria-label="Undo last rating"
-                      title="Undo last rating"
+                        title="Undo last rating"
                       >
-                        <span style={{ fontSize: '12px', fontWeight: 700 }}>Undo</span>
-                        <kbd className="keycap-badge">Z</kbd>
+                        Undo last rating <kbd className="keycap-badge">Z</kbd>
                       </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -641,7 +589,7 @@ export const StudySessionPage: React.FC = () => {
               }}>
                 <Keyboard size={13} style={{ color: '#818cf8' }} />
                 <span>
-                  Press <kbd className="keycap-badge">Space</kbd> or <kbd className="keycap-badge">Enter</kbd> to Flip &bull; Press keys <kbd className="keycap-badge">1</kbd> &ndash; <kbd className="keycap-badge">5</kbd> to rate &bull; Press <kbd className="keycap-badge">Z</kbd> to Undo last rating
+                  Press <kbd className="keycap-badge">Space</kbd> or <kbd className="keycap-badge">Enter</kbd> to Flip &bull; Press keys <kbd className="keycap-badge">1</kbd> &ndash; <kbd className="keycap-badge">4</kbd> to rate &bull; Press <kbd className="keycap-badge">Z</kbd> to Undo last rating
                 </span>
               </div>
             )}

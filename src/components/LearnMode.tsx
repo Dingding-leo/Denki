@@ -3,6 +3,8 @@ import { useFlashcardStore } from '../store/useFlashcardStore';
 import { renderContent } from '../services/markdown';
 import { CheckCircle, XCircle, ArrowRight, Sparkles } from 'lucide-react';
 import { celebrate } from '../services/celebrate';
+import { CardMemorySnapshot } from './CardMemorySnapshot';
+import { REVIEW_RATINGS, type Rating } from '../services/reviewRatings';
 
 interface LearnModeProps {
   onExit?: () => void;
@@ -78,7 +80,7 @@ export const LearnMode: React.FC<LearnModeProps> = ({ onExit }) => {
     }
   };
 
-  const handleRating = async (rating: 1 | 2 | 3 | 4 | 5) => {
+  const handleRating = async (rating: Rating) => {
     // Save review rating directly
     await useFlashcardStore.getState().rateCard(rating);
     
@@ -129,12 +131,12 @@ export const LearnMode: React.FC<LearnModeProps> = ({ onExit }) => {
       return;
     }
 
-    if (['1', '2', '3', '4', '5'].includes(e.key)) {
+    if (['1', '2', '3', '4'].includes(e.key)) {
       e.preventDefault();
-      void handleRating(Number.parseInt(e.key, 10) as 1 | 2 | 3 | 4 | 5);
+      void handleRating(Number.parseInt(e.key, 10) as Rating);
     } else if (e.key === ' ' || e.key === 'Enter') {
       e.preventDefault();
-      void handleRating(isCorrect ? 5 : 1);
+      void handleRating(isCorrect ? 3 : 1);
     } else if ((e.key === 'o' || e.key === 'O') && overrideAllowed) {
       handleOverride();
     }
@@ -229,6 +231,11 @@ export const LearnMode: React.FC<LearnModeProps> = ({ onExit }) => {
           </button>
         )}
       </div>
+
+      <CardMemorySnapshot
+        key={`memory-${currentCard.id ?? session.currentIndex}-${session.currentIndex}`}
+        card={currentCard}
+      />
 
       {/* Main Study Card Face */}
       <div style={{
@@ -408,26 +415,17 @@ export const LearnMode: React.FC<LearnModeProps> = ({ onExit }) => {
                 Rate your recall confidence for spaced repetition mapping:
               </p>
               
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(5, 1fr)',
-                gap: '8px',
-              }}>
-                {[
-                  { rating: 1, label: 'Again', desc: 'No idea', colorClass: 'btn-score-1' },
-                  { rating: 2, label: 'Hard', desc: 'Hesitant', colorClass: 'btn-score-2' },
-                  { rating: 3, label: 'Good', desc: 'Got it', colorClass: 'btn-score-3' },
-                  { rating: 4, label: 'Very Well', desc: 'Stable', colorClass: 'btn-score-4' },
-                  { rating: 5, label: 'Perfect', desc: 'Instant', colorClass: 'btn-score-5' },
-                ].map(opt => {
-                  // Recommend score 5 for correct, score 1 for wrong
-                  const isRecommended = isCorrect ? opt.rating === 5 : opt.rating === 1;
-                  
+              <div className="learn-rating-grid">
+                {REVIEW_RATINGS.map((option) => {
+                  // A correct typed answer defaults to Good; Easy remains an
+                  // explicit choice for genuinely effortless recall.
+                  const isRecommended = isCorrect ? option.rating === 3 : option.rating === 1;
+
                   return (
                     <button
-                      key={opt.rating}
-                      onClick={() => handleRating(opt.rating as 1 | 2 | 3 | 4 | 5)}
-                      className={opt.colorClass}
+                      key={option.rating}
+                      onClick={() => handleRating(option.rating)}
+                      className={`btn-score-${option.rating}`}
                       style={{
                         padding: '10px 4px',
                         borderRadius: '8px',
@@ -436,18 +434,19 @@ export const LearnMode: React.FC<LearnModeProps> = ({ onExit }) => {
                         alignItems: 'center',
                         gap: '2px',
                         cursor: 'pointer',
-                        outline: isRecommended ? '2px solid #818cf8' : 'none',
+                        outline: isRecommended ? '2px solid var(--eye-sage, #818cf8)' : 'none',
                         transform: isRecommended ? 'scale(1.02)' : 'none',
                       }}
                     >
-                      <span style={{ fontSize: '13px', fontWeight: 800 }}>{opt.rating}</span>
-                      <span style={{ fontSize: '10px', fontWeight: 600 }}>{opt.label}</span>
+                      <span style={{ fontSize: '13px', fontWeight: 800 }}>{option.rating}</span>
+                      <span style={{ fontSize: '10px', fontWeight: 700 }}>{option.label}</span>
+                      <span style={{ fontSize: '8px', opacity: 0.72 }}>{option.description}</span>
                       {isRecommended && (
-                        <span style={{ 
-                          fontSize: '8px', 
-                          background: '#818cf8', 
-                          color: '#fff', 
-                          padding: '1px 4px', 
+                        <span style={{
+                          fontSize: '8px',
+                          background: 'var(--eye-sage, #818cf8)',
+                          color: 'var(--eye-canvas, #fff)',
+                          padding: '1px 4px',
                           borderRadius: '4px',
                           marginTop: '3px',
                           textTransform: 'uppercase',
@@ -483,7 +482,7 @@ export const LearnMode: React.FC<LearnModeProps> = ({ onExit }) => {
         {!checked ? (
           <span><strong>Enter</strong> to submit • <strong>Space</strong> to reveal without typing • <strong>Esc</strong> to exit</span>
         ) : (
-          <span>Press <strong>1–5</strong> to rate • <strong>Space/Enter</strong> for recommended • {overrideAllowed && <><strong>O</strong> to override • </>}<strong>Esc</strong> to exit</span>
+          <span>Press <strong>1–4</strong> to rate • <strong>Space/Enter</strong> for recommended • {overrideAllowed && <><strong>O</strong> to override • </>}<strong>Esc</strong> to exit</span>
         )}
       </div>
     </div>

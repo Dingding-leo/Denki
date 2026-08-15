@@ -33,7 +33,7 @@ export interface Card {
   scheduledDays: number;  // Interval in days until next due
   due: Date;              // Exact due date/time
   lastReviewed?: Date;    // Timestamp of last review
-  lastRating?: number;    // Score of the last review log (1-5), or undefined if new
+  lastRating?: number;    // Current scores are 1-4; legacy 5 is displayed as Easy
 }
 
 export interface ReviewLog {
@@ -42,7 +42,7 @@ export interface ReviewLog {
   deckId: number;
   classId: number;        // Linked Class (for class-level statistics)
   reviewedAt: Date;
-  rating: number;         // 1 = Again, 2 = Hard, 3 = Good, 4 = Very Well, 5 = Perfect
+  rating: number;         // 1 = Again, 2 = Hard, 3 = Good, 4 = Easy (legacy logs may contain 5)
   stability: number;      // Stability before this review
   difficulty: number;     // Difficulty before this review
   elapsedDays: number;    // Days elapsed since last review

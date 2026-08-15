@@ -5,6 +5,7 @@ import { reviewCard } from '../../services/scheduler';
 import { loadSchedulerParams } from '../../services/schedulerParams';
 import { triggerAutoSave } from '../../services/backup';
 import { loadNewCardsPerDay, countNewIntroducedToday, newCardAllowance } from '../../services/studyLimits';
+import { buildStudyQueue, pickReinsertIndex } from '../../services/studyQueue';
 import { toast } from '../uiStore';
 import type { FlashcardState, StudySlice } from '../types';
 
@@ -104,14 +105,9 @@ export const createStudySlice: StateCreator<
       ({ cards: filteredCards, heldBack } = await applyNewCardLimit(filteredCards));
     }
 
-    // Build weighted queue containing exactly 1 copy of each card for FSRS session order
-    const weightedQueue: Card[] = [...filteredCards];
-    
-    // Sort chronologically by card ID or creation date (first created to last)
-    weightedQueue.sort((a, b) => {
-      if (a.id && b.id) return a.id - b.id;
-      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-    });
+    // Every session receives a fresh shuffled order. Class-wide queues also
+    // interleave decks when possible, preventing long blocks from one deck.
+    const weightedQueue = buildStudyQueue(filteredCards);
 
     set({
       session: {
@@ -144,14 +140,9 @@ export const createStudySlice: StateCreator<
       ({ cards: filteredCards, heldBack } = await applyNewCardLimit(filteredCards));
     }
 
-    // Build weighted queue containing exactly 1 copy of each card for FSRS session order
-    const weightedQueue: Card[] = [...filteredCards];
-    
-    // Sort chronologically by card ID or creation date (first created to last)
-    weightedQueue.sort((a, b) => {
-      if (a.id && b.id) return a.id - b.id;
-      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-    });
+    // Every session receives a fresh shuffled order. Class-wide queues also
+    // interleave decks when possible, preventing long blocks from one deck.
+    const weightedQueue = buildStudyQueue(filteredCards);
 
     set({
       session: {
@@ -238,17 +229,14 @@ export const createStudySlice: StateCreator<
       // (counting this rating's entry below). History holds the pre-rating card,
       // so match by card id.
       if (rating <= 2) {
-        const priorReinserts = history.filter((h) => h.card.id === currentCard.id).length;
+        const priorReinserts = history.filter(
+          (entry) => entry.card.id === currentCard.id && entry.rating <= 2,
+        ).length;
         const canReinsert = priorReinserts < MAX_REINSERTIONS;
 
         if (canReinsert) {
-          const remaining = newQueue.length - nextIndex;
-          let insertDistance: number;
-          if (rating === 1) insertDistance = 3;                                          // 3 cards later
-          else insertDistance = Math.max(5, Math.floor(remaining * 0.15));               // ~15% into remaining
-
-          const insertIdx = Math.min(newQueue.length, nextIndex + insertDistance);
-          newQueue.splice(insertIdx, 0, updatedCard);
+          const insertIndex = pickReinsertIndex(newQueue.length, nextIndex, rating);
+          newQueue.splice(insertIndex, 0, updatedCard);
         }
       }
 
