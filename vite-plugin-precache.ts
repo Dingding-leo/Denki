@@ -1,16 +1,10 @@
 import type { Plugin } from 'vite';
-import path from 'path';
 
 /**
- * Emit a `sw-assets.json` manifest listing every hashed JS/CSS asset emitted by
- * the build. The service worker (public/sw.js) fetches this on `install` and
- * precaches all of them, so the built app works fully offline and a stale shell
- * never references an uncached chunk after a deploy.
- *
- * Why not inline into sw.js: sw.js is a static file copied from public/ before
- * the build; inlining would need a token-replace step that breaks the file if a
- * user edits it directly. A separate manifest keeps the SW readable and the
- * asset list data-driven.
+ * Emit a `sw-assets.json` manifest listing every hashed code asset emitted by
+ * the build. The service worker fetches this on install and precaches JavaScript,
+ * CSS, and WebAssembly so lazy features (including the local Anki importer) work
+ * on the first offline launch instead of only after their first network use.
  */
 export function denkiPrecachePlugin(): Plugin {
   return {
@@ -19,13 +13,12 @@ export function denkiPrecachePlugin(): Plugin {
     generateBundle(_opts, bundle) {
       const assets: string[] = [];
       for (const file of Object.values(bundle)) {
-        if (file.type === 'asset' || file.type === 'chunk') {
-          if (file.fileName.endsWith('.js') || file.fileName.endsWith('.css')) {
-            assets.push(`assets/${path.basename(file.fileName)}`);
-          }
+        if (file.type !== 'asset' && file.type !== 'chunk') continue;
+        if (/\.(?:js|css|wasm)$/.test(file.fileName)) {
+          assets.push(file.fileName);
         }
       }
-      // Sort for deterministic output.
+
       assets.sort();
       this.emitFile({
         type: 'asset',
