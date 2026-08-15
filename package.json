@@ -18,12 +18,14 @@
     "canvas-confetti": "^1.9.4",
     "dexie": "^4.4.3",
     "dompurify": "^3.4.7",
+    "jszip": "3.10.1",
     "lucide-react": "^1.17.0",
     "marked": "^18.0.4",
     "prismjs": "^1.30.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-router-dom": "^7.16.0",
+    "sql.js": "1.14.1",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
@@ -39,6 +41,7 @@
     "@types/prismjs": "^1.26.6",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@types/sql.js": "1.4.11",
     "@vitejs/plugin-react": "^6.0.1",
     "eslint": "^10.3.0",
     "eslint-plugin-react-hooks": "^7.1.1",

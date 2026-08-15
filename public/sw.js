@@ -1,4 +1,4 @@
-const CACHE_NAME = 'denki-cache-v7';
+const CACHE_NAME = 'denki-cache-v8';
 const BASE_URL = new URL('./', self.location.href).pathname;
 const SHELL = [
   BASE_URL,
@@ -7,27 +7,26 @@ const SHELL = [
   `${BASE_URL}denki_logo.png`,
 ];
 
-// 1. Install Event: Precache the app shell AND every hashed JS/CSS asset so the
-//    app works fully offline and a deployed shell always has its chunks. The
-//    asset list is emitted by the build (vite-plugin-precache) as sw-assets.json.
+// 1. Install Event: Precache the app shell and every hashed JS/CSS/WASM asset.
+//    The asset list is emitted by the build (vite-plugin-precache) as
+//    sw-assets.json, so lazy features remain available on the first offline use.
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
       .open(CACHE_NAME)
       .then(async (cache) => {
         await cache.addAll(SHELL);
-        // Best-effort: if the manifest exists, precache all hashed chunks. A
-        // failure here (e.g. a chunk 404s mid-precache) must not fail install —
-        // the network-first strategy below still recovers chunks on demand.
+        // Best-effort: if one asset disappears during a deploy, do not reject
+        // the entire service-worker install. Runtime caching can recover it.
         try {
           const res = await fetch(`${BASE_URL}sw-assets.json`);
           if (res.ok) {
             const manifest = await res.json();
-            const assets = (manifest.assets || []).map((a) => `${BASE_URL}${a}`);
+            const assets = (manifest.assets || []).map((asset) => `${BASE_URL}${asset}`);
             if (assets.length) await cache.addAll(assets);
           }
         } catch {
-          /* manifest unavailable — chunks will be cached on first use */
+          /* manifest unavailable — assets will be cached on first use */
         }
       })
       .then(() => self.skipWaiting())
@@ -52,13 +51,13 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// 3. Fetch Event: Network-first for HTML/JS/CSS, cache-first for static assets.
-//    The precache makes offline work; network-first keeps deploys fresh.
+// 3. Fetch Event: Network-first for HTML/JS/CSS, cache-first for immutable
+//    static assets such as images, fonts, and hashed WebAssembly binaries.
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
-  // Only handle same-origin requests (never cache cross-origin CDN/API calls).
+  // Only handle same-origin requests (never cache third-party APIs).
   if (url.origin !== self.location.origin) return;
 
   const isNavigate = event.request.mode === 'navigate';
@@ -78,7 +77,6 @@ self.addEventListener('fetch', (event) => {
           return networkResponse;
         })
         .catch(() =>
-          // Offline fallback: serve from cache.
           caches.match(event.request).then((cached) => {
             if (cached) return cached;
             if (isNavigate) return caches.match(BASE_URL);
@@ -88,7 +86,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Cache-first for static assets (images, fonts, manifest).
+  // Cache-first for static assets. Hashed filenames make this safe across builds.
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) return cachedResponse;
