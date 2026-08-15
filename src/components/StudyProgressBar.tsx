@@ -1,5 +1,10 @@
 import React, { useMemo } from 'react';
 import type { Card } from '../db/schema';
+import {
+  normalizeStoredRating,
+  REVIEW_RATINGS,
+  type Rating,
+} from '../services/reviewRatings';
 
 interface StudyProgressBarProps {
   queue: Card[];
@@ -9,46 +14,30 @@ interface StudyProgressBarProps {
 export const StudyProgressBar: React.FC<StudyProgressBarProps> = ({ queue, currentIndex }) => {
   const progressSegments = useMemo(() => {
     if (queue.length === 0) return null;
-    
-    // Deduplicate by card ID, keeping the latest card state in the queue
+
     const uniqueCardsMap = new Map<number, Card>();
-    queue.forEach(card => {
-      if (card.id !== undefined) {
-        uniqueCardsMap.set(card.id, card);
-      }
+    queue.forEach((card) => {
+      if (card.id !== undefined) uniqueCardsMap.set(card.id, card);
     });
 
-    let score1 = 0, score2 = 0, score3 = 0, score4 = 0, score5 = 0, unseen = 0;
-    
-    uniqueCardsMap.forEach(card => {
-      const r = card.lastRating;
-      if (r === 1) score1++;
-      else if (r === 2) score2++;
-      else if (r === 3) score3++;
-      else if (r === 4) score4++;
-      else if (r === 5) score5++;
-      else unseen++;
+    const counts: Record<Rating, number> = { 1: 0, 2: 0, 3: 0, 4: 0 };
+    let unseen = 0;
+
+    uniqueCardsMap.forEach((card) => {
+      const rating = normalizeStoredRating(card.lastRating);
+      if (rating === undefined) unseen++;
+      else counts[rating]++;
     });
-    
+
     const total = uniqueCardsMap.size;
-    return {
-      unseen, score1, score2, score3, score4, score5,
-      total,
-      pctUnseen: total > 0 ? (unseen / total) * 100 : 0,
-      pct1: total > 0 ? (score1 / total) * 100 : 0,
-      pct2: total > 0 ? (score2 / total) * 100 : 0,
-      pct3: total > 0 ? (score3 / total) * 100 : 0,
-      pct4: total > 0 ? (score4 / total) * 100 : 0,
-      pct5: total > 0 ? (score5 / total) * 100 : 0,
-    };
+    const percent = (count: number) => (total > 0 ? (count / total) * 100 : 0);
+    return { unseen, counts, total, pctUnseen: percent(unseen), percent };
   }, [queue]);
 
   if (!progressSegments) return null;
 
   return (
     <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-      
-      {/* Contiguous Stacked bar representing the entire deck's state */}
       <div style={{
         width: '100%',
         height: '6px',
@@ -59,53 +48,50 @@ export const StudyProgressBar: React.FC<StudyProgressBarProps> = ({ queue, curre
         border: '1px solid rgba(255,255,255,0.06)',
       }}>
         {progressSegments.unseen > 0 && (
-          <div style={{ width: `${progressSegments.pctUnseen}%`, height: '100%', background: '#4b5563', transition: 'width 0.3s ease' }} title={`Unseen: ${progressSegments.unseen} cards`} />
+          <div
+            style={{ width: `${progressSegments.pctUnseen}%`, height: '100%', background: '#4b5563', transition: 'width 0.3s ease' }}
+            title={`New: ${progressSegments.unseen} cards`}
+          />
         )}
-        {progressSegments.score1 > 0 && (
-          <div style={{ width: `${progressSegments.pct1}%`, height: '100%', background: '#ef4444', transition: 'width 0.3s ease' }} title={`Not at all (1): ${progressSegments.score1} cards`} />
-        )}
-        {progressSegments.score2 > 0 && (
-          <div style={{ width: `${progressSegments.pct2}%`, height: '100%', background: '#f97316', transition: 'width 0.3s ease' }} title={`Slightly (2): ${progressSegments.score2} cards`} />
-        )}
-        {progressSegments.score3 > 0 && (
-          <div style={{ width: `${progressSegments.pct3}%`, height: '100%', background: '#eab308', transition: 'width 0.3s ease' }} title={`Moderately (3): ${progressSegments.score3} cards`} />
-        )}
-        {progressSegments.score4 > 0 && (
-          <div style={{ width: `${progressSegments.pct4}%`, height: '100%', background: '#10b981', transition: 'width 0.3s ease' }} title={`Very well (4): ${progressSegments.score4} cards`} />
-        )}
-        {progressSegments.score5 > 0 && (
-          <div style={{ width: `${progressSegments.pct5}%`, height: '100%', background: '#3b82f6', transition: 'width 0.3s ease' }} title={`Perfectly (5): ${progressSegments.score5} cards`} />
-        )}
+        {REVIEW_RATINGS.map((definition) => {
+          const count = progressSegments.counts[definition.rating];
+          return count > 0 ? (
+            <div
+              key={definition.rating}
+              style={{
+                width: `${progressSegments.percent(count)}%`,
+                height: '100%',
+                background: definition.color,
+                transition: 'width 0.3s ease',
+              }}
+              title={`${definition.label} (${definition.rating}): ${count} cards`}
+            />
+          ) : null;
+        })}
       </div>
 
-      {/* Legendary labels & Session metrics indicators */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '8px' }}>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
           <span style={{ fontSize: '10px', color: '#8e8e93', fontWeight: 800, letterSpacing: '0.5px' }}>DECK STATUS</span>
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', fontSize: '10px', color: '#8e8e93' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#4b5563', display: 'inline-block' }} />New: {progressSegments.unseen}
+              <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#4b5563', display: 'inline-block' }} />
+              New: {progressSegments.unseen}
             </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#fca5a5' }}>
-              <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />Again: {progressSegments.score1}
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#fdba74' }}>
-              <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#f97316', display: 'inline-block' }} />Hard: {progressSegments.score2}
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#fde047' }}>
-              <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#eab308', display: 'inline-block' }} />Good: {progressSegments.score3}
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#6ee7b7' }}>
-              <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />V. Good: {progressSegments.score4}
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#93c5fd' }}>
-              <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#3b82f6', display: 'inline-block' }} />Easy: {progressSegments.score5}
-            </span>
+            {REVIEW_RATINGS.map((definition) => (
+              <span
+                key={definition.rating}
+                style={{ display: 'flex', alignItems: 'center', gap: '4px', color: definition.color }}
+              >
+                <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: definition.color, display: 'inline-block' }} />
+                {definition.label}: {progressSegments.counts[definition.rating]}
+              </span>
+            ))}
           </div>
         </div>
 
         <span className="badge-premium" style={{ fontSize: '9px', color: '#a5b4fc', borderColor: 'rgba(99, 102, 241, 0.25)', background: 'rgba(99, 102, 241, 0.08)', fontWeight: 700 }}>
-          Session Card: {currentIndex + 1} / {queue.length}
+          Session Card: {Math.min(currentIndex + 1, queue.length)} / {queue.length}
         </span>
       </div>
     </div>

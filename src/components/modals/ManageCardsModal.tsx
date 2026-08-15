@@ -4,6 +4,7 @@ import { useFlashcardStore } from '../../store/useFlashcardStore';
 import type { Card, CardType } from '../../db/schema';
 import { celebrate } from '../../services/celebrate';
 import { confirmDialog, toast } from '../../store/uiStore';
+import { normalizeStoredRating, REVIEW_RATINGS } from '../../services/reviewRatings';
 
 interface ManageCardsModalProps {
   classId: number;
@@ -611,7 +612,7 @@ export const ManageCardsModal: React.FC<ManageCardsModalProps> = ({ classId, dec
                               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <span style={{ fontSize: '11px', color: '#0a84ff', fontWeight: 500 }}>Set Confidence:</span>
                                 <select
-                                  value={card.id ? (card.lastRating ?? 0) : 0}
+                                  value={card.id ? (normalizeStoredRating(card.lastRating) ?? 0) : 0}
                                   onChange={async (e) => {
                                     if (!card.id) return;
                                     const ratingVal = parseInt(e.target.value, 10);
@@ -640,11 +641,11 @@ export const ManageCardsModal: React.FC<ManageCardsModalProps> = ({ classId, dec
                                   }}
                                 >
                                   <option value={0}>Unseen (New)</option>
-                                  <option value={1}>1 - Again (Not at all)</option>
-                                  <option value={2}>2 - Hard (Slightly)</option>
-                                  <option value={3}>3 - Good (Moderately)</option>
-                                  <option value={4}>4 - Easy (Very well)</option>
-                                  <option value={5}>5 - Perfect (Perfectly)</option>
+                                  {REVIEW_RATINGS.map((definition) => (
+                                    <option key={definition.rating} value={definition.rating}>
+                                      {definition.rating} - {definition.label} ({definition.description})
+                                    </option>
+                                  ))}
                                 </select>
                               </div>
                             </div>

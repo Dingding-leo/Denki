@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { Award, Timer, CheckCircle, BarChart2 } from 'lucide-react';
 import type { StudySessionHistoryEntry } from '../store/types';
+import { REVIEW_RATINGS, type Rating } from '../services/reviewRatings';
 
 interface StudySessionSummaryProps {
   history: StudySessionHistoryEntry[];
@@ -20,12 +21,12 @@ export const StudySessionSummary: React.FC<StudySessionSummaryProps> = ({
         total: 0,
         accuracy: 0,
         avgTimePerCard: 0,
-        distribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+        distribution: { 1: 0, 2: 0, 3: 0, 4: 0 } as Record<Rating, number>,
       };
     }
 
     let correctCount = 0;
-    const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    const distribution: Record<Rating, number> = { 1: 0, 2: 0, 3: 0, 4: 0 };
 
     history.forEach(entry => {
       distribution[entry.rating] = (distribution[entry.rating] || 0) + 1;
@@ -109,18 +110,12 @@ export const StudySessionSummary: React.FC<StudySessionSummaryProps> = ({
             Confidence Scores Distribution
           </h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {([
-              { rating: 5, label: 'Perfect (5)', color: '#3b82f6' },
-              { rating: 4, label: 'Very Well (4)', color: '#10b981' },
-              { rating: 3, label: 'Moderate (3)', color: '#eab308' },
-              { rating: 2, label: 'Slightly (2)', color: '#f97316' },
-              { rating: 1, label: 'Not at all (1)', color: '#ef4444' },
-            ]).map(item => {
-              const count = stats.distribution[item.rating as 1|2|3|4|5] || 0;
+            {[...REVIEW_RATINGS].reverse().map((item) => {
+              const count = stats.distribution[item.rating] || 0;
               const percent = stats.total > 0 ? (count / stats.total) * 100 : 0;
               return (
                 <div key={item.rating} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ fontSize: '11px', color: '#9ca3af', width: '80px', flexShrink: 0 }}>{item.label}</span>
+                  <span style={{ fontSize: '11px', color: '#9ca3af', width: '80px', flexShrink: 0 }}>{item.label} ({item.rating})</span>
                   <div style={{ flex: 1, height: '8px', background: 'rgba(255,255,255,0.03)', borderRadius: '4px', overflow: 'hidden' }}>
                     <div style={{ width: `${percent}%`, height: '100%', background: item.color, borderRadius: '4px', transition: 'width 0.5s ease' }} />
                   </div>

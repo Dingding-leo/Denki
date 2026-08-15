@@ -1,6 +1,7 @@
 import type { Card, ReviewLog } from '../db/schema';
+import type { Rating } from './reviewRatings';
 
-export type Rating = 1 | 2 | 3 | 4 | 5; // 1 = Not at all, 2 = Slightly, 3 = Moderately, 4 = Very well, 5 = Perfectly
+export type { Rating } from './reviewRatings';
 
 // FSRS state mapping
 export const STATES = {
@@ -24,7 +25,7 @@ const W = [
   0.1367, 1.0461, 2.1072, 0.0793, 0.3246, 1.587, 0.2272, 2.8755,
 ] as const;
 
-// FSRS grades (distinct from Denki's 1–5 confidence scale).
+// Canonical FSRS grades, exposed directly as Denki's four review choices.
 const AGAIN = 1;
 const HARD = 2;
 const GOOD = 3;
@@ -33,7 +34,6 @@ const EASY = 4;
 const MIN_STABILITY = 0.01;
 const DEFAULT_MAX_INTERVAL = 36500; // ~100 years
 const LEARN_STEP_DAYS = 1 / 144; // ≈ 10 minutes — Learning/Relearning cards resurface quickly
-const PERFECT_BONUS = 1.15; // extra stability for a "Perfectly (5)" recall over "Very well (4)"
 const FUZZ_RATIO = 0.05; // ±5% jitter on Review intervals to de-clump due dates
 const FUZZ_MIN_DAYS = 2.5; // don't fuzz very short intervals
 
@@ -51,16 +51,9 @@ export const DEFAULT_PARAMS: SchedulerParams = {
   maxInterval: DEFAULT_MAX_INTERVAL,
 };
 
-/**
- * Maps Denki's 5-point confidence scale onto the 4 canonical FSRS grades.
- * 1 (Not at all) → Again, 2 (Slightly) → Hard, 3 (Moderately) → Good,
- * 4 (Very well) & 5 (Perfectly) → Easy (5 additionally gets a perfect bonus).
- */
+/** Direct one-to-one mapping: Again, Hard, Good, Easy. */
 function ratingToGrade(rating: Rating): number {
-  if (rating === 1) return AGAIN;
-  if (rating === 2) return HARD;
-  if (rating === 3) return GOOD;
-  return EASY; // 4 and 5
+  return rating;
 }
 
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
@@ -140,7 +133,7 @@ function fuzzInterval(days: number, rng: () => number): number {
  * historical log entry.
  *
  * @param card   Current card object
- * @param rating User rating on the 1–5 confidence scale
+ * @param rating Canonical FSRS rating: Again, Hard, Good, or Easy
  * @param now    Date/time of review
  * @param params Scheduler parameters (retention + user multipliers)
  * @param rng    Injectable RNG for interval fuzz (defaults to Math.random; tests pass a fixed value)
@@ -195,7 +188,6 @@ export function reviewCard(
     } else {
       nextStability = stabilityAfterRecall(oldStability, nextDifficultyValue, retrievability, grade, params);
     }
-    if (rating === 5) nextStability *= PERFECT_BONUS;
   }
 
   nextStability = Math.max(MIN_STABILITY, nextStability);
