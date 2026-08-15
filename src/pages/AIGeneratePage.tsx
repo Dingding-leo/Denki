@@ -19,7 +19,7 @@ const AIGeneratePage: React.FC = () => {
 
   const { classes, loadClasses, loadDecks, bulkCreateCards } = useFlashcardStore();
 
-  React.useEffect(() => { loadClasses(); }, []);
+  React.useEffect(() => { void loadClasses(); }, [loadClasses]);
 
   React.useEffect(() => {
     if (selectedClassId) {
@@ -28,7 +28,7 @@ const AIGeneratePage: React.FC = () => {
         setDecks(store.decks.filter(d => d.classId === selectedClassId));
       });
     }
-  }, [selectedClassId]);
+  }, [selectedClassId, loadDecks]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

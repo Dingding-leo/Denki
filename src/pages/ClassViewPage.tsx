@@ -27,13 +27,13 @@ export const ClassViewPage: React.FC = () => {
   const [editingDeck, setEditingDeck] = useState<{ id: number; name: string; description: string } | null>(null);
 
   useEffect(() => {
-    // Sync to store for Analytics Dashboard
     useFlashcardStore.setState({ activeClassId });
+    const { loadDecks, loadStats } = useFlashcardStore.getState();
     if (activeClassId !== null) {
-      store.loadDecks(activeClassId);
-      store.loadStats(activeClassId);
+      void loadDecks(activeClassId);
+      void loadStats(activeClassId);
     } else {
-      store.loadStats(null);
+      void loadStats(null);
     }
   }, [activeClassId]);
 

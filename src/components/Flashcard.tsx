@@ -61,7 +61,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({ card, isFlipped, onFlip, a
   }, [card.id, isFlipped]);
 
   // Helper function to synthesize speech
-  const speakText = (text: string) => {
+  const speakText = React.useCallback((text: string) => {
     // Strip markdown formatting & cloze tags for clear speech
     const cleanText = text
       .replace(/\{\{c\d+::(.*?)\}\}/g, '$1') // Extract cloze values
@@ -88,7 +88,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({ card, isFlipped, onFlip, a
       
       window.speechSynthesis.speak(utterance);
     }
-  };
+  }, [selectedVoice]);
 
   const lastSpokenRef = useRef<{ cardId?: number; isFlipped?: boolean }>({});
 
@@ -120,7 +120,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({ card, isFlipped, onFlip, a
 
     const textToSpeak = isFlipped ? card.back : card.front;
     speakText(textToSpeak);
-  }, [card.id, isFlipped, autoSpeak]);
+  }, [card.id, card.front, card.back, isFlipped, autoSpeak, speakText]);
 
   // Cleanup speech on unmount
   useEffect(() => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useEffectEvent } from 'react';
 import { useFlashcardStore } from '../store/useFlashcardStore';
 import { renderContent } from '../services/markdown';
 import { CheckCircle, XCircle, ArrowRight, Sparkles } from 'lucide-react';
@@ -10,6 +10,7 @@ interface LearnModeProps {
 
 export const LearnMode: React.FC<LearnModeProps> = ({ onExit }) => {
   const session = useFlashcardStore(s => s.session);
+  const currentCard = session?.queue[session.currentIndex];
 
   const [inputVal, setInputVal] = useState('');
   const [checked, setChecked] = useState(false);
@@ -24,54 +25,6 @@ export const LearnMode: React.FC<LearnModeProps> = ({ onExit }) => {
       textareaRef.current.focus();
     }
   }, [session?.currentIndex, checked]);
-
-  // Refs + the global keydown listener are declared BEFORE any early return so
-  // the hook order is unconditional. Declaring them after the `if (!session)` /
-  // `if (!currentCard)` returns below is a rules-of-hooks violation that crashes
-  // the whole app ("rendered fewer hooks than expected") the moment the Learn
-  // queue empties. The refs are synced from render state further down.
-  const checkedRef = useRef(checked);
-  const isCorrectRef = useRef(isCorrect);
-  const overrideAllowedRef = useRef(overrideAllowed);
-  const handleCheckAnswerRef = useRef<() => void>(() => {});
-  const handleRatingRef = useRef<(rating: 1 | 2 | 3 | 4 | 5) => void>(() => {});
-  const handleOverrideRef = useRef<() => void>(() => {});
-  const onExitRef = useRef(onExit);
-
-  useEffect(() => {
-    const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // Don't intercept if user is typing in an unrelated input
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === 'INPUT' || tag === 'SELECT') return;
-      // Allow the textarea in this component (Enter handled by handleKeyDown above)
-      if (e.target === textareaRef.current && e.key !== 'Escape') return;
-
-      if (e.key === 'Escape') {
-        if (onExitRef.current) onExitRef.current();
-        return;
-      }
-
-      if (!checkedRef.current) {
-        if (e.key === ' ' || e.key === 'Enter') {
-          e.preventDefault();
-          handleCheckAnswerRef.current();
-        }
-      } else {
-        if (['1', '2', '3', '4', '5'].includes(e.key)) {
-          e.preventDefault();
-          handleRatingRef.current(parseInt(e.key) as 1 | 2 | 3 | 4 | 5);
-        } else if (e.key === ' ' || e.key === 'Enter') {
-          e.preventDefault();
-          handleRatingRef.current(isCorrectRef.current ? 5 : 1);
-        } else if (e.key === 'o' || e.key === 'O') {
-          if (overrideAllowedRef.current) handleOverrideRef.current();
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleGlobalKeyDown);
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, []); // Stable: all mutable state accessed via refs
 
   // Normalize string for fuzzy comparison
   const normalize = (str: string): string => {
@@ -94,6 +47,8 @@ export const LearnMode: React.FC<LearnModeProps> = ({ onExit }) => {
   };
 
   const handleCheckAnswer = () => {
+    if (!currentCard) return;
+
     let correct = false;
 
     if (inputVal.trim()) {
@@ -154,15 +109,42 @@ export const LearnMode: React.FC<LearnModeProps> = ({ onExit }) => {
     }
   };
 
-  // Refs (declared above the early returns) current with this render's state
-  // and handlers, for the stable global keydown listener.
-  checkedRef.current = checked;
-  isCorrectRef.current = isCorrect;
-  overrideAllowedRef.current = overrideAllowed;
-  handleCheckAnswerRef.current = handleCheckAnswer;
-  handleRatingRef.current = handleRating;
-  handleOverrideRef.current = handleOverride;
-  onExitRef.current = onExit;
+  const handleGlobalKeyDown = useEffectEvent((e: KeyboardEvent) => {
+    const tag = (e.target as HTMLElement)?.tagName;
+    if (tag === 'INPUT' || tag === 'SELECT') return;
+    if (e.target === textareaRef.current && e.key !== 'Escape') return;
+
+    if (e.key === 'Escape') {
+      onExit?.();
+      return;
+    }
+
+    if (!session || !currentCard) return;
+
+    if (!checked) {
+      if (e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault();
+        handleCheckAnswer();
+      }
+      return;
+    }
+
+    if (['1', '2', '3', '4', '5'].includes(e.key)) {
+      e.preventDefault();
+      void handleRating(Number.parseInt(e.key, 10) as 1 | 2 | 3 | 4 | 5);
+    } else if (e.key === ' ' || e.key === 'Enter') {
+      e.preventDefault();
+      void handleRating(isCorrect ? 5 : 1);
+    } else if ((e.key === 'o' || e.key === 'O') && overrideAllowed) {
+      handleOverride();
+    }
+  });
+
+  useEffect(() => {
+    const listener = (event: KeyboardEvent) => handleGlobalKeyDown(event);
+    window.addEventListener('keydown', listener);
+    return () => window.removeEventListener('keydown', listener);
+  }, []);
 
   // Memoize the markdown parses BEFORE any early return so the hook order stays
   // unconditional (a hook after an early return is a rules-of-hooks violation
@@ -170,7 +152,7 @@ export const LearnMode: React.FC<LearnModeProps> = ({ onExit }) => {
   // re-renders per keystroke, so these keep ~11 regex passes off the hot path.
   // `memoCard` is a reference-stable card object from the session queue, so it
   // is the correct memo dependency (content only changes with the card itself).
-  const memoCard = session?.queue[session?.currentIndex ?? 0];
+  const memoCard = currentCard;
   const frontHTML = React.useMemo(
     () => (memoCard ? renderContent(memoCard.front, memoCard.cardType === 'cloze', false) : ''),
     [memoCard],
@@ -187,7 +169,6 @@ export const LearnMode: React.FC<LearnModeProps> = ({ onExit }) => {
 
   if (!session) return null;
 
-  const currentCard = session.queue[session.currentIndex];
 
   if (!currentCard) {
     return (

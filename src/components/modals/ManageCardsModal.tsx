@@ -78,7 +78,7 @@ export const ManageCardsModal: React.FC<ManageCardsModalProps> = ({ classId, dec
 
   // Load cards for this deck on mount or when deckId changes
   useEffect(() => {
-    store.loadCards(deckId);
+    void useFlashcardStore.getState().loadCards(deckId);
   }, [deckId]);
 
   // Close modal on Escape key
