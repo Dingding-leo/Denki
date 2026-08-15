@@ -128,43 +128,86 @@ const MatchTile = React.memo(
 );
 MatchTile.displayName = 'MatchTile';
 
-export const MatchGame: React.FC<MatchGameProps> = ({ deckId, onExit, onExitToSession }) => {
+export const MatchGame: React.FC<MatchGameProps> = (props) => (
+  <MatchGameForDeck key={props.deckId} {...props} />
+);
+
+const buildMatchItems = (cards: Card[], gameSize: number): MatchItem[] => {
+  const selectedCards = shuffleArray(cards).slice(0, Math.min(cards.length, gameSize));
+  const matchItems: MatchItem[] = [];
+
+  for (const card of selectedCards) {
+    if (!card.id) continue;
+    const isCloze = card.front.includes('{{c') && card.front.includes('::');
+    matchItems.push({
+      id: `${card.id}-front`,
+      cardId: card.id,
+      side: 'front',
+      content: card.front,
+      isCloze,
+      state: 'idle',
+    });
+    matchItems.push({
+      id: `${card.id}-back`,
+      cardId: card.id,
+      side: 'back',
+      content: card.back,
+      isCloze: false,
+      state: 'idle',
+    });
+  }
+
+  return shuffleArray(matchItems);
+};
+
+const MatchGameForDeck: React.FC<MatchGameProps> = ({ deckId, onExit, onExitToSession }) => {
   const deckName = useFlashcardStore(
     (state) => state.decks.find(d => d.id === deckId)?.name || 'Deck',
   );
 
-  // Keep a ref to the latest deck cards loaded from the database
-  const deckCardsRef = useRef<Card[]>([]);
-
+  const [deckCards, setDeckCards] = useState<Card[]>([]);
   const [items, setItems] = useState<MatchItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [time, setTime] = useState<number>(0);
-  const [isActive, setIsActive] = useState<boolean>(false);
-  const [isCompleted, setIsCompleted] = useState<boolean>(false);
-  const [highScore, setHighScore] = useState<number | null>(null);
-  const [newHighScoreBadge, setNewHighScoreBadge] = useState<boolean>(false);
-  const [gameSize, setGameSize] = useState<number>(6);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [time, setTime] = useState(0);
+  const [isActive, setIsActive] = useState(false);
+  const [isCompleted, setIsCompleted] = useState(false);
+  const [highScore, setHighScore] = useState<number | null>(() => {
+    const stored = localStorage.getItem(`denki-match-highscore-${deckId}`);
+    if (!stored) return null;
+    const parsed = Number.parseFloat(stored);
+    return Number.isFinite(parsed) ? parsed : null;
+  });
+  const [newHighScoreBadge, setNewHighScoreBadge] = useState(false);
+  const [gameSize, setGameSize] = useState(6);
+  const [loading, setLoading] = useState(true);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mismatchResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const startTimeRef = useRef<number>(0);
-  const penaltyRef = useRef<number>(0);
+  const startTimeRef = useRef(0);
+  const penaltyRef = useRef(0);
 
-  // Load high score and cards from the database when deckId changes
-  useEffect(() => {
-    const stored = localStorage.getItem(`denki-match-highscore-${deckId}`);
-    if (stored) {
-      setHighScore(parseFloat(stored));
+  const stopTimer = React.useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
     }
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    db.cards.where('deckId').equals(deckId).toArray().then(cards => {
-      if (cancelled) return;
-      deckCardsRef.current = cards;
-      initializeGame();
-      setLoading(false);
-    });
+    db.cards.where('deckId').equals(deckId).toArray()
+      .then((cards) => {
+        if (cancelled) return;
+        setDeckCards(cards);
+        setLoading(false);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        console.error('Failed to load cards for Match Game:', error);
+        setDeckCards([]);
+        setLoading(false);
+      });
+
     return () => {
       cancelled = true;
       stopTimer();
@@ -173,11 +216,8 @@ export const MatchGame: React.FC<MatchGameProps> = ({ deckId, onExit, onExitToSe
         mismatchResetRef.current = null;
       }
     };
-  }, [deckId]);
+  }, [deckId, stopTimer]);
 
-  // Allow Escape to leave the game grid and return to the review session. The
-  // page-level Esc handler only runs in review mode, so without this the active
-  // grid can't be exited by key.
   useEffect(() => {
     if (!isActive) return;
     const onKey = (e: KeyboardEvent) => {
@@ -191,23 +231,22 @@ export const MatchGame: React.FC<MatchGameProps> = ({ deckId, onExit, onExitToSe
     return () => window.removeEventListener('keydown', onKey);
   }, [isActive, onExitToSession]);
 
-  // Start the timer when game is active
   useEffect(() => {
-    if (isActive) {
-      startTimeRef.current = Date.now();
-      penaltyRef.current = 0;
-      timerRef.current = setInterval(() => {
-        const elapsed = (Date.now() - startTimeRef.current) / 1000 + penaltyRef.current;
-        setTime(parseFloat(elapsed.toFixed(1)));
-      }, 100);
-    } else {
+    if (!isActive) {
       stopTimer();
+      return;
     }
-    return () => stopTimer();
-  }, [isActive]);
 
-  // On the lobby/victory screens (not playing), Escape returns to the study
-  // session — the only way a keyboard-only user can leave the lobby.
+    startTimeRef.current = Date.now();
+    penaltyRef.current = 0;
+    timerRef.current = setInterval(() => {
+      const elapsed = (Date.now() - startTimeRef.current) / 1000 + penaltyRef.current;
+      setTime(Number.parseFloat(elapsed.toFixed(1)));
+    }, 100);
+
+    return stopTimer;
+  }, [isActive, stopTimer]);
+
   useEffect(() => {
     if (isActive || isCompleted) return;
     const onKey = (e: KeyboardEvent) => {
@@ -220,175 +259,117 @@ export const MatchGame: React.FC<MatchGameProps> = ({ deckId, onExit, onExitToSe
     return () => window.removeEventListener('keydown', onKey);
   }, [isActive, isCompleted, onExitToSession]);
 
-  const stopTimer = () => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-  };
-
-  const initializeGame = () => {
+  const initializeGame = React.useCallback(() => {
     stopTimer();
     setTime(0);
     setIsActive(false);
     setIsCompleted(false);
     setSelectedId(null);
     setNewHighScoreBadge(false);
-
-    const currentCards = deckCardsRef.current;
-    if (currentCards.length === 0) return;
-
-    // 1. Select up to gameSize random cards
-    const shuffledCards = shuffleArray(currentCards);
-    const selectedCards = shuffledCards.slice(0, Math.min(currentCards.length, gameSize));
-
-    // 2. Create Match Items (Fronts and Backs)
-    const matchItems: MatchItem[] = [];
-    selectedCards.forEach(card => {
-      if (!card.id) return;
-      const isCloze = card.front.includes('{{c') && card.front.includes('::');
-      
-      matchItems.push({
-        id: `${card.id}-front`,
-        cardId: card.id,
-        side: 'front',
-        content: card.front,
-        isCloze,
-        state: 'idle',
-      });
-      matchItems.push({
-        id: `${card.id}-back`,
-        cardId: card.id,
-        side: 'back',
-        content: card.back,
-        isCloze: false,
-        state: 'idle',
-      });
-    });
-
-    // 3. Shuffle the 12 items
-    setItems(shuffleArray(matchItems));
-  };
+    setItems(buildMatchItems(deckCards, gameSize));
+  }, [deckCards, gameSize, stopTimer]);
 
   const startGame = () => {
     initializeGame();
     setIsActive(true);
   };
 
-  const handleItemClick = (clickedId: string) => {
+  const completeGame = React.useCallback(() => {
+    setIsCompleted(true);
+    setIsActive(false);
+    stopTimer();
+
+    const finalTime = Number.parseFloat(
+      ((Date.now() - startTimeRef.current) / 1000 + penaltyRef.current).toFixed(1),
+    );
+    setTime(finalTime);
+
+    celebrate({
+      particleCount: 150,
+      spread: 80,
+      origin: { y: 0.65 },
+      colors: ['#818cf8', '#6366f1', '#eab308', '#10b981'],
+    });
+
+    const stored = localStorage.getItem(`denki-match-highscore-${deckId}`);
+    if (!stored || finalTime < Number.parseFloat(stored)) {
+      localStorage.setItem(`denki-match-highscore-${deckId}`, String(finalTime));
+      setHighScore(finalTime);
+      setNewHighScoreBadge(true);
+
+      setTimeout(() => {
+        celebrate({
+particleCount: 100,
+angle: 60,
+spread: 55,
+origin: { x: 0 },
+colors: ['#eab308', '#6366f1'],
+        });
+        celebrate({
+particleCount: 100,
+angle: 120,
+spread: 55,
+origin: { x: 1 },
+colors: ['#eab308', '#6366f1'],
+        });
+      }, 500);
+    }
+  }, [deckId, stopTimer]);
+
+  const handleItemClick = React.useCallback((clickedId: string) => {
     if (!isActive || isCompleted) return;
 
-    const clickedIdx = items.findIndex(item => item.id === clickedId);
-    if (clickedIdx === -1) return;
+    const clickedItem = items.find(item => item.id === clickedId);
+    if (!clickedItem || clickedItem.state === 'matched' || clickedItem.state === 'mismatched') return;
 
-    const clickedItem = items[clickedIdx];
-    if (clickedItem.state === 'matched' || clickedItem.state === 'mismatched') return;
-
-    // Case 1: First item selection
     if (selectedId === null) {
       setSelectedId(clickedId);
       setItems(prev => prev.map(item => item.id === clickedId ? { ...item, state: 'selected' } : item));
       return;
     }
 
-    // Case 2: Click same item again -> Deselect
     if (selectedId === clickedId) {
       setSelectedId(null);
       setItems(prev => prev.map(item => item.id === clickedId ? { ...item, state: 'idle' } : item));
       return;
     }
 
-    // Case 3: Match checking
-    const firstIdx = items.findIndex(item => item.id === selectedId);
-    if (firstIdx === -1) return;
-    const firstItem = items[firstIdx];
+    const firstItem = items.find(item => item.id === selectedId);
+    if (!firstItem) return;
 
     const isMatch = firstItem.cardId === clickedItem.cardId && firstItem.side !== clickedItem.side;
-
     if (isMatch) {
-      // 1. Play success highlight
-      setItems(prev => prev.map(item => 
-        (item.id === clickedId || item.id === selectedId)
-          ? { ...item, state: 'matched' }
-          : item
-      ));
+      const nextItems = items.map(item =>
+        item.id === clickedId || item.id === selectedId
+? { ...item, state: 'matched' as const }
+: item,
+      );
+      setItems(nextItems);
       setSelectedId(null);
-    } else {
-      // 2. Play mismatch shake
-      setItems(prev => prev.map(item => 
-        (item.id === clickedId || item.id === selectedId)
-          ? { ...item, state: 'mismatched' }
-          : item
-      ));
-      setSelectedId(null);
-
-      // Mismatch penalty of +1.5 seconds
-      penaltyRef.current += 1.5;
-      setTime(prev => parseFloat((prev + 1.5).toFixed(1)));
-
-      // Reset cards to idle after 500ms
-      if (mismatchResetRef.current) clearTimeout(mismatchResetRef.current);
-      mismatchResetRef.current = setTimeout(() => {
-        setItems(prev => prev.map(item =>
-          (item.state === 'mismatched')
-            ? { ...item, state: 'idle' }
-            : item
-        ));
-      }, 500);
-    }
-  };
-
-  // Win detection monitor
-  useEffect(() => {
-    if (!isActive || items.length === 0 || isCompleted) return;
-
-    const allMatched = items.every(item => item.state === 'matched');
-    if (allMatched) {
-      setIsCompleted(true);
-      setIsActive(false);
-      stopTimer();
-
-      // Compute final time with penalty
-      const finalTime = parseFloat(((Date.now() - startTimeRef.current) / 1000 + penaltyRef.current).toFixed(1));
-      setTime(finalTime);
-
-      // Trigger confetti!
-      celebrate({
-        particleCount: 150,
-        spread: 80,
-        origin: { y: 0.65 },
-        colors: ['#818cf8', '#6366f1', '#eab308', '#10b981'],
-      });
-
-      // Compute high score
-      const stored = localStorage.getItem(`denki-match-highscore-${deckId}`);
-      if (!stored || finalTime < parseFloat(stored)) {
-        localStorage.setItem(`denki-match-highscore-${deckId}`, String(finalTime));
-        setHighScore(finalTime);
-        setNewHighScoreBadge(true);
-        
-        // Extra celebratory confetti shower
-        setTimeout(() => {
-          celebrate({
-            particleCount: 100,
-            angle: 60,
-            spread: 55,
-            origin: { x: 0 },
-            colors: ['#eab308', '#6366f1']
-          });
-          celebrate({
-            particleCount: 100,
-            angle: 120,
-            spread: 55,
-            origin: { x: 1 },
-            colors: ['#eab308', '#6366f1']
-          });
-        }, 500);
+      if (nextItems.length > 0 && nextItems.every(item => item.state === 'matched')) {
+        completeGame();
       }
+      return;
     }
-  }, [items, isActive, isCompleted, deckId]);
 
-  if (!loading && deckCardsRef.current.length < 3) {
+    setItems(prev => prev.map(item =>
+      item.id === clickedId || item.id === selectedId
+        ? { ...item, state: 'mismatched' }
+        : item,
+    ));
+    setSelectedId(null);
+    penaltyRef.current += 1.5;
+    setTime(prev => Number.parseFloat((prev + 1.5).toFixed(1)));
+
+    if (mismatchResetRef.current) clearTimeout(mismatchResetRef.current);
+    mismatchResetRef.current = setTimeout(() => {
+      setItems(prev => prev.map(item =>
+        item.state === 'mismatched' ? { ...item, state: 'idle' } : item,
+      ));
+    }, 500);
+  }, [completeGame, isActive, isCompleted, items, selectedId]);
+
+  if (!loading && deckCards.length < 3) {
     return (
       <div style={{
         display: 'flex',

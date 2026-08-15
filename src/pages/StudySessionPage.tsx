@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useEffectEvent } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 import { BookOpen, Volume2, Keyboard, Eye, ArrowLeft, X } from 'lucide-react';
@@ -17,8 +17,6 @@ import { loadSchedulerParams } from '../services/schedulerParams';
 export const StudySessionPage: React.FC = () => {
   const { classId, deckId } = useParams();
   const navigate = useNavigate();
-  // Select only the slices this page renders so a stats refresh (classStats /
-  // deckStats / globalStats) doesn't re-render the whole study session.
   const store = useFlashcardStore(useShallow((s) => ({
     session: s.session,
     decks: s.decks,
@@ -30,140 +28,78 @@ export const StudySessionPage: React.FC = () => {
     undoLastRate: s.undoLastRate,
     endStudySession: s.endStudySession,
   })));
-  
+
   const [studyMode, setStudyMode] = useState<'review' | 'match' | 'learn'>('review');
   const [isFlipped, setIsFlipped] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [autoSpeak, setAutoSpeak] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(true);
-  
   const [checkpointOpen, setCheckpointOpen] = useState(false);
   const [roundAverages, setRoundAverages] = useState<number[]>([]);
-  
-  const cardStartTimeRef = useRef<number>(Date.now());
-  const sessionStartTimeRef = useRef<number>(Date.now());
-  const roundTimesRef = useRef<number[]>([]); // per-card seconds since the last checkpoint
+  const [totalTimeSpent, setTotalTimeSpent] = useState(0);
+
+  const cardStartTimeRef = useRef(0);
+  const sessionStartTimeRef = useRef(0);
+  const roundTimesRef = useRef<number[]>([]);
 
   useEffect(() => {
-    sessionStartTimeRef.current = Date.now();
+    const now = Date.now();
+    sessionStartTimeRef.current = now;
+    cardStartTimeRef.current = now;
+    roundTimesRef.current = [];
+
+    const actions = useFlashcardStore.getState();
     if (classId) {
-      store.startClassStudySession(parseInt(classId, 10), false);
+      void actions.startClassStudySession(Number.parseInt(classId, 10), false);
     } else if (deckId) {
-      store.startStudySession(parseInt(deckId, 10), false);
+      void actions.startStudySession(Number.parseInt(deckId, 10), false);
     }
   }, [classId, deckId]);
 
   const activeStudyDeckId = store.session?.deckId || null;
-  const deckName = activeStudyDeckId 
+  const deckName = activeStudyDeckId
     ? store.decks.find(d => d.id === activeStudyDeckId)?.name || 'Deck'
     : 'Workspace';
 
-  // Refs for stable keydown handler in review mode
-  const handleRateCardRef = useRef<(rating: number) => void>(() => {});
-  const handleExitStudyRef = useRef<() => void>(() => {});
-  const handleContinueRef = useRef<() => void>(() => {});
-  const isFlippedRef = useRef(isFlipped);
-  isFlippedRef.current = isFlipped;
-  const checkpointOpenRef = useRef(checkpointOpen);
-  checkpointOpenRef.current = checkpointOpen;
-
-  useEffect(() => {
-    // Only attach keyboard handler in review mode.
-    if (studyMode !== 'review') return;
-
-    const handleKeyDown = async (e: KeyboardEvent) => {
-      // Don't intercept if user is typing in a textarea or input
-      if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) {
-        return;
-      }
-      
-      if (!store.session || store.session.queue.length === 0) {
-        if (e.key === 'Escape') {
-          handleExitStudyRef.current();
-        }
-        return;
-      }
-
-      if (checkpointOpenRef.current) {
-        if (e.code === 'Space' || e.code === 'Enter') {
-          e.preventDefault();
-          handleContinueRef.current();
-        } else if (e.key === 'Escape') {
-          handleExitStudyRef.current();
-        }
-        return;
-      }
-
-      if (e.code === 'Space' || e.code === 'Enter') {
-        e.preventDefault();
-        setIsFlipped(prev => !prev);
-      }
-      
-      if (isFlippedRef.current) {
-        if (e.key === '1') handleRateCardRef.current(1);
-        if (e.key === '2') handleRateCardRef.current(2);
-        if (e.key === '3') handleRateCardRef.current(3);
-        if (e.key === '4') handleRateCardRef.current(4);
-        if (e.key === '5') handleRateCardRef.current(5);
-      }
-
-      // Undo shortcut (Z key)
-      if (e.key === 'z' || e.key === 'Z') {
-        e.preventDefault();
-        await store.undoLastRate();
-        setIsFlipped(false);
-      }
-
-      if (e.key === 'Escape') {
-        handleExitStudyRef.current();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [store.session, studyMode]);
-  
   const handleRateCard = async (rating: number) => {
-    if (!store.session) return;
+    const actions = useFlashcardStore.getState();
+    if (!actions.session) return;
+
     const timeSpentMs = Date.now() - cardStartTimeRef.current;
     roundTimesRef.current.push(timeSpentMs / 1000);
 
-    await store.rateCard(rating as Rating);
+    await actions.rateCard(rating as Rating);
     setIsFlipped(false);
-
     cardStartTimeRef.current = Date.now();
 
-    // Read the FRESH session after the await — the captured `store` snapshot is
-    // stale (rateCard replaced the session object), which previously made the
-    // checkpoint fire one card late and the completion confetti never fire.
-    const s = useFlashcardStore.getState().session;
-    if (!s) return;
+    const session = useFlashcardStore.getState().session;
+    if (!session) return;
 
-    if (s.completedCount > 0 && s.completedCount % 10 === 0 && s.currentIndex < s.queue.length) {
-      // True mean pace across the cards in this round (not just the last card).
+    if (session.completedCount > 0 && session.completedCount % 10 === 0 && session.currentIndex < session.queue.length) {
       const times = roundTimesRef.current;
-      const avg = times.length ? Math.round(times.reduce((a, b) => a + b, 0) / times.length) : 0;
+      const average = times.length
+        ? Math.round(times.reduce((sum, value) => sum + value, 0) / times.length)
+        : 0;
       roundTimesRef.current = [];
-      setRoundAverages(prev => [...prev, avg]);
+      setRoundAverages(prev => [...prev, average]);
       setCheckpointOpen(true);
-
-      celebrate({
-        particleCount: 50,
-        spread: 60,
-        origin: { y: 0.6 }
-      });
-    } else if (s.currentIndex >= s.queue.length) {
+      celebrate({ particleCount: 50, spread: 60, origin: { y: 0.6 } });
+    } else if (session.currentIndex >= session.queue.length) {
+      const elapsed = sessionStartTimeRef.current > 0
+        ? (Date.now() - sessionStartTimeRef.current) / 1000
+        : 0;
+      setTotalTimeSpent(elapsed);
       celebrate({
         particleCount: 150,
         spread: 90,
         origin: { y: 0.6 },
-        colors: ['#10b981', '#34d399', '#6ee7b7']
+        colors: ['#10b981', '#34d399', '#6ee7b7'],
       });
     }
   };
 
   const handleExitStudy = () => {
-    store.endStudySession();
+    useFlashcardStore.getState().endStudySession();
     navigate(-1);
   };
 
@@ -172,10 +108,53 @@ export const StudySessionPage: React.FC = () => {
     cardStartTimeRef.current = Date.now();
   };
 
-  // Keep refs current so the stable useEffect handler uses the latest implementations
-  handleRateCardRef.current = handleRateCard;
-  handleExitStudyRef.current = handleExitStudy;
-  handleContinueRef.current = handleContinue;
+  const handleReviewKeyDown = useEffectEvent(async (e: KeyboardEvent) => {
+    if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) return;
+
+    const session = useFlashcardStore.getState().session;
+    if (!session || session.queue.length === 0) {
+      if (e.key === 'Escape') handleExitStudy();
+      return;
+    }
+
+    if (checkpointOpen) {
+      if (e.code === 'Space' || e.code === 'Enter') {
+        e.preventDefault();
+        handleContinue();
+      } else if (e.key === 'Escape') {
+        handleExitStudy();
+      }
+      return;
+    }
+
+    if (e.code === 'Space' || e.code === 'Enter') {
+      e.preventDefault();
+      setIsFlipped(prev => !prev);
+    }
+
+    const rating = Number.parseInt(e.key, 10);
+    if (isFlipped && rating >= 1 && rating <= 5) {
+      e.preventDefault();
+      await handleRateCard(rating);
+      return;
+    }
+
+    if (e.key === 'z' || e.key === 'Z') {
+      e.preventDefault();
+      await useFlashcardStore.getState().undoLastRate();
+      setIsFlipped(false);
+      return;
+    }
+
+    if (e.key === 'Escape') handleExitStudy();
+  });
+
+  useEffect(() => {
+    if (studyMode !== 'review') return;
+    const listener = (event: KeyboardEvent) => { void handleReviewKeyDown(event); };
+    window.addEventListener('keydown', listener);
+    return () => window.removeEventListener('keydown', listener);
+  }, [studyMode]);
 
   if (!store.session) {
     return <div style={{ display: 'flex', height: '100vh', justifyContent: 'center', alignItems: 'center', color: '#f3f4f6' }}>Loading study session...</div>;
@@ -183,7 +162,6 @@ export const StudySessionPage: React.FC = () => {
 
   const { queue, currentIndex, completedCount, history, isCram } = store.session;
   const currentStreak = store.currentStreak;
-  const totalTimeSpent = (Date.now() - sessionStartTimeRef.current) / 1000;
 
   // Compute intervals for FSRS transparency when card is flipped. Uses the
   // user's saved params and a fixed (no-fuzz) RNG so previews stay stable across

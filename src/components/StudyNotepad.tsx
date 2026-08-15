@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 
@@ -7,18 +7,15 @@ interface StudyNotepadProps {
   deckName: string;
 }
 
-export const StudyNotepad: React.FC<StudyNotepadProps> = ({ deckId, deckName }) => {
-  const [deckNotes, setDeckNotes] = useState('');
-  const [notesMode, setNotesMode] = useState<'edit' | 'preview'>('preview');
+export const StudyNotepad: React.FC<StudyNotepadProps> = (props) => (
+  <StudyNotepadForDeck key={props.deckId} {...props} />
+);
 
-  useEffect(() => {
-    const saved = localStorage.getItem(`denki-notes-${deckId}`);
-    if (saved) {
-      setDeckNotes(saved);
-    } else {
-      setDeckNotes('');
-    }
-  }, [deckId]);
+const StudyNotepadForDeck: React.FC<StudyNotepadProps> = ({ deckId, deckName }) => {
+  const [deckNotes, setDeckNotes] = useState(
+    () => localStorage.getItem(`denki-notes-${deckId}`) ?? '',
+  );
+  const [notesMode, setNotesMode] = useState<'edit' | 'preview'>('preview');
 
   const handleNotesChange = (text: string) => {
     setDeckNotes(text);
@@ -53,68 +50,61 @@ export const StudyNotepad: React.FC<StudyNotepadProps> = ({ deckId, deckName }) 
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.06)', paddingBottom: '10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ fontSize: '12px', fontWeight: 700, color: '#f3f4f6' }}>
-            📝 Deck Notes
-          </span>
-          <span style={{ fontSize: '10px', color: '#6b7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '150px' }} title={`${deckName}.md`}>
-            ({deckName}.md)
-          </span>
+<span style={{ fontSize: '12px', fontWeight: 700, color: '#f3f4f6' }}>📝 Deck Notes</span>
+<span style={{ fontSize: '10px', color: '#6b7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '150px' }} title={`${deckName}.md`}>
+  ({deckName}.md)
+</span>
         </div>
 
-        {/* Edit vs Preview Toggle Buttons */}
         <div style={{ display: 'flex', gap: '6px', background: 'rgba(0,0,0,0.2)', padding: '2px', borderRadius: '6px' }}>
-          <button
-            onClick={() => setNotesMode('edit')}
-            style={{
-              background: notesMode === 'edit' ? '#6366f1' : 'transparent',
-              color: notesMode === 'edit' ? 'white' : '#9ca3af',
-              border: 'none',
-              borderRadius: '4px',
-              padding: '3px 8px',
-              fontSize: '10px',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            Write
-          </button>
-          <button
-            onClick={() => setNotesMode('preview')}
-            style={{
-              background: notesMode === 'preview' ? '#6366f1' : 'transparent',
-              color: notesMode === 'preview' ? 'white' : '#9ca3af',
-              border: 'none',
-              borderRadius: '4px',
-              padding: '3px 8px',
-              fontSize: '10px',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            Preview
-          </button>
+<button
+  onClick={() => setNotesMode('edit')}
+  style={{
+    background: notesMode === 'edit' ? '#6366f1' : 'transparent',
+    color: notesMode === 'edit' ? 'white' : '#9ca3af',
+    border: 'none',
+    borderRadius: '4px',
+    padding: '3px 8px',
+    fontSize: '10px',
+    fontWeight: 600,
+    cursor: 'pointer',
+  }}
+>
+  Write
+</button>
+<button
+  onClick={() => setNotesMode('preview')}
+  style={{
+    background: notesMode === 'preview' ? '#6366f1' : 'transparent',
+    color: notesMode === 'preview' ? 'white' : '#9ca3af',
+    border: 'none',
+    borderRadius: '4px',
+    padding: '3px 8px',
+    fontSize: '10px',
+    fontWeight: 600,
+    cursor: 'pointer',
+  }}
+>
+  Preview
+</button>
         </div>
       </div>
 
-      {/* Text editor face */}
       {notesMode === 'edit' ? (
         <textarea
-          className="notes-editor"
-          value={deckNotes}
-          onChange={e => handleNotesChange(e.target.value)}
-          placeholder="# Deck Notes&#10;&#10;Write down your observations, formulas, or summaries here.&#10;&#10;- Auto-saves in real-time!&#10;- Supports Markdown style tags."
+className="notes-editor"
+value={deckNotes}
+onChange={e => handleNotesChange(e.target.value)}
+placeholder="# Deck Notes&#10;&#10;Write down your observations, formulas, or summaries here.&#10;&#10;- Auto-saves in real-time!&#10;- Supports Markdown style tags."
         />
       ) : (
-        /* Markdown preview face */
-        <div 
-          className="markdown-content notes-preview"
-          dangerouslySetInnerHTML={{ __html: renderMarkdown(deckNotes || '*No notes typed yet. Click Write to add notes.*') }}
+        <div
+className="markdown-content notes-preview"
+dangerouslySetInnerHTML={{ __html: renderMarkdown(deckNotes || '*No notes typed yet. Click Write to add notes.*') }}
         />
       )}
 
-      <span style={{ fontSize: '10px', color: '#6b7280', textAlign: 'right' }}>
-        ⚡ Saved automatically
-      </span>
+      <span style={{ fontSize: '10px', color: '#6b7280', textAlign: 'right' }}>⚡ Saved automatically</span>
     </div>
   );
 };

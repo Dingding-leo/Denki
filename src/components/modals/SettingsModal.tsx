@@ -9,26 +9,21 @@ interface SettingsModalProps {
   onClose: () => void;
 }
 
+const readNumberSetting = (key: string, fallback: number): number => {
+  const stored = localStorage.getItem(key);
+  if (stored === null) return fallback;
+  const parsed = Number.parseFloat(stored);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
 export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
-  const [retention, setRetention] = useState(0.9);
-  const [easyBonus, setEasyBonus] = useState(1.3);
-  const [hardMultiplier, setHardMultiplier] = useState(1.2);
-  const [speechSpeed, setSpeechSpeed] = useState(1.0);
-  const [newCardsPerDay, setNewCardsPerDay] = useState(DEFAULT_NEW_CARDS_PER_DAY);
+  const [retention, setRetention] = useState(() => readNumberSetting('denki-fsrs-retention', 0.9));
+  const [easyBonus, setEasyBonus] = useState(() => readNumberSetting('denki-fsrs-easy-bonus', 1.3));
+  const [hardMultiplier, setHardMultiplier] = useState(() => readNumberSetting('denki-fsrs-hard-multiplier', 1.2));
+  const [speechSpeed, setSpeechSpeed] = useState(() => readNumberSetting('denki-speech-speed', 1.0));
+  const [newCardsPerDay, setNewCardsPerDay] = useState(loadNewCardsPerDay);
 
   useEffect(() => {
-    const r = localStorage.getItem('denki-fsrs-retention');
-    const eb = localStorage.getItem('denki-fsrs-easy-bonus');
-    const hm = localStorage.getItem('denki-fsrs-hard-multiplier');
-    const ss = localStorage.getItem('denki-speech-speed');
-
-    if (r) setRetention(parseFloat(r));
-    if (eb) setEasyBonus(parseFloat(eb));
-    if (hm) setHardMultiplier(parseFloat(hm));
-    if (ss) setSpeechSpeed(parseFloat(ss));
-    setNewCardsPerDay(loadNewCardsPerDay());
-
-    // ESC key closes modal
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };

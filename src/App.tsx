@@ -23,7 +23,6 @@ const PageFallback = () => (
 );
 
 const App: React.FC = () => {
-  const store = useFlashcardStore();
   const [isInitializing, setIsInitializing] = useState(true);
 
   useEffect(() => {
@@ -33,8 +32,8 @@ const App: React.FC = () => {
         // restore the dev/filesystem backup before anything else loads.
         await restoreFromBackupIfNeeded();
         await Promise.all([
-          store.loadClasses(),
-          store.loadDecks(),
+          useFlashcardStore.getState().loadClasses(),
+          useFlashcardStore.getState().loadDecks(),
         ]);
       } catch (err) {
         console.error('Failed to initialize Denki:', err);
