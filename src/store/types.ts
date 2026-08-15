@@ -87,7 +87,6 @@ export interface StudySlice {
   session: StudySession | null;
   startStudySession: (deckId: number, forceCram?: boolean) => Promise<void>;
   startClassStudySession: (classId: number, forceCram?: boolean) => Promise<void>;
-  resumeStudySession: (scope: { deckId?: number; classId?: number }) => Promise<boolean>;
   rateCard: (rating: Rating) => Promise<void>;
   undoLastRate: () => Promise<void>;
   previousCard: () => void;
