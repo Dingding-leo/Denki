@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { NavLink, useNavigate, useParams } from 'react-router-dom';
-import { ChevronRight, ChevronLeft, Sparkles, LayoutDashboard, Plus, Settings, Search } from 'lucide-react';
+import { BookOpen, ChevronLeft, ChevronRight, Home, Plus, Search, Settings } from 'lucide-react';
 import { useFlashcardStore } from '../../store/useFlashcardStore';
 import { useUIStore } from '../../store/uiStore';
 import { CreateClassModal } from '../modals/CreateClassModal';
@@ -9,27 +9,28 @@ import { SettingsModal } from '../modals/SettingsModal';
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
 export const Sidebar: React.FC = () => {
-  const classes = useFlashcardStore(s => s.classes);
-  const classStats = useFlashcardStore(s => s.classStats);
-  const currentStreak = useFlashcardStore(s => s.currentStreak);
+  const classes = useFlashcardStore((state) => state.classes);
+  const classStats = useFlashcardStore((state) => state.classStats);
+  const currentStreak = useFlashcardStore((state) => state.currentStreak);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showClassModal, setShowClassModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   const navigate = useNavigate();
   const { classId: routeClassId } = useParams();
-  const activeClassId = routeClassId ? parseInt(routeClassId, 10) : null;
+  const activeClassId = routeClassId ? Number.parseInt(routeClassId, 10) : null;
 
   const classesWithMastery = useMemo(() => {
-    return classes.map(cls => {
-      const stats = classStats[cls.id || 0] || {
+    return classes.map((studyClass) => {
+      const stats = classStats[studyClass.id ?? 0] ?? {
         total: 0,
         dueCount: 0,
         masteryPct: 0,
         decksCount: 0,
       };
+
       return {
-        ...cls,
+        ...studyClass,
         total: stats.total,
         dueCount: stats.dueCount,
         masteryPct: stats.masteryPct,
@@ -40,330 +41,125 @@ export const Sidebar: React.FC = () => {
 
   return (
     <>
-      <aside style={{
-        width: sidebarCollapsed ? '72px' : '280px',
-        background: 'var(--bg-primary)',
-        borderRight: '1px solid var(--border-glass)',
-        display: 'flex',
-        flexDirection: 'column',
-        zIndex: 10,
-        transition: 'width 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-        position: 'relative',
-        height: '100vh',
-      }}>
-        {/* Collapse Trigger Overlay */}
+      <aside className={`zine-sidebar ${sidebarCollapsed ? 'is-collapsed' : ''}`}>
         <button
-          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          style={{
-            position: 'absolute',
-            top: '24px',
-            right: '-12px',
-            width: '24px',
-            height: '24px',
-            borderRadius: '50%',
-            background: 'rgba(255, 255, 255, 0.05)',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#8e8e93',
-            cursor: 'pointer',
-            zIndex: 100,
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.35)',
-            backdropFilter: 'blur(8px)',
-            WebkitBackdropFilter: 'blur(8px)',
-          }}
-          className="hover-lift"
-          aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          type="button"
+          onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
+          className="zine-sidebar-toggle"
+          aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           aria-expanded={!sidebarCollapsed}
-          title={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+          title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
-          {sidebarCollapsed ? <ChevronRight size={12} style={{ color: '#ffffff' }} /> : <ChevronLeft size={12} style={{ color: '#ffffff' }} />}
+          {sidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
         </button>
 
-        {/* Logo Brand Header */}
-        <div style={{
-          height: '70px',
-          display: 'flex',
-          alignItems: 'center',
-          padding: sidebarCollapsed ? '0' : '0 20px',
-          justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
-          borderBottom: '1px solid rgba(255,255,255,0.06)',
-          gap: '12px',
-        }}>
-          <div style={{
-            width: '32px',
-            height: '32px',
-            borderRadius: '8px',
-            background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'white',
-            boxShadow: '0 0 12px rgba(99, 102, 241, 0.25)',
-            flexShrink: 0,
-          }}>
-            <Sparkles size={16} />
+        <header className="zine-brand">
+          <div className="zine-brand-mark" aria-hidden="true">D/01</div>
+          <div className="zine-brand-copy">
+            <span className="zine-brand-title">DENKI</span>
+            <span className="zine-brand-subtitle">Study Press · Local Edition</span>
+            {currentStreak > 0 && (
+              <span className="zine-brand-streak">Day {currentStreak} · Still printing</span>
+            )}
           </div>
-          {!sidebarCollapsed && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <span style={{ fontSize: '18px', fontWeight: 800, letterSpacing: '0.5px' }} className="gradient-text">
-                DENKI
-              </span>
-              {currentStreak > 0 && (
-                <span 
-                  style={{ fontSize: '10px', color: '#ff9f0a', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '3px' }} 
-                  title="Daily Study Streak!"
-                  className="streak-badge-glow"
-                >
-                  🔥 {currentStreak} day streak
-                </span>
-              )}
-            </div>
-          )}
-        </div>
+        </header>
 
-        {/* Home Link */}
-        <div style={{ padding: sidebarCollapsed ? '12px 6px' : '16px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-          {/* Global search trigger (⌘K command palette) */}
+        <nav className="zine-sidebar-primary" aria-label="Primary navigation">
           <button
+            type="button"
             onClick={() => useUIStore.getState().setPaletteOpen(true)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              width: '100%',
-              padding: sidebarCollapsed ? '10px 0' : '9px 12px',
-              borderRadius: '8px',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              background: 'rgba(255, 255, 255, 0.03)',
-              color: '#8e8e93',
-              fontSize: '13px',
-              cursor: 'pointer',
-              justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
-              marginBottom: '8px',
-              transition: 'all 0.2s ease',
-            }}
-            className="hover-glow"
+            className="zine-search"
             aria-label="Search classes, decks and cards"
             title={`Search (${isMac ? '⌘' : 'Ctrl+'}K)`}
           >
-            <Search size={15} style={{ flexShrink: 0 }} />
-            {!sidebarCollapsed && (
-              <>
-                <span style={{ flex: 1, textAlign: 'left' }}>Search…</span>
-                <kbd className="keycap-badge" style={{ fontSize: '9px' }}>{isMac ? '⌘K' : '^K'}</kbd>
-              </>
-            )}
+            <Search size={15} aria-hidden="true" />
+            <span className="zine-nav-copy">Search the archive</span>
+            <span className="zine-shortcut">{isMac ? '⌘K' : '^K'}</span>
           </button>
 
           <NavLink
             to="/"
-            style={({ isActive }) => ({
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              width: '100%',
-              padding: '10px 12px',
-              borderRadius: '8px',
-              border: 'none',
-              background: isActive && !activeClassId ? 'linear-gradient(90deg, rgba(99, 102, 241, 0.12) 0%, rgba(99, 102, 241, 0.02) 100%)' : 'transparent',
-              color: isActive && !activeClassId ? '#ffffff' : '#8e8e93',
-              fontSize: '13px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
-              textDecoration: 'none',
-              borderLeft: isActive && !activeClassId ? '3px solid #6366f1' : '3px solid transparent'
-            })}
-            className="hover-glow hover-lift"
+            end
+            className={({ isActive }) => `zine-nav-link ${isActive ? 'is-active' : ''}`}
+            title={sidebarCollapsed ? 'Study desk' : undefined}
           >
-            {({ isActive }) => (
-              <>
-                <LayoutDashboard size={16} style={{ color: isActive && !activeClassId ? '#6366f1' : '#8e8e93', flexShrink: 0 }} />
-                {!sidebarCollapsed && <span>Dashboard Home</span>}
-              </>
-            )}
+            <Home size={16} aria-hidden="true" />
+            <span className="zine-nav-copy">Study desk</span>
           </NavLink>
 
           <NavLink
             to="/ai-generate"
-            style={({ isActive }) => ({
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              width: '100%',
-              padding: '10px 12px',
-              borderRadius: '8px',
-              border: 'none',
-              background: isActive ? 'linear-gradient(90deg, rgba(168, 85, 247, 0.12) 0%, rgba(168, 85, 247, 0.02) 100%)' : 'transparent',
-              color: isActive ? '#ffffff' : '#8e8e93',
-              fontSize: '13px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
-              textDecoration: 'none',
-              borderLeft: isActive ? '3px solid #a855f7' : '3px solid transparent',
-              marginTop: '4px'
-            })}
-            className="hover-glow hover-lift"
+            className={({ isActive }) => `zine-nav-link ${isActive ? 'is-active' : ''}`}
+            title={sidebarCollapsed ? 'Card lab' : undefined}
           >
-            {({ isActive }) => (
-              <>
-                <Sparkles size={16} style={{ color: isActive ? '#a855f7' : '#8e8e93', flexShrink: 0 }} />
-                {!sidebarCollapsed && <span>AI Generate</span>}
-              </>
-            )}
+            <BookOpen size={16} aria-hidden="true" />
+            <span className="zine-nav-copy">Card lab</span>
           </NavLink>
-        </div>
+        </nav>
 
-        {/* MY CLASSES LIST */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            padding: sidebarCollapsed ? '12px 0' : '16px 16px 8px 16px',
-            color: '#9ca3af', /* AA contrast at 11px on near-black bg */
-            fontSize: '11px',
-            textTransform: 'uppercase',
-            letterSpacing: '1px',
-            fontWeight: 700,
-            justifyContent: sidebarCollapsed ? 'center' : 'space-between',
-          }}>
-            {!sidebarCollapsed && <span>My Classes</span>}
+        <section className="zine-library" aria-labelledby="library-index-heading">
+          <div className="zine-library-heading">
+            <span id="library-index-heading">Library index / {String(classesWithMastery.length).padStart(2, '0')}</span>
             <button
+              type="button"
               onClick={() => setShowClassModal(true)}
-              style={{
-                background: 'rgba(255,255,255,0.03)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: '4px',
-                width: '20px',
-                height: '20px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                color: '#9ca3af',
-              }}
+              className="zine-add-class"
               aria-label="Create new class"
-              title="Create New Class"
+              title="Create new class"
             >
-              <Plus size={12} />
+              <Plus size={14} />
             </button>
           </div>
 
-          {/* Scrollable Classes List */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            {classesWithMastery.map(cls => {
-              const isSelected = activeClassId === cls.id;
-              
+          <div className="zine-class-list">
+            {classesWithMastery.map((studyClass, index) => {
+              if (studyClass.id === undefined) return null;
+              const isSelected = activeClassId === studyClass.id;
+              const classNumber = String(index + 1).padStart(2, '0');
+
               return (
                 <NavLink
-                  key={cls.id}
-                  to={`/class/${cls.id}`}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    width: '100%',
-                    padding: sidebarCollapsed ? '10px 0' : '10px 12px',
-                    borderRadius: '8px',
-                    border: 'none',
-                    background: isSelected ? 'rgba(255, 255, 255, 0.06)' : 'transparent',
-                    color: isSelected ? '#ffffff' : '#8e8e93',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                    justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
-                    textDecoration: 'none'
-                  }}
-                  title={sidebarCollapsed ? `${cls.name} (${cls.total} cards)` : undefined}
+                  key={studyClass.id}
+                  to={`/class/${studyClass.id}`}
+                  className={`zine-class-link ${isSelected ? 'is-active' : ''}`}
+                  title={sidebarCollapsed ? `${studyClass.name} · ${studyClass.total} cards` : undefined}
                 >
-                  <div style={{ position: 'relative', width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <svg width="22" height="22" viewBox="0 0 22 22">
-                      <circle cx="11" cy="11" r="9" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="2.5" />
-                      <circle
-                          cx="11" cy="11" r="9"
-                          fill="none"
-                          stroke={cls.total > 0 ? `url(#classMasterGrad-${cls.id})` : "rgba(255,255,255,0.1)"}
-                          strokeWidth="2.5"
-                          strokeDasharray={56.5}
-                          strokeDashoffset={56.5 - (56.5 * cls.masteryPct) / 100}
-                          strokeLinecap="round"
-                          transform="rotate(-90 11 11)"
-                      />
-                      <defs>
-                        <linearGradient id={`classMasterGrad-${cls.id}`} x1="0" y1="0" x2="1" y2="1">
-                          <stop offset="0%" stopColor="#6366f1" />
-                          <stop offset="100%" stopColor="#10b981" />
-                        </linearGradient>
-                      </defs>
-                    </svg>
-                    {sidebarCollapsed ? null : (
-                      <span style={{ position: 'absolute', fontSize: '7px', fontWeight: 700, color: '#f3f4f6' }}>
-                        {cls.masteryPct}
-                      </span>
-                    )}
-                  </div>
- 
-                  {!sidebarCollapsed && (
-                    <div style={{ flex: 1, textAlign: 'left', overflow: 'hidden' }}>
-                      <p style={{ fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {cls.name}
-                      </p>
-                      <p style={{ fontSize: '10px', color: '#9ca3af' }}>{cls.decksCount} decks • {cls.total} cards</p>
-                    </div>
-                  )}
- 
-                  {!sidebarCollapsed && cls.dueCount > 0 && (
-                    <span style={{
-                      background: 'rgba(99, 102, 241, 0.1)',
-                      border: '1px solid rgba(99, 102, 241, 0.25)',
-                      color: '#a5b4fc',
-                      fontSize: '9px',
-                      fontWeight: 700,
-                      padding: '2px 6px',
-                      borderRadius: '10px',
-                    }}>
-                      {cls.dueCount}
+                  <span className="zine-class-index" aria-label={`${studyClass.masteryPct}% mastered`}>
+                    {sidebarCollapsed ? classNumber : `${studyClass.masteryPct}%`}
+                  </span>
+                  <span className="zine-class-copy">
+                    <span className="zine-class-name">{classNumber}. {studyClass.name}</span>
+                    <span className="zine-class-meta">
+                      {studyClass.decksCount} decks / {studyClass.total} cards
+                    </span>
+                  </span>
+                  {studyClass.dueCount > 0 && (
+                    <span className="zine-due-stamp" title={`${studyClass.dueCount} cards due`}>
+                      {studyClass.dueCount} due
                     </span>
                   )}
                 </NavLink>
               );
             })}
           </div>
-        </div>
+        </section>
 
-        {/* Sidebar Footer Settings Action */}
-        <div style={{
-          padding: '12px 16px',
-          borderTop: '1px solid rgba(255,255,255,0.06)',
-          display: 'flex',
-          justifyContent: sidebarCollapsed ? 'center' : 'space-between',
-          alignItems: 'center',
-          gap: '12px',
-        }}>
+        <footer className="zine-sidebar-footer">
           <button
+            type="button"
             onClick={() => setShowSettingsModal(true)}
-            style={{
-              padding: '6px 12px',
-              width: sidebarCollapsed ? '32px' : '100%',
-              height: '36px',
-              justifyContent: 'center',
-            }}
-            className="btn-premium-secondary"
+            className="zine-settings-button"
             aria-label="Open settings"
-            title="App Settings"
+            title="App settings"
           >
             <Settings size={16} />
-            {!sidebarCollapsed && <span>Settings</span>}
+            <span className="zine-settings-copy">Press settings</span>
           </button>
-        </div>
+        </footer>
       </aside>
 
       {showClassModal && (
-        <CreateClassModal 
+        <CreateClassModal
           onClose={() => setShowClassModal(false)}
           onClassCreated={(classId) => {
             setShowClassModal(false);
@@ -373,9 +169,7 @@ export const Sidebar: React.FC = () => {
       )}
 
       {showSettingsModal && (
-        <SettingsModal 
-          onClose={() => setShowSettingsModal(false)}
-        />
+        <SettingsModal onClose={() => setShowSettingsModal(false)} />
       )}
     </>
   );
