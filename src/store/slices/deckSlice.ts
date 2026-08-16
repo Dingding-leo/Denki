@@ -4,6 +4,8 @@ import { triggerAutoSave } from '../../services/backup';
 import { STATES } from '../../services/scheduler';
 import type { DeckSlice, FlashcardState } from '../types';
 
+let latestDecksRequest = 0;
+
 function cleanDeckName(name: string): string {
   const cleaned = name.trim();
   if (!cleaned) throw new Error('Deck name cannot be empty.');
@@ -20,11 +22,16 @@ export const createDeckSlice: StateCreator<
   activeDeckId: null,
 
   loadDecks: async (classId) => {
+    const requestId = ++latestDecksRequest;
     const decks = classId !== undefined
       ? await db.decks.where('classId').equals(classId).toArray()
       : await db.decks.toArray();
     decks.sort((left, right) =>
       new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+
+    // Rapid route changes can resolve out of order. Only the most recent scope
+    // may replace the visible deck list or trigger its follow-up statistics load.
+    if (requestId !== latestDecksRequest) return;
     set({ decks });
 
     if (classId !== undefined) await get().loadDeckStats(classId);

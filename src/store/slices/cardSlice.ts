@@ -6,6 +6,8 @@ import { createCSVImportPlan } from '../../services/csvImport';
 import { STATES } from '../../services/scheduler';
 import type { CardSlice, FlashcardState } from '../types';
 
+let latestCardsRequest = 0;
+
 async function assertCardDestination(classId: number, deckId: number): Promise<void> {
   const [studyClass, deck] = await Promise.all([
     db.classes.get(classId),
@@ -36,6 +38,13 @@ function sessionContainsCard(state: FlashcardState, cardId: number): boolean {
   return state.session?.queue.some((card) => card.id === cardId) ?? false;
 }
 
+async function refreshCardsIfActive(
+  get: () => FlashcardState,
+  deckId: number,
+): Promise<void> {
+  if (get().activeDeckId === deckId) await get().loadCards(deckId);
+}
+
 export const createCardSlice: StateCreator<
   FlashcardState,
   [],
@@ -45,9 +54,27 @@ export const createCardSlice: StateCreator<
   cards: [],
 
   loadCards: async (deckId) => {
+    const requestId = ++latestCardsRequest;
+    const requestedScope = deckId ?? null;
+
+    // Clear the previous deck immediately so a card manager can never expose or
+    // mutate cards from the deck that was open before this request.
+    if (get().activeDeckId !== requestedScope) {
+      set({ activeDeckId: requestedScope, cards: [] });
+    }
+
     const cards = deckId !== undefined
       ? await db.cards.where('deckId').equals(deckId).toArray()
       : await db.cards.toArray();
+
+    // Ignore both out-of-order responses and responses whose consumer closed or
+    // changed scope while IndexedDB was still resolving.
+    if (
+      requestId !== latestCardsRequest ||
+      get().activeDeckId !== requestedScope
+    ) {
+      return;
+    }
     set({ cards });
   },
 
@@ -69,7 +96,7 @@ export const createCardSlice: StateCreator<
     });
 
     await Promise.all([
-      get().loadCards(deckId),
+      refreshCardsIfActive(get, deckId),
       get().loadClassStats(classId),
       get().loadDeckStats(classId),
       get().loadStats(get().activeClassId),
@@ -88,7 +115,7 @@ export const createCardSlice: StateCreator<
     if (updated === 0) throw new Error('Card not found');
 
     if (sessionContainsCard(get(), cardId)) set({ session: null });
-    await get().loadCards(card.deckId);
+    await refreshCardsIfActive(get, card.deckId);
     triggerAutoSave();
   },
 
@@ -103,7 +130,7 @@ export const createCardSlice: StateCreator<
 
     if (sessionContainsCard(get(), cardId)) set({ session: null });
     await Promise.all([
-      get().loadCards(card.deckId),
+      refreshCardsIfActive(get, card.deckId),
       get().loadClassStats(card.classId),
       get().loadDeckStats(card.classId),
       get().loadStats(get().activeClassId),
@@ -147,8 +174,10 @@ export const createCardSlice: StateCreator<
 
     const classIds = [...new Set(normalizedCards.map((card) => card.classId))];
     const activeDeckId = get().activeDeckId;
+    const activeDeckChanged = activeDeckId !== null &&
+      normalizedCards.some((card) => card.deckId === activeDeckId);
     await Promise.all([
-      activeDeckId ? get().loadCards(activeDeckId) : Promise.resolve(),
+      activeDeckChanged ? get().loadCards(activeDeckId) : Promise.resolve(),
       ...classIds.map((classId) => get().loadClassStats(classId)),
       ...classIds.map((classId) => get().loadDeckStats(classId)),
       get().loadStats(get().activeClassId),
@@ -225,9 +254,8 @@ export const createCardSlice: StateCreator<
     });
 
     if (sessionContainsCard(get(), cardId)) set({ session: null });
-    const activeDeckId = get().activeDeckId;
     await Promise.all([
-      activeDeckId ? get().loadCards(activeDeckId) : Promise.resolve(),
+      refreshCardsIfActive(get, card.deckId),
       get().loadClassStats(card.classId),
       get().loadDeckStats(card.classId),
       get().loadStats(get().activeClassId),
@@ -261,7 +289,7 @@ export const createCardSlice: StateCreator<
 
     await db.cards.bulkAdd(entries);
     await Promise.all([
-      get().loadCards(deckId),
+      refreshCardsIfActive(get, deckId),
       get().loadClassStats(classId),
       get().loadDeckStats(classId),
       get().loadStats(get().activeClassId),

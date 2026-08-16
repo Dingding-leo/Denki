@@ -74,12 +74,35 @@ export const ManageCardsModal: React.FC<ManageCardsModalProps> = ({ classId, dec
   const [editBack, setEditBack] = useState('');
   const [editCardType, setEditCardType] = useState<CardType>('standard');
   const [searchQuery, setSearchQuery] = useState('');
+  const [loadingCards, setLoadingCards] = useState(true);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
 
   const deck = store.decks.find(d => d.id === deckId);
 
-  // Load cards for this deck on mount or when deckId changes
+  // Load only this deck's cards. The store clears the previous scope
+  // immediately and ignores any late response after a newer deck is requested.
   useEffect(() => {
-    void useFlashcardStore.getState().loadCards(deckId);
+    let cancelled = false;
+    void useFlashcardStore.getState().loadCards(deckId)
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          toast(
+            `Cards could not be loaded: ${error instanceof Error ? error.message : 'unknown error'}`,
+            'error',
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingCards(false);
+      });
+
+    return () => {
+      cancelled = true;
+      const current = useFlashcardStore.getState();
+      if (current.activeDeckId === deckId) {
+        useFlashcardStore.setState({ activeDeckId: null, cards: [] });
+      }
+    };
   }, [deckId]);
 
   // Close modal on Escape key
@@ -93,18 +116,40 @@ export const ManageCardsModal: React.FC<ManageCardsModalProps> = ({ classId, dec
 
   const handleCreateCardSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCardFront.trim() || !newCardBack.trim()) return;
-    
-    await store.createCard(classId, deckId, newCardFront.trim(), newCardBack.trim(), newCardType);
-    setNewCardFront('');
-    setNewCardBack('');
-    
-    celebrate({
-      particleCount: 15,
-      spread: 20,
-      origin: { y: 0.85 },
-      colors: ['#0a84ff', '#5e5ce6']
-    });
+    if (
+      pendingAction !== null ||
+      !newCardFront.trim() ||
+      (newCardType === 'standard' && !newCardBack.trim())
+    ) {
+      return;
+    }
+
+    setPendingAction('create');
+    try {
+      await store.createCard(
+        classId,
+        deckId,
+        newCardFront.trim(),
+        newCardBack.trim(),
+        newCardType,
+      );
+      setNewCardFront('');
+      setNewCardBack('');
+
+      celebrate({
+        particleCount: 15,
+        spread: 20,
+        origin: { y: 0.85 },
+        colors: ['#7f9c86', '#a7b79f'],
+      });
+    } catch (error) {
+      toast(
+        `Card could not be created: ${error instanceof Error ? error.message : 'unknown error'}`,
+        'error',
+      );
+    } finally {
+      setPendingAction(null);
+    }
   };
 
   const handleStartEdit = (card: Card) => {
@@ -115,16 +160,38 @@ export const ManageCardsModal: React.FC<ManageCardsModalProps> = ({ classId, dec
   };
 
   const handleSaveEdit = async (cardId: number) => {
-    if (!editFront.trim() || !editBack.trim()) return;
-    await store.updateCard(cardId, editFront.trim(), editBack.trim(), editCardType);
-    setEditingCardId(null);
-    
-    celebrate({
-      particleCount: 10,
-      spread: 15,
-      origin: { y: 0.85 },
-      colors: ['#30d158', '#34c759']
-    });
+    if (
+      pendingAction !== null ||
+      !editFront.trim() ||
+      (editCardType === 'standard' && !editBack.trim())
+    ) {
+      return;
+    }
+
+    setPendingAction(`edit-${cardId}`);
+    try {
+      await store.updateCard(
+        cardId,
+        editFront.trim(),
+        editBack.trim(),
+        editCardType,
+      );
+      setEditingCardId(null);
+
+      celebrate({
+        particleCount: 10,
+        spread: 15,
+        origin: { y: 0.85 },
+        colors: ['#7f9c86', '#a7b79f'],
+      });
+    } catch (error) {
+      toast(
+        `Card could not be updated: ${error instanceof Error ? error.message : 'unknown error'}`,
+        'error',
+      );
+    } finally {
+      setPendingAction(null);
+    }
   };
 
   const getCardStateLabel = (state: number) => {
@@ -294,7 +361,7 @@ export const ManageCardsModal: React.FC<ManageCardsModalProps> = ({ classId, dec
                 onChange={e => setNewCardBack(e.target.value)}
                 className="textarea-premium"
                 style={{ resize: 'none' }}
-                required
+                required={newCardType === 'standard'}
               />
             </div>
           </div>
@@ -302,9 +369,10 @@ export const ManageCardsModal: React.FC<ManageCardsModalProps> = ({ classId, dec
           <button
             type="submit"
             className="btn-premium-primary"
+            disabled={pendingAction !== null}
             style={{ alignSelf: 'flex-start', height: '32px', padding: '0 16px', fontSize: '12px' }}
           >
-            Add Card
+            {pendingAction === 'create' ? 'Adding…' : 'Add Card'}
           </button>
         </form>
 
@@ -327,7 +395,11 @@ export const ManageCardsModal: React.FC<ManageCardsModalProps> = ({ classId, dec
             </div>
           </div>
           
-          {store.cards.length === 0 ? (
+          {loadingCards ? (
+            <div role="status" style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)', fontSize: '13px' }}>
+              Loading cards…
+            </div>
+          ) : store.cards.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '40px 20px', color: '#8e8e93', fontSize: '13px' }}>
               This deck has no cards yet. Add a card above to get started!
             </div>
@@ -534,11 +606,13 @@ export const ManageCardsModal: React.FC<ManageCardsModalProps> = ({ classId, dec
 
                             <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
                               <button
-                                onClick={() => card.id && handleSaveEdit(card.id)}
+                                type="button"
+                                onClick={() => card.id && void handleSaveEdit(card.id)}
+                                disabled={pendingAction !== null}
                                 style={{ height: '28px', padding: '0 12px', fontSize: '11px' }}
                                 className="btn-premium-success"
                               >
-                                <Check size={12} /> Save Changes
+                                <Check size={12} /> {pendingAction === `edit-${card.id}` ? 'Saving…' : 'Save Changes'}
                               </button>
                               <button
                                 onClick={() => setEditingCardId(null)}
