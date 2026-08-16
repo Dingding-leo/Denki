@@ -16,32 +16,26 @@ interface FlashcardProps {
 export const Flashcard: React.FC<FlashcardProps> = ({ card, isFlipped, onFlip, autoSpeak = false }) => {
   const [showScratchpad, setShowScratchpad] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [selectedVoice, setSelectedVoice] = useState<SpeechSynthesisVoice | null>(null);
+  const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
 
-  // Setup speech synthesis voices once on mount and handle cleanup
-  useEffect(() => {
-    if (!('speechSynthesis' in window)) return;
+  // Cache the preferred English voice without putting it in React state. Voice
+// discovery is asynchronous in some browsers; a ref avoids speaking the
+// same side twice when the voice list becomes available.
+useEffect(() => {
+  if (!('speechSynthesis' in window)) return;
 
-    const loadVoice = () => {
-      const voices = window.speechSynthesis.getVoices();
-      const engVoice = voices.find(v => v.lang.startsWith('en') && v.name.includes('Google')) ||
-                       voices.find(v => v.lang.startsWith('en'));
-      if (engVoice) {
-        setSelectedVoice(engVoice);
-      }
-    };
+  const loadVoice = () => {
+    const voices = window.speechSynthesis.getVoices();
+    selectedVoiceRef.current =
+      voices.find((voice) => voice.lang.startsWith('en') && voice.name.includes('Google')) ??
+      voices.find((voice) => voice.lang.startsWith('en')) ??
+      null;
+  };
 
-    loadVoice();
-    if ('onvoiceschanged' in window.speechSynthesis) {
-      window.speechSynthesis.onvoiceschanged = loadVoice;
-    }
-
-    return () => {
-      if ('onvoiceschanged' in window.speechSynthesis) {
-        window.speechSynthesis.onvoiceschanged = null;
-      }
-    };
-  }, []);
+  loadVoice();
+  window.speechSynthesis.addEventListener('voiceschanged', loadVoice);
+  return () => window.speechSynthesis.removeEventListener('voiceschanged', loadVoice);
+}, []);
 
   // Reset scratchpad state during render when card changes to avoid cascading renders
   const [prevCardId, setPrevCardId] = useState(card.id);
@@ -60,67 +54,58 @@ export const Flashcard: React.FC<FlashcardProps> = ({ card, isFlipped, onFlip, a
     });
   }, [card.id, isFlipped]);
 
-  // Helper function to synthesize speech
-  const speakText = React.useCallback((text: string) => {
-    // Strip markdown formatting & cloze tags for clear speech
-    const cleanText = text
-      .replace(/\{\{c\d+::(.*?)\}\}/g, '$1') // Extract cloze values
-      .replace(/```[\s\S]*?```/g, '') // Remove code blocks
-      .replace(/[`*#_-]/g, ' ') // Remove special markdown chars
-      .trim();
+  // Stable speech callback: voice discovery must not replay the current side.
+const speakText = React.useCallback((textToRead: string) => {
+  const cleanText = textToRead
+    .replace(/\{\{c\d+::(.*?)\}\}/g, '$1')
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/[`*#_-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel(); // Cancel current readouts
-      const utterance = new SpeechSynthesisUtterance(cleanText);
-      utterance.lang = 'en-US';
-      
-      if (selectedVoice) {
-        utterance.voice = selectedVoice;
-      } else {
-        const voices = window.speechSynthesis.getVoices();
-        const engVoice = voices.find(v => v.lang.startsWith('en') && v.name.includes('Google')) ||
-                         voices.find(v => v.lang.startsWith('en'));
-        if (engVoice) utterance.voice = engVoice;
-      }
-      
-      const savedSpeed = localStorage.getItem('denki-speech-speed') || '1.0';
-      utterance.rate = parseFloat(savedSpeed);
-      
-      window.speechSynthesis.speak(utterance);
-    }
-  }, [selectedVoice]);
+  if (!cleanText || !('speechSynthesis' in window)) return;
 
-  const lastSpokenRef = useRef<{ cardId?: number; isFlipped?: boolean }>({});
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(cleanText);
+  utterance.lang = 'en-US';
+  const fallbackVoice = window.speechSynthesis
+    .getVoices()
+    .find((voice) => voice.lang.startsWith('en'));
+  utterance.voice = selectedVoiceRef.current ?? fallbackVoice ?? null;
+  const savedSpeed = Number.parseFloat(localStorage.getItem('denki-speech-speed') ?? '1.0');
+  utterance.rate = Number.isFinite(savedSpeed) ? savedSpeed : 1;
+  window.speechSynthesis.speak(utterance);
+}, []);
 
-  // Auto-speak effect when active, triggering on card change or flip
-  useEffect(() => {
-    if (!autoSpeak) {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-      }
-      return;
-    }
+const autoSpeechTimerRef = useRef<number | null>(null);
 
-    // Prevent double speaking during transition to next card
-    // If isFlipped changes from true to false on the same card, it means the card is resetting for transition, so do not speak the front again!
-    const isResettingSameCard = 
-      lastSpokenRef.current.cardId === card.id && 
-      lastSpokenRef.current.isFlipped === true && 
-      isFlipped === false;
+// A newly advanced card briefly inherits the previous card's flipped
+// state. Deferring one task lets that stale answer task be cancelled;
+// the settled front/question is then read automatically.
+useEffect(() => {
+  if (autoSpeechTimerRef.current !== null) {
+    window.clearTimeout(autoSpeechTimerRef.current);
+    autoSpeechTimerRef.current = null;
+  }
 
-    if (isResettingSameCard) {
-      lastSpokenRef.current = { cardId: card.id, isFlipped };
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-      }
-      return;
-    }
+  if (!autoSpeak) {
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    return;
+  }
 
-    lastSpokenRef.current = { cardId: card.id, isFlipped };
-
-    const textToSpeak = isFlipped ? card.back : card.front;
+  const textToSpeak = isFlipped ? card.back : card.front;
+  autoSpeechTimerRef.current = window.setTimeout(() => {
+    autoSpeechTimerRef.current = null;
     speakText(textToSpeak);
-  }, [card.id, card.front, card.back, isFlipped, autoSpeak, speakText]);
+  }, 0);
+
+  return () => {
+    if (autoSpeechTimerRef.current !== null) {
+      window.clearTimeout(autoSpeechTimerRef.current);
+      autoSpeechTimerRef.current = null;
+    }
+  };
+}, [card.id, card.front, card.back, isFlipped, autoSpeak, speakText]);
 
   // Cleanup speech on unmount
   useEffect(() => {
