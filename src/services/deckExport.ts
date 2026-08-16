@@ -3,12 +3,11 @@ import { db } from '../db';
 /**
  * Quote a CSV field when it contains a comma, quote, or newline (RFC 4180), and
  * neutralize spreadsheet formula injection: cells starting with `=`, `+`, `-`,
- * or `@` are prefixed with a single quote so Excel/Sheets treat them as text
- * instead of executing them when the exported file is opened.
+ * or `@` are prefixed with a single quote so Excel/Sheets treat them as text.
  */
 function csvField(value: string): string {
-  const safe = /^[=+\-@]/.test(value) ? "'" + value : value;
-  return /[",\n\r]/.test(safe) ? '"' + safe.replace(/"/g, '""') + '"' : safe;
+  const safe = /^[=+\-@]/.test(value) ? `'${value}` : value;
+  return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
 interface ExportableCard {
@@ -17,13 +16,13 @@ interface ExportableCard {
   cardType: string;
 }
 
-/**
- * Serialize a deck's cards to CSV with a `Front,Back,Type` header. The output
- * round-trips through importFromCSV (which skips that header on import).
- */
 export function buildDeckCsv(cards: ExportableCard[]): string {
   const header = 'Front,Back,Type';
-  const rows = cards.map((c) => [csvField(c.front), csvField(c.back), c.cardType].join(','));
+  const rows = cards.map((card) => [
+    csvField(card.front),
+    csvField(card.back),
+    card.cardType,
+  ].join(','));
   return [header, ...rows].join('\n');
 }
 
@@ -32,17 +31,32 @@ function sanitizeFilename(name: string): string {
 }
 
 function downloadText(text: string, filename: string, mime: string): void {
-  const blob = new Blob([text], { type: mime });
+  // The UTF-8 BOM improves non-English text detection in spreadsheet apps.
+  const blob = new Blob([mime.includes('csv') ? '\uFEFF' : '', text], { type: mime });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
+
+  try {
+    anchor.click();
+  } finally {
+    anchor.remove();
+    // Safari can still be consuming the object URL when click() returns.
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
 }
 
 /** Export one deck's cards as a downloadable CSV file. */
 export async function exportDeckToCsv(deckId: number, deckName: string): Promise<void> {
+  const deck = await db.decks.get(deckId);
+  if (!deck) throw new Error('Deck not found.');
   const cards = await db.cards.where('deckId').equals(deckId).toArray();
-  downloadText(buildDeckCsv(cards), `${sanitizeFilename(deckName)}.csv`, 'text/csv;charset=utf-8');
+  downloadText(
+    buildDeckCsv(cards),
+    `${sanitizeFilename(deckName || deck.name)}.csv`,
+    'text/csv;charset=utf-8',
+  );
 }
