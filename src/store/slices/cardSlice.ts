@@ -1,22 +1,25 @@
-import type { StateCreator } from 'zustand';
-import { db } from '../../db';
-import type { CardType } from '../../db/schema';
-import { triggerAutoSave } from '../../services/backup';
-import { createCSVImportPlan } from '../../services/csvImport';
-import { STATES } from '../../services/scheduler';
-import type { CardSlice, FlashcardState } from '../types';
+import type { StateCreator } from "zustand";
+import { db } from "../../db";
+import type { CardType } from "../../db/schema";
+import { triggerAutoSave } from "../../services/backup";
+import { createCSVImportPlan } from "../../services/csvImport";
+import { STATES } from "../../services/scheduler";
+import type { CardSlice, FlashcardState } from "../types";
 
 let latestCardsRequest = 0;
 
-async function assertCardDestination(classId: number, deckId: number): Promise<void> {
+async function assertCardDestination(
+  classId: number,
+  deckId: number,
+): Promise<void> {
   const [studyClass, deck] = await Promise.all([
     db.classes.get(classId),
     db.decks.get(deckId),
   ]);
 
-  if (!studyClass) throw new Error('Destination class was not found.');
+  if (!studyClass) throw new Error("Destination class was not found.");
   if (!deck || deck.classId !== classId) {
-    throw new Error('Destination deck does not belong to the selected class.');
+    throw new Error("Destination deck does not belong to the selected class.");
   }
 }
 
@@ -27,9 +30,9 @@ function normalizeCardContent(
 ): { front: string; back: string; cardType: CardType } {
   const cleanedFront = front.trim();
   const cleanedBack = back.trim();
-  if (!cleanedFront) throw new Error('Card front cannot be empty.');
-  if (cardType === 'standard' && !cleanedBack) {
-    throw new Error('A standard card needs an answer.');
+  if (!cleanedFront) throw new Error("Card front cannot be empty.");
+  if (cardType === "standard" && !cleanedBack) {
+    throw new Error("A standard card needs an answer.");
   }
   return { front: cleanedFront, back: cleanedBack, cardType };
 }
@@ -63,9 +66,10 @@ export const createCardSlice: StateCreator<
       set({ activeDeckId: requestedScope, cards: [] });
     }
 
-    const cards = deckId !== undefined
-      ? await db.cards.where('deckId').equals(deckId).toArray()
-      : await db.cards.toArray();
+    const cards =
+      deckId !== undefined
+        ? await db.cards.where("deckId").equals(deckId).toArray()
+        : await db.cards.toArray();
 
     // Ignore both out-of-order responses and responses whose consumer closed or
     // changed scope while IndexedDB was still resolving.
@@ -108,11 +112,11 @@ export const createCardSlice: StateCreator<
 
   updateCard: async (cardId, front, back, cardType) => {
     const card = await db.cards.get(cardId);
-    if (!card) throw new Error('Card not found');
+    if (!card) throw new Error("Card not found");
     const content = normalizeCardContent(front, back, cardType);
 
     const updated = await db.cards.update(cardId, content);
-    if (updated === 0) throw new Error('Card not found');
+    if (updated === 0) throw new Error("Card not found");
 
     if (sessionContainsCard(get(), cardId)) set({ session: null });
     await refreshCardsIfActive(get, card.deckId);
@@ -123,9 +127,9 @@ export const createCardSlice: StateCreator<
     const card = await db.cards.get(cardId);
     if (!card) return;
 
-    await db.transaction('rw', [db.cards, db.reviews], async () => {
+    await db.transaction("rw", [db.cards, db.reviews], async () => {
       await db.cards.delete(cardId);
-      await db.reviews.where('cardId').equals(cardId).delete();
+      await db.reviews.where("cardId").equals(cardId).delete();
     });
 
     if (sessionContainsCard(get(), cardId)) set({ session: null });
@@ -142,39 +146,49 @@ export const createCardSlice: StateCreator<
   bulkCreateCards: async (cardsToCreate) => {
     if (cardsToCreate.length === 0) return;
 
-    const destinationPairs = new Map<string, { classId: number; deckId: number }>();
+    const destinationPairs = new Map<
+      string,
+      { classId: number; deckId: number }
+    >();
     const normalizedCards = cardsToCreate.map((card) => {
       destinationPairs.set(`${card.classId}:${card.deckId}`, {
         classId: card.classId,
         deckId: card.deckId,
       });
-      return { ...card, ...normalizeCardContent(card.front, card.back, card.cardType) };
+      return {
+        ...card,
+        ...normalizeCardContent(card.front, card.back, card.cardType),
+      };
     });
 
     await Promise.all(
       [...destinationPairs.values()].map(({ classId, deckId }) =>
-        assertCardDestination(classId, deckId)),
+        assertCardDestination(classId, deckId),
+      ),
     );
 
     const now = new Date();
-    await db.cards.bulkAdd(normalizedCards.map((card) => ({
-      classId: card.classId,
-      deckId: card.deckId,
-      front: card.front,
-      back: card.back,
-      cardType: card.cardType,
-      createdAt: now,
-      state: STATES.New,
-      stability: 0,
-      difficulty: 0,
-      elapsedDays: 0,
-      scheduledDays: 0,
-      due: now,
-    })));
+    await db.cards.bulkAdd(
+      normalizedCards.map((card) => ({
+        classId: card.classId,
+        deckId: card.deckId,
+        front: card.front,
+        back: card.back,
+        cardType: card.cardType,
+        createdAt: now,
+        state: STATES.New,
+        stability: 0,
+        difficulty: 0,
+        elapsedDays: 0,
+        scheduledDays: 0,
+        due: now,
+      })),
+    );
 
     const classIds = [...new Set(normalizedCards.map((card) => card.classId))];
     const activeDeckId = get().activeDeckId;
-    const activeDeckChanged = activeDeckId !== null &&
+    const activeDeckChanged =
+      activeDeckId !== null &&
       normalizedCards.some((card) => card.deckId === activeDeckId);
     await Promise.all([
       activeDeckChanged ? get().loadCards(activeDeckId) : Promise.resolve(),
@@ -188,15 +202,17 @@ export const createCardSlice: StateCreator<
 
   manuallySetCardConfidence: async (cardId, rating) => {
     if (!Number.isInteger(rating) || rating < 0 || rating > 4) {
-      throw new Error('Manual confidence must be Reset (0), Again, Hard, Good, or Easy.');
+      throw new Error(
+        "Manual confidence must be Reset (0), Again, Hard, Good, or Easy.",
+      );
     }
 
     const card = await db.cards.get(cardId);
-    if (!card) throw new Error('Card not found');
+    if (!card) throw new Error("Card not found");
 
-    await db.transaction('rw', [db.cards, db.reviews], async () => {
+    await db.transaction("rw", [db.cards, db.reviews], async () => {
       if (rating === 0) {
-        await db.reviews.where('cardId').equals(cardId).delete();
+        await db.reviews.where("cardId").equals(cardId).delete();
         await db.cards.update(cardId, {
           state: STATES.New,
           stability: 0,
@@ -227,7 +243,9 @@ export const createCardSlice: StateCreator<
 
       const scheduledDays = Number(stability.toFixed(4));
       const reviewedAt = new Date();
-      const due = new Date(reviewedAt.getTime() + scheduledDays * 24 * 60 * 60 * 1000);
+      const due = new Date(
+        reviewedAt.getTime() + scheduledDays * 24 * 60 * 60 * 1000,
+      );
 
       await db.cards.update(cardId, {
         state,

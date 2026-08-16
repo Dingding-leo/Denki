@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { db } from '../../../db';
-import type { Card, Deck } from '../../../db/schema';
-import { useFlashcardStore } from '../../useFlashcardStore';
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { db } from "../../../db";
+import type { Card, Deck } from "../../../db/schema";
+import { useFlashcardStore } from "../../useFlashcardStore";
 
 interface Deferred<T> {
   promise: Promise<T>;
@@ -23,7 +23,7 @@ function card(id: number, deckId: number, classId: number): Card {
     deckId,
     front: `Question ${id}`,
     back: `Answer ${id}`,
-    cardType: 'standard',
+    cardType: "standard",
     createdAt: new Date(),
     state: 0,
     stability: 0,
@@ -39,12 +39,12 @@ function deck(id: number, classId: number): Deck {
     id,
     classId,
     name: `Deck ${id}`,
-    description: '',
+    description: "",
     createdAt: new Date(),
   };
 }
 
-describe('library loader request integrity', () => {
+describe("library loader request integrity", () => {
   beforeEach(async () => {
     await Promise.all([
       db.reviews.clear(),
@@ -64,17 +64,17 @@ describe('library loader request integrity', () => {
     vi.restoreAllMocks();
   });
 
-  it('keeps the newest card scope when IndexedDB requests resolve out of order', async () => {
+  it("keeps the newest card scope when IndexedDB requests resolve out of order", async () => {
     const first = deferred<Card[]>();
     const second = deferred<Card[]>();
-    const whereSpy = vi.spyOn(db.cards, 'where') as unknown as {
+    const whereSpy = vi.spyOn(db.cards, "where") as unknown as {
       mockImplementation: (implementation: (index: string) => unknown) => void;
     };
     whereSpy.mockImplementation((index) => {
-      expect(index).toBe('deckId');
+      expect(index).toBe("deckId");
       return {
         equals: (deckId: number) => ({
-          toArray: () => deckId === 1 ? first.promise : second.promise,
+          toArray: () => (deckId === 1 ? first.promise : second.promise),
         }),
       };
     });
@@ -88,12 +88,14 @@ describe('library loader request integrity', () => {
     await firstLoad;
 
     expect(useFlashcardStore.getState().activeDeckId).toBe(2);
-    expect(useFlashcardStore.getState().cards.map((item) => item.deckId)).toEqual([2]);
+    expect(
+      useFlashcardStore.getState().cards.map((item) => item.deckId),
+    ).toEqual([2]);
   });
 
-  it('does not repopulate cards after their consumer clears the active scope', async () => {
+  it("does not repopulate cards after their consumer clears the active scope", async () => {
     const pending = deferred<Card[]>();
-    const whereSpy = vi.spyOn(db.cards, 'where') as unknown as {
+    const whereSpy = vi.spyOn(db.cards, "where") as unknown as {
       mockImplementation: (implementation: (index: string) => unknown) => void;
     };
     whereSpy.mockImplementation(() => ({
@@ -109,17 +111,17 @@ describe('library loader request integrity', () => {
     expect(useFlashcardStore.getState().cards).toEqual([]);
   });
 
-  it('keeps the latest class deck list when route loads finish out of order', async () => {
+  it("keeps the latest class deck list when route loads finish out of order", async () => {
     const first = deferred<Deck[]>();
     const second = deferred<Deck[]>();
-    const whereSpy = vi.spyOn(db.decks, 'where') as unknown as {
+    const whereSpy = vi.spyOn(db.decks, "where") as unknown as {
       mockImplementation: (implementation: (index: string) => unknown) => void;
     };
     whereSpy.mockImplementation((index) => {
-      expect(index).toBe('classId');
+      expect(index).toBe("classId");
       return {
         equals: (classId: number) => ({
-          toArray: () => classId === 1 ? first.promise : second.promise,
+          toArray: () => (classId === 1 ? first.promise : second.promise),
         }),
       };
     });
@@ -132,6 +134,8 @@ describe('library loader request integrity', () => {
     first.resolve([deck(1, 1)]);
     await firstLoad;
 
-    expect(useFlashcardStore.getState().decks.map((item) => item.classId)).toEqual([2]);
+    expect(
+      useFlashcardStore.getState().decks.map((item) => item.classId),
+    ).toEqual([2]);
   });
 });
