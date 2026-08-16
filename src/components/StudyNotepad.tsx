@@ -35,15 +35,19 @@ const StudyNotepadForDeck: React.FC<StudyNotepadProps> = ({ deckId, deckName }) 
   const initial = useState(() => {
     const deck = useFlashcardStore.getState().decks.find((candidate) => candidate.id === deckId);
     const legacyNotes = readLegacyNotes(deckId);
+    const databaseNotes = deck?.notes ?? '';
+    const migrateLegacy = databaseNotes.length === 0 && legacyNotes.length > 0;
     return {
-      text: deck?.notes ?? legacyNotes,
-      migrateLegacy: !deck?.notes && legacyNotes.length > 0,
+      text: migrateLegacy ? legacyNotes : databaseNotes,
+      migrateLegacy,
     };
   })[0];
 
   const [deckNotes, setDeckNotes] = useState(initial.text);
   const [notesMode, setNotesMode] = useState<'edit' | 'preview'>('preview');
-  const [saveState, setSaveState] = useState<SaveState>('saved');
+  const [saveState, setSaveState] = useState<SaveState>(
+    initial.migrateLegacy ? 'saving' : 'saved',
+  );
   const latestNotesRef = useRef(deckNotes);
   const saveTimerRef = useRef<number | null>(null);
   const mountedRef = useRef(true);
@@ -62,7 +66,6 @@ const StudyNotepadForDeck: React.FC<StudyNotepadProps> = ({ deckId, deckName }) 
   useEffect(() => {
     mountedRef.current = true;
     if (initial.migrateLegacy) {
-      setSaveState('saving');
       void persistNotes(initial.text, true);
     }
 
