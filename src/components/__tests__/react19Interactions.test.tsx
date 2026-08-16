@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { db } from '../../db';
 import type { Card } from '../../db/schema';
 import { useFlashcardStore } from '../../store/useFlashcardStore';
@@ -40,16 +40,44 @@ describe('React 19 interaction state', () => {
     });
   });
 
-  it('reinitializes deck notes when the deck changes without a syncing effect', () => {
-    localStorage.setItem('denki-notes-1', '# First deck');
-    localStorage.setItem('denki-notes-2', '# Second deck');
+  it('reinitializes deck notes and migrates legacy localStorage into the backed-up deck record', async () => {
+    const classId = await db.classes.add({
+      name: 'Course',
+      description: '',
+      createdAt: new Date(),
+    });
+    const firstDeckId = await db.decks.add({
+      classId,
+      name: 'One',
+      description: '',
+      createdAt: new Date(),
+    });
+    const secondDeckId = await db.decks.add({
+      classId,
+      name: 'Two',
+      description: '',
+      createdAt: new Date(),
+    });
+    const decks = await db.decks.toArray();
+    useFlashcardStore.setState({ decks });
+    localStorage.setItem(`denki-notes-${firstDeckId}`, '# First deck');
+    localStorage.setItem(`denki-notes-${secondDeckId}`, '# Second deck');
 
-    const { rerender } = render(<StudyNotepad deckId={1} deckName="One" />);
+    const { rerender } = render(
+      <StudyNotepad deckId={firstDeckId} deckName="One" />,
+    );
     expect(screen.getByRole('heading', { name: 'First deck' })).toBeInTheDocument();
+    await waitFor(async () => {
+      expect((await db.decks.get(firstDeckId))?.notes).toBe('# First deck');
+      expect(localStorage.getItem(`denki-notes-${firstDeckId}`)).toBeNull();
+    });
 
-    rerender(<StudyNotepad deckId={2} deckName="Two" />);
+    rerender(<StudyNotepad deckId={secondDeckId} deckName="Two" />);
     expect(screen.getByRole('heading', { name: 'Second deck' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'First deck' })).not.toBeInTheDocument();
+    await waitFor(async () => {
+      expect((await db.decks.get(secondDeckId))?.notes).toBe('# Second deck');
+    });
   });
 
   it('keeps global Learn Mode shortcuts safe when no session exists', () => {

@@ -1,255 +1,283 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Edit2, Eraser, Trash2, Undo } from 'lucide-react';
 
 interface ScratchpadProps {
   visible: boolean;
 }
 
+const MAX_HISTORY = 30;
+const MAX_DEVICE_PIXEL_RATIO = 2;
+
+function currentRatio(): number {
+  return Math.min(window.devicePixelRatio || 1, MAX_DEVICE_PIXEL_RATIO);
+}
+
+function configureContext(
+  canvas: HTMLCanvasElement,
+  devicePixelRatio = currentRatio(),
+): CanvasRenderingContext2D | null {
+  const context = canvas.getContext('2d');
+  if (!context) return null;
+  context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+  context.lineCap = 'round';
+  context.lineJoin = 'round';
+  return context;
+}
+
+function captureCanvas(canvas: HTMLCanvasElement | null): string | null {
+  if (!canvas || canvas.width === 0 || canvas.height === 0) return null;
+  try {
+    return canvas.toDataURL();
+  } catch {
+    return null;
+  }
+}
+
 export const Scratchpad: React.FC<ScratchpadProps> = ({ visible }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const resizeGenerationRef = useRef(0);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [color, setColor] = useState('#6366f1'); // Default Indigo
-  const lineWidth = 4;
+  const [color, setColor] = useState('#9eb3a1');
   const [isEraser, setIsEraser] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
 
-  // Adjust canvas size to fit the container
-  const resizeCanvas = () => {
+  const drawSnapshot = useCallback((snapshot: string) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    
-    const rect = canvas.parentElement?.getBoundingClientRect();
-    if (rect) {
-      canvas.width = rect.width;
-      canvas.height = rect.height - 60; // Leave space for control toolbar
-      
-      // Re-fill transparent background
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-      }
-    }
-  };
+    const rect = canvas.getBoundingClientRect();
+    const context = configureContext(canvas);
+    if (!context) return;
 
-  useEffect(() => {
-    resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
-    return () => window.removeEventListener('resize', resizeCanvas);
+    const image = new Image();
+    image.onload = () => {
+      if (canvasRef.current !== canvas) return;
+      context.clearRect(0, 0, rect.width, rect.height);
+      context.drawImage(
+        image,
+        0,
+        0,
+        image.naturalWidth || image.width,
+        image.naturalHeight || image.height,
+        0,
+        0,
+        rect.width,
+        rect.height,
+      );
+    };
+    image.src = snapshot;
+  }, []);
+
+  const resizeCanvas = useCallback(() => {
+    const canvas = canvasRef.current;
+    const parent = canvas?.parentElement;
+    if (!canvas || !parent || !visible) return;
+
+    const previousDrawing = captureCanvas(canvas);
+    const rect = parent.getBoundingClientRect();
+    const cssWidth = Math.max(1, Math.floor(rect.width));
+    const cssHeight = Math.max(1, Math.floor(rect.height - 50));
+    const ratio = currentRatio();
+    const generation = ++resizeGenerationRef.current;
+
+    canvas.style.width = `${cssWidth}px`;
+    canvas.style.height = `${cssHeight}px`;
+    canvas.width = Math.max(1, Math.round(cssWidth * ratio));
+    canvas.height = Math.max(1, Math.round(cssHeight * ratio));
+    configureContext(canvas, ratio);
+
+    if (!previousDrawing) return;
+    const image = new Image();
+    image.onload = () => {
+      if (generation !== resizeGenerationRef.current || canvasRef.current !== canvas) return;
+      const context = configureContext(canvas, ratio);
+      if (!context) return;
+      context.drawImage(
+        image,
+        0,
+        0,
+        image.naturalWidth || image.width,
+        image.naturalHeight || image.height,
+        0,
+        0,
+        cssWidth,
+        cssHeight,
+      );
+    };
+    image.src = previousDrawing;
   }, [visible]);
 
-  const saveToHistory = () => {
-    const canvas = canvasRef.current;
-    if (canvas) {
-      setHistory(prev => [...prev, canvas.toDataURL()]);
+  useEffect(() => {
+    if (!visible) return;
+
+    const frame = window.requestAnimationFrame(resizeCanvas);
+    const parent = canvasRef.current?.parentElement;
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined' && parent) {
+      observer = new ResizeObserver(() => resizeCanvas());
+      observer.observe(parent);
     }
+    window.addEventListener('resize', resizeCanvas);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer?.disconnect();
+      window.removeEventListener('resize', resizeCanvas);
+    };
+  }, [resizeCanvas, visible]);
+
+  const saveToHistory = () => {
+    const snapshot = captureCanvas(canvasRef.current);
+    if (!snapshot) return;
+    setHistory((current) => [...current.slice(-(MAX_HISTORY - 1)), snapshot]);
   };
 
-  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+  const getPoint = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  };
 
+  const startDrawing = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    const point = getPoint(event);
+    if (!canvas || !point) return;
+    const context = configureContext(canvas);
+    if (!context) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    canvas.setPointerCapture(event.pointerId);
     saveToHistory();
 
-    const rect = canvas.getBoundingClientRect();
-    let clientX: number;
-    let clientY: number;
-
-    if ('touches' in e) {
-      if (e.touches.length === 0) return;
-      clientX = e.touches[0].clientX;
-      clientY = e.touches[0].clientY;
-    } else {
-      clientX = e.clientX;
-      clientY = e.clientY;
-    }
-
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
-
-    ctx.beginPath();
-    ctx.moveTo(x, y);
+    context.globalCompositeOperation = isEraser ? 'destination-out' : 'source-over';
+    context.strokeStyle = isEraser ? 'rgba(0,0,0,1)' : color;
+    context.lineWidth = isEraser ? 24 : 4;
+    context.beginPath();
+    context.moveTo(point.x, point.y);
     setIsDrawing(true);
-    
-    // True erase (transparent) rather than painting the card-bg color over strokes.
-    ctx.globalCompositeOperation = isEraser ? 'destination-out' : 'source-over';
-    ctx.strokeStyle = isEraser ? 'rgba(0,0,0,1)' : color;
-    ctx.lineWidth = isEraser ? 24 : lineWidth;
   };
 
-  const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+  const draw = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (!isDrawing) return;
-    
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    const point = getPoint(event);
+    if (!canvas || !point) return;
+    const context = configureContext(canvas);
+    if (!context) return;
 
-    const rect = canvas.getBoundingClientRect();
-    let clientX: number;
-    let clientY: number;
-
-    if ('touches' in e) {
-      if (e.touches.length === 0) return;
-      clientX = e.touches[0].clientX;
-      clientY = e.touches[0].clientY;
-    } else {
-      clientX = e.clientX;
-      clientY = e.clientY;
-    }
-
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
-
-    ctx.lineTo(x, y);
-    ctx.stroke();
+    event.preventDefault();
+    event.stopPropagation();
+    context.globalCompositeOperation = isEraser ? 'destination-out' : 'source-over';
+    context.strokeStyle = isEraser ? 'rgba(0,0,0,1)' : color;
+    context.lineWidth = isEraser ? 24 : 4;
+    context.lineTo(point.x, point.y);
+    context.stroke();
   };
 
-  const stopDrawing = () => {
+  const stopDrawing = (event?: React.PointerEvent<HTMLCanvasElement>) => {
+    event?.stopPropagation();
     setIsDrawing(false);
   };
 
   const clearCanvas = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    const context = configureContext(canvas);
+    if (!context) return;
 
     saveToHistory();
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const rect = canvas.getBoundingClientRect();
+    context.clearRect(0, 0, rect.width, rect.height);
   };
 
   const undo = () => {
-    if (history.length === 0) return;
-    
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const prevImage = history[history.length - 1];
-    setHistory(prev => prev.slice(0, -1));
-
-    const img = new Image();
-    img.src = prevImage;
-    img.onload = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0);
-    };
+    const previous = history.at(-1);
+    if (!previous) return;
+    setHistory((current) => current.slice(0, -1));
+    drawSnapshot(previous);
   };
 
-  if (!visible) return null;
+  const brushColors = ['#9eb3a1', '#d9caa7', '#c98f7d', '#93a9bd'];
 
   return (
     <div
-      // Stop pointer events inside the scratchpad from bubbling to the card's
-      // flip handler — otherwise drawing or picking a tool flips the card and
-      // reveals the answer.
-      onClick={(e) => e.stopPropagation()}
-      onMouseDown={(e) => e.stopPropagation()}
-      onTouchStart={(e) => e.stopPropagation()}
+      aria-hidden={!visible}
+      onClick={(event) => event.stopPropagation()}
+      onPointerDown={(event) => event.stopPropagation()}
       style={{
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      zIndex: 10,
-      display: 'flex',
-      flexDirection: 'column',
-      background: 'rgba(10, 14, 23, 0.85)',
-      borderRadius: '20px',
-      overflow: 'hidden',
-    }}>
+        position: 'absolute',
+        inset: 0,
+        zIndex: 10,
+        display: visible ? 'flex' : 'none',
+        flexDirection: 'column',
+        background: 'rgba(12, 23, 18, 0.94)',
+        overflow: 'hidden',
+      }}
+    >
       <canvas
         ref={canvasRef}
-        onMouseDown={startDrawing}
-        onMouseMove={draw}
-        onMouseUp={stopDrawing}
-        onMouseLeave={stopDrawing}
-        onTouchStart={startDrawing}
-        onTouchMove={draw}
-        onTouchEnd={stopDrawing}
-        style={{
-          flex: 1,
-          cursor: 'crosshair',
-          touchAction: 'none',
-        }}
+        aria-label="Scratchpad drawing area"
+        onPointerDown={startDrawing}
+        onPointerMove={draw}
+        onPointerUp={stopDrawing}
+        onPointerCancel={stopDrawing}
+        onPointerLeave={stopDrawing}
+        style={{ flex: 1, cursor: isEraser ? 'cell' : 'crosshair', touchAction: 'none' }}
       />
-      
-      {/* Control Bar */}
+
       <div style={{
         height: '50px',
-        background: 'rgba(18, 24, 38, 0.95)',
-        borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+        flex: '0 0 50px',
+        background: 'rgba(18, 34, 27, 0.98)',
+        borderTop: '1px solid rgba(211, 220, 207, 0.16)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '0 16px',
+        padding: '0 14px',
+        gap: '10px',
       }}>
-        <div style={{ display: 'flex', gap: '12px' }}>
+        <div style={{ display: 'flex', gap: '8px' }}>
           <button
+            type="button"
             onClick={() => setIsEraser(false)}
-            style={{
-              background: !isEraser ? 'rgba(99, 102, 241, 0.2)' : 'transparent',
-              border: !isEraser ? '1px solid #6366f1' : '1px solid transparent',
-              color: !isEraser ? '#a5b4fc' : '#9ca3af',
-              borderRadius: '6px',
-              padding: '6px 12px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontSize: '13px',
-              fontWeight: 500,
-            }}
+            className={isEraser ? 'btn-premium-secondary' : 'btn-premium-primary'}
+            aria-pressed={!isEraser}
+            style={{ height: '30px', padding: '0 10px', fontSize: '11px' }}
           >
-            <Edit2 size={14} /> Sketch
+            <Edit2 size={13} /> Draw
           </button>
-          
           <button
+            type="button"
             onClick={() => setIsEraser(true)}
-            style={{
-              background: isEraser ? 'rgba(239, 68, 68, 0.2)' : 'transparent',
-              border: isEraser ? '1px solid #ef4444' : '1px solid transparent',
-              color: isEraser ? '#fca5a5' : '#9ca3af',
-              borderRadius: '6px',
-              padding: '6px 12px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontSize: '13px',
-              fontWeight: 500,
-            }}
+            className={isEraser ? 'btn-premium-danger' : 'btn-premium-secondary'}
+            aria-pressed={isEraser}
+            style={{ height: '30px', padding: '0 10px', fontSize: '11px' }}
           >
-            <Eraser size={14} /> Eraser
+            <Eraser size={13} /> Erase
           </button>
         </div>
 
-        <div style={{ display: 'flex', gap: '8px' }}>
-          {/* Preset Brush Colors */}
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           {!isEraser && (
-            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginRight: '12px' }}>
-              {['#6366f1', '#10b981', '#f59e0b', '#ec4899'].map(c => (
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginRight: '4px' }}>
+              {brushColors.map((brushColor, index) => (
                 <button
-                  key={c}
-                  onClick={() => setColor(c)}
+                  key={brushColor}
+                  type="button"
+                  onClick={() => setColor(brushColor)}
+                  aria-label={`Select drawing color ${index + 1}`}
+                  aria-pressed={color === brushColor}
                   style={{
-                    width: '16px',
-                    height: '16px',
+                    width: '18px',
+                    height: '18px',
                     borderRadius: '50%',
-                    backgroundColor: c,
-                    border: color === c ? '2px solid white' : '1px solid rgba(255,255,255,0.2)',
+                    backgroundColor: brushColor,
+                    border: color === brushColor
+                      ? '2px solid var(--text-primary)'
+                      : '1px solid rgba(255,255,255,0.25)',
                     cursor: 'pointer',
-                    transform: color === c ? 'scale(1.2)' : 'none',
-                    transition: 'transform 0.1s ease',
+                    transform: color === brushColor ? 'scale(1.12)' : 'none',
                   }}
                 />
               ))}
@@ -257,36 +285,26 @@ export const Scratchpad: React.FC<ScratchpadProps> = ({ visible }) => {
           )}
 
           <button
+            type="button"
             onClick={undo}
             disabled={history.length === 0}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: history.length > 0 ? '#f3f4f6' : '#6b7280',
-              cursor: history.length > 0 ? 'pointer' : 'default',
-              padding: '6px',
-              display: 'flex',
-              alignItems: 'center',
-            }}
+            className="btn-premium-secondary"
+            aria-label="Undo last scratchpad change"
             title="Undo"
+            style={{ width: '30px', height: '30px', padding: 0 }}
           >
-            <Undo size={16} />
+            <Undo size={14} />
           </button>
-          
+
           <button
+            type="button"
             onClick={clearCanvas}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: '#ef4444',
-              cursor: 'pointer',
-              padding: '6px',
-              display: 'flex',
-              alignItems: 'center',
-            }}
-            title="Clear Scratchpad"
+            className="btn-premium-danger"
+            aria-label="Clear scratchpad"
+            title="Clear scratchpad"
+            style={{ width: '30px', height: '30px', padding: 0 }}
           >
-            <Trash2 size={16} />
+            <Trash2 size={14} />
           </button>
         </div>
       </div>
