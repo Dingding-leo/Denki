@@ -8,6 +8,7 @@ interface Deferred<T> {
   resolve: (value: T) => void;
 }
 
+// Deferred results let each test control IndexedDB completion order deterministically.
 function deferred<T>(): Deferred<T> {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((complete) => {
