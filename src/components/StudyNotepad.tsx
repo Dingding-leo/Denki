@@ -65,12 +65,13 @@ const StudyNotepadForDeck: React.FC<StudyNotepadProps> = ({ deckId, deckName }) 
 
   useEffect(() => {
     mountedRef.current = true;
-    if (initial.migrateLegacy) {
-      void persistNotes(initial.text, true);
-    }
+    const migrationTimer = initial.migrateLegacy
+      ? window.setTimeout(() => void persistNotes(initial.text, true), 0)
+      : null;
 
     return () => {
       mountedRef.current = false;
+      if (migrationTimer !== null) window.clearTimeout(migrationTimer);
       if (saveTimerRef.current !== null) {
         window.clearTimeout(saveTimerRef.current);
       }
