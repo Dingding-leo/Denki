@@ -322,9 +322,9 @@ export const StudySessionPage: React.FC = () => {
                   boxShadow: autoSpeak ? '0 0 12px rgba(16, 185, 129, 0.2)' : 'none',
                 }}
                 className="btn-premium-secondary"
-                aria-label="Auto-pronounce answers"
+                aria-label="Automatically read questions and answers"
                 aria-pressed={autoSpeak}
-                title={`Auto Pronounce English (${autoSpeak ? 'ON' : 'OFF'})`}
+                title={`Auto-read Questions and Answers (${autoSpeak ? 'ON' : 'OFF'})`}
               >
                 <Volume2 size={15} />
               </button>
