@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Edit2, Eraser, Trash2, Undo } from 'lucide-react';
 
 interface ScratchpadProps {
@@ -8,9 +8,13 @@ interface ScratchpadProps {
 const MAX_HISTORY = 30;
 const MAX_DEVICE_PIXEL_RATIO = 2;
 
+function currentRatio(): number {
+  return Math.min(window.devicePixelRatio || 1, MAX_DEVICE_PIXEL_RATIO);
+}
+
 function configureContext(
   canvas: HTMLCanvasElement,
-  devicePixelRatio: number,
+  devicePixelRatio = currentRatio(),
 ): CanvasRenderingContext2D | null {
   const context = canvas.getContext('2d');
   if (!context) return null;
@@ -18,6 +22,15 @@ function configureContext(
   context.lineCap = 'round';
   context.lineJoin = 'round';
   return context;
+}
+
+function captureCanvas(canvas: HTMLCanvasElement | null): string | null {
+  if (!canvas || canvas.width === 0 || canvas.height === 0) return null;
+  try {
+    return canvas.toDataURL();
+  } catch {
+    return null;
+  }
 }
 
 export const Scratchpad: React.FC<ScratchpadProps> = ({ visible }) => {
@@ -28,27 +41,16 @@ export const Scratchpad: React.FC<ScratchpadProps> = ({ visible }) => {
   const [isEraser, setIsEraser] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
 
-  const snapshotCanvas = (): string | null => {
-    const canvas = canvasRef.current;
-    if (!canvas || canvas.width === 0 || canvas.height === 0) return null;
-    try {
-      return canvas.toDataURL();
-    } catch {
-      return null;
-    }
-  };
-
-  const drawSnapshot = (snapshot: string) => {
+  const drawSnapshot = useCallback((snapshot: string) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const ratio = Math.min(window.devicePixelRatio || 1, MAX_DEVICE_PIXEL_RATIO);
-    const context = configureContext(canvas, ratio);
+    const context = configureContext(canvas);
     if (!context) return;
 
     const image = new Image();
     image.onload = () => {
-      if (!canvasRef.current || canvasRef.current !== canvas) return;
+      if (canvasRef.current !== canvas) return;
       context.clearRect(0, 0, rect.width, rect.height);
       context.drawImage(
         image,
@@ -63,18 +65,18 @@ export const Scratchpad: React.FC<ScratchpadProps> = ({ visible }) => {
       );
     };
     image.src = snapshot;
-  };
+  }, []);
 
-  const resizeCanvas = () => {
+  const resizeCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     const parent = canvas?.parentElement;
     if (!canvas || !parent || !visible) return;
 
-    const previousDrawing = snapshotCanvas();
+    const previousDrawing = captureCanvas(canvas);
     const rect = parent.getBoundingClientRect();
     const cssWidth = Math.max(1, Math.floor(rect.width));
     const cssHeight = Math.max(1, Math.floor(rect.height - 50));
-    const ratio = Math.min(window.devicePixelRatio || 1, MAX_DEVICE_PIXEL_RATIO);
+    const ratio = currentRatio();
     const generation = ++resizeGenerationRef.current;
 
     canvas.style.width = `${cssWidth}px`;
@@ -102,17 +104,18 @@ export const Scratchpad: React.FC<ScratchpadProps> = ({ visible }) => {
       );
     };
     image.src = previousDrawing;
-  };
+  }, [visible]);
 
   useEffect(() => {
     if (!visible) return;
 
     const frame = window.requestAnimationFrame(resizeCanvas);
     const parent = canvasRef.current?.parentElement;
-    const observer = typeof ResizeObserver !== 'undefined' && parent
-      ? new ResizeObserver(resizeCanvas)
-      : null;
-    observer?.observe(parent!);
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined' && parent) {
+      observer = new ResizeObserver(() => resizeCanvas());
+      observer.observe(parent);
+    }
     window.addEventListener('resize', resizeCanvas);
 
     return () => {
@@ -120,10 +123,10 @@ export const Scratchpad: React.FC<ScratchpadProps> = ({ visible }) => {
       observer?.disconnect();
       window.removeEventListener('resize', resizeCanvas);
     };
-  }, [visible]);
+  }, [resizeCanvas, visible]);
 
   const saveToHistory = () => {
-    const snapshot = snapshotCanvas();
+    const snapshot = captureCanvas(canvasRef.current);
     if (!snapshot) return;
     setHistory((current) => [...current.slice(-(MAX_HISTORY - 1)), snapshot]);
   };
@@ -132,19 +135,14 @@ export const Scratchpad: React.FC<ScratchpadProps> = ({ visible }) => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
-    return {
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top,
-    };
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   };
 
   const startDrawing = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     const point = getPoint(event);
     if (!canvas || !point) return;
-
-    const ratio = Math.min(window.devicePixelRatio || 1, MAX_DEVICE_PIXEL_RATIO);
-    const context = configureContext(canvas, ratio);
+    const context = configureContext(canvas);
     if (!context) return;
 
     event.preventDefault();
@@ -165,9 +163,7 @@ export const Scratchpad: React.FC<ScratchpadProps> = ({ visible }) => {
     const canvas = canvasRef.current;
     const point = getPoint(event);
     if (!canvas || !point) return;
-
-    const ratio = Math.min(window.devicePixelRatio || 1, MAX_DEVICE_PIXEL_RATIO);
-    const context = configureContext(canvas, ratio);
+    const context = configureContext(canvas);
     if (!context) return;
 
     event.preventDefault();
@@ -187,12 +183,11 @@ export const Scratchpad: React.FC<ScratchpadProps> = ({ visible }) => {
   const clearCanvas = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const ratio = Math.min(window.devicePixelRatio || 1, MAX_DEVICE_PIXEL_RATIO);
-    const context = configureContext(canvas, ratio);
+    const context = configureContext(canvas);
     if (!context) return;
 
     saveToHistory();
+    const rect = canvas.getBoundingClientRect();
     context.clearRect(0, 0, rect.width, rect.height);
   };
 
@@ -228,11 +223,7 @@ export const Scratchpad: React.FC<ScratchpadProps> = ({ visible }) => {
         onPointerUp={stopDrawing}
         onPointerCancel={stopDrawing}
         onPointerLeave={stopDrawing}
-        style={{
-          flex: 1,
-          cursor: isEraser ? 'cell' : 'crosshair',
-          touchAction: 'none',
-        }}
+        style={{ flex: 1, cursor: isEraser ? 'cell' : 'crosshair', touchAction: 'none' }}
       />
 
       <div style={{
