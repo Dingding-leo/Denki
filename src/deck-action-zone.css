@@ -1,0 +1,105 @@
+/*
+ * DECK ACTION ZONE
+ * Deck cards are compact, so maintenance controls and learning actions must
+ * never compete for one horizontal line. This layer makes the footer a
+ * deterministic two-tier layout: quiet deck utilities on top, then full-width
+ * Cards / Drill / Study actions underneath.
+ */
+
+.class-deck-card {
+  container-type: inline-size;
+}
+
+.class-deck-footer {
+  width: 100%;
+  min-width: 0;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 9px !important;
+  align-items: stretch !important;
+  padding-top: 10px !important;
+  border-top: 1px solid var(--border);
+}
+
+.class-deck-tools {
+  width: 100%;
+  min-width: 0;
+  display: flex !important;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(182, 176, 159, 0.14);
+}
+
+.class-deck-tools::before {
+  content: "Deck tools";
+  min-width: 0;
+  margin-right: auto;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.class-deck-tool {
+  flex: 0 0 30px;
+}
+
+.class-deck-actions {
+  width: 100%;
+  min-width: 0;
+  display: grid !important;
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(0, 1fr)
+    minmax(0, 1.16fr);
+  gap: 6px !important;
+  align-items: stretch !important;
+}
+
+.class-deck-action {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding-inline: 8px !important;
+  overflow: visible;
+  white-space: nowrap;
+}
+
+.class-deck-action svg {
+  flex: 0 0 auto;
+}
+
+.class-deck-action.is-primary {
+  padding-inline: 10px !important;
+}
+
+/* Respond to the card itself rather than the viewport. Browser zoom, sidebar
+ * width, or a future grid change therefore cannot crop the primary action. */
+@container (max-width: 350px) {
+  .class-deck-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .class-deck-action.is-primary {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 680px) {
+  .class-deck-footer {
+    align-items: stretch !important;
+  }
+
+  .class-deck-tools,
+  .class-deck-actions {
+    width: 100%;
+  }
+}
