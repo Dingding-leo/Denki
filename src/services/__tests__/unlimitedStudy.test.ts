@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { db } from '../../db';
-import type { Card } from '../../db/schema';
-import { useFlashcardStore } from '../../store/useFlashcardStore';
+import { beforeEach, describe, expect, it } from "vitest";
+import { db } from "../../db";
+import type { Card } from "../../db/schema";
+import { useFlashcardStore } from "../../store/useFlashcardStore";
 
 function seedCard(deckId: number, classId: number, front: string): Card {
   return {
@@ -9,7 +9,7 @@ function seedCard(deckId: number, classId: number, front: string): Card {
     deckId,
     front,
     back: `A:${front}`,
-    cardType: 'standard',
+    cardType: "standard",
     createdAt: new Date(),
     state: 0,
     stability: 0,
@@ -20,17 +20,35 @@ function seedCard(deckId: number, classId: number, front: string): Card {
   };
 }
 
-describe('unlimited new-card study', () => {
+describe("unlimited new-card study", () => {
   beforeEach(async () => {
     window.localStorage.clear();
-    useFlashcardStore.setState({ session: null, activeDeckId: null, activeClassId: null });
-    await Promise.all([db.cards.clear(), db.reviews.clear(), db.decks.clear(), db.classes.clear()]);
+    useFlashcardStore.setState({
+      session: null,
+      activeDeckId: null,
+      activeClassId: null,
+    });
+    await Promise.all([
+      db.cards.clear(),
+      db.reviews.clear(),
+      db.decks.clear(),
+      db.classes.clear(),
+    ]);
   });
 
-  it('never reads a legacy daily-limit preference', async () => {
-    window.localStorage.setItem('denki-new-cards-per-day', '1');
-    const classId = await db.classes.add({ name: 'C', description: '', createdAt: new Date() });
-    const deckId = await db.decks.add({ classId, name: 'D', description: '', createdAt: new Date() });
+  it("never reads a legacy daily-limit preference", async () => {
+    window.localStorage.setItem("denki-new-cards-per-day", "1");
+    const classId = await db.classes.add({
+      name: "C",
+      description: "",
+      createdAt: new Date(),
+    });
+    const deckId = await db.decks.add({
+      classId,
+      name: "D",
+      description: "",
+      createdAt: new Date(),
+    });
     for (let index = 0; index < 30; index += 1) {
       await db.cards.add(seedCard(deckId, classId, `Q${index}`));
     }
@@ -42,6 +60,8 @@ describe('unlimited new-card study', () => {
     expect(useFlashcardStore.getState().deckStats[deckId].dueCount).toBe(30);
 
     await useFlashcardStore.getState().loadStats(null);
-    expect(useFlashcardStore.getState().globalStats?.workloadForecast[0].count).toBe(30);
+    expect(
+      useFlashcardStore.getState().globalStats?.workloadForecast[0].count,
+    ).toBe(30);
   });
 });

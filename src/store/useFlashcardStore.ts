@@ -1,16 +1,16 @@
-import { create } from 'zustand';
+import { create } from "zustand";
 import {
   clearPersistedStudySession,
   persistStudySession,
   restorePersistedStudySession,
-} from '../services/studySessionPersistence';
-import { createClassSlice } from './slices/classSlice';
-import { createDeckSlice } from './slices/deckSlice';
-import { createCardSlice } from './slices/cardSlice';
-import { createStudySlice } from './slices/studySlice';
-import { createStatsSlice } from './slices/statsSlice';
-import type { FlashcardState } from './types';
-import { toast } from './uiStore';
+} from "../services/studySessionPersistence";
+import { createClassSlice } from "./slices/classSlice";
+import { createDeckSlice } from "./slices/deckSlice";
+import { createCardSlice } from "./slices/cardSlice";
+import { createStudySlice } from "./slices/studySlice";
+import { createStatsSlice } from "./slices/statsSlice";
+import type { FlashcardState } from "./types";
+import { toast } from "./uiStore";
 
 export const useFlashcardStore = create<FlashcardState>((...args) => ({
   ...createClassSlice(...args),
@@ -38,10 +38,13 @@ useFlashcardStore.setState({
     if (!forceCram) {
       const current = useFlashcardStore.getState().session;
       if (current?.deckId === deckId && !current.isDrill) return;
-      const restored = await restorePersistedStudySession({ deckId, isDrill: false });
+      const restored = await restorePersistedStudySession({
+        deckId,
+        isDrill: false,
+      });
       if (restored) {
         useFlashcardStore.setState({ session: restored });
-        toast('Resumed your previous study session', 'info');
+        toast("Resumed your previous study session", "info");
         return;
       }
     }
@@ -51,10 +54,13 @@ useFlashcardStore.setState({
     if (!forceCram) {
       const current = useFlashcardStore.getState().session;
       if (current?.classId === classId && !current.isDrill) return;
-      const restored = await restorePersistedStudySession({ classId, isDrill: false });
+      const restored = await restorePersistedStudySession({
+        classId,
+        isDrill: false,
+      });
       if (restored) {
         useFlashcardStore.setState({ session: restored });
-        toast('Resumed your previous study session', 'info');
+        toast("Resumed your previous study session", "info");
         return;
       }
     }
@@ -64,11 +70,14 @@ useFlashcardStore.setState({
     if (!forceCram) {
       const current = useFlashcardStore.getState().session;
       if (current?.isGlobal && !current.isDrill) return;
-      const restored = await restorePersistedStudySession({ isGlobal: true, isDrill: false });
+      const restored = await restorePersistedStudySession({
+        isGlobal: true,
+        isDrill: false,
+      });
       if (restored) {
         await useFlashcardStore.getState().loadDecks();
         useFlashcardStore.setState({ session: restored });
-        toast('Resumed your previous mixed review', 'info');
+        toast("Resumed your previous mixed review", "info");
         return;
       }
     }
@@ -82,10 +91,13 @@ useFlashcardStore.setState({
 
     const current = useFlashcardStore.getState().session;
     if (current?.deckId === deckId && current.isDrill) return;
-    const restored = await restorePersistedStudySession({ deckId, isDrill: true });
+    const restored = await restorePersistedStudySession({
+      deckId,
+      isDrill: true,
+    });
     if (restored) {
       useFlashcardStore.setState({ session: restored });
-      toast('Resumed your previous drill', 'info');
+      toast("Resumed your previous drill", "info");
       return;
     }
     await startDeckDrill(deckId, buckets);

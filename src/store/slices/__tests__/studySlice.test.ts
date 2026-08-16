@@ -1,14 +1,14 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { db } from '../../../db';
-import { useFlashcardStore } from '../../useFlashcardStore';
-import type { Card } from '../../../db/schema';
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { db } from "../../../db";
+import { useFlashcardStore } from "../../useFlashcardStore";
+import type { Card } from "../../../db/schema";
 
 const seedCard = (deckId: number, classId: number, front: string): Card => ({
   classId,
   deckId,
   front,
   back: `A:${front}`,
-  cardType: 'standard',
+  cardType: "standard",
   createdAt: new Date(),
   state: 0, // New → always due
   stability: 0,
@@ -19,25 +19,44 @@ const seedCard = (deckId: number, classId: number, front: string): Card => ({
 });
 
 async function startWithCards(n: number) {
-  const classId = (await db.classes.add({ name: 'C', description: '', createdAt: new Date() })) as number;
-  const deckId = (await db.decks.add({ classId, name: 'D', description: '', createdAt: new Date() })) as number;
-  for (let i = 0; i < n; i++) await db.cards.add(seedCard(deckId, classId, `q${i}`));
+  const classId = (await db.classes.add({
+    name: "C",
+    description: "",
+    createdAt: new Date(),
+  })) as number;
+  const deckId = (await db.decks.add({
+    classId,
+    name: "D",
+    description: "",
+    createdAt: new Date(),
+  })) as number;
+  for (let i = 0; i < n; i++)
+    await db.cards.add(seedCard(deckId, classId, `q${i}`));
   await useFlashcardStore.getState().startStudySession(deckId);
   return { classId, deckId };
 }
 
-describe('studySlice rateCard / undoLastRate', () => {
+describe("studySlice rateCard / undoLastRate", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
   beforeEach(async () => {
     window.localStorage.clear();
-    await Promise.all([db.cards.clear(), db.reviews.clear(), db.decks.clear(), db.classes.clear()]);
-    useFlashcardStore.setState({ session: null, activeDeckId: null, activeClassId: null });
+    await Promise.all([
+      db.cards.clear(),
+      db.reviews.clear(),
+      db.decks.clear(),
+      db.classes.clear(),
+    ]);
+    useFlashcardStore.setState({
+      session: null,
+      activeDeckId: null,
+      activeClassId: null,
+    });
   });
 
-  it('rate then undo restores queue index, completedCount, and the DB review log', async () => {
+  it("rate then undo restores queue index, completedCount, and the DB review log", async () => {
     await startWithCards(3);
     await useFlashcardStore.getState().rateCard(3);
 
@@ -53,7 +72,7 @@ describe('studySlice rateCard / undoLastRate', () => {
     expect(await db.reviews.count()).toBe(0);
   });
 
-  it('drops a concurrent second rateCard instead of desyncing the queue/history from the DB', async () => {
+  it("drops a concurrent second rateCard instead of desyncing the queue/history from the DB", async () => {
     await startWithCards(3);
     const store = useFlashcardStore.getState();
 
@@ -68,7 +87,7 @@ describe('studySlice rateCard / undoLastRate', () => {
     expect(await db.reviews.count()).toBe(1); // exactly one review persisted, not two
   });
 
-  it('does not resurrect a session that was ended mid-flight', async () => {
+  it("does not resurrect a session that was ended mid-flight", async () => {
     await startWithCards(3);
     const store = useFlashcardStore.getState();
 
@@ -79,7 +98,7 @@ describe('studySlice rateCard / undoLastRate', () => {
     expect(useFlashcardStore.getState().session).toBeNull();
   });
 
-  it('undo after a re-inserted (rating 1) card restores the exact prior queue — no overwrite', async () => {
+  it("undo after a re-inserted (rating 1) card restores the exact prior queue — no overwrite", async () => {
     await startWithCards(5);
     const store = useFlashcardStore.getState();
 
@@ -99,7 +118,9 @@ describe('studySlice rateCard / undoLastRate', () => {
     const afterUndo = useFlashcardStore.getState().session!;
 
     // The queue must be restored to the pre-rating snapshot verbatim.
-    expect(afterUndo.queue.map((c) => c.id)).toEqual(lastEntry.queueSnapshot.map((c) => c.id));
+    expect(afterUndo.queue.map((c) => c.id)).toEqual(
+      lastEntry.queueSnapshot.map((c) => c.id),
+    );
     expect(afterUndo.currentIndex).toBe(lastEntry.index);
     expect(afterUndo.completedCount).toBe(lastEntry.completedCount);
     expect(afterUndo.completedCount).toBe(2);
@@ -110,10 +131,12 @@ describe('studySlice rateCard / undoLastRate', () => {
     // (Duplicates are expected here: a re-inserted card legitimately appears twice.)
   });
 
-  it('double-undo after two re-inserted ratings returns to the exact starting queue', async () => {
+  it("double-undo after two re-inserted ratings returns to the exact starting queue", async () => {
     await startWithCards(5);
     const store = useFlashcardStore.getState();
-    const startIds = useFlashcardStore.getState().session!.queue.map((c) => c.id);
+    const startIds = useFlashcardStore
+      .getState()
+      .session!.queue.map((c) => c.id);
 
     await store.rateCard(1); // reinserted
     await store.rateCard(1); // reinserted
@@ -128,7 +151,7 @@ describe('studySlice rateCard / undoLastRate', () => {
     expect(afterUndo.queue.map((c) => c.id)).toEqual(startIds);
   });
 
-  it('a card is never re-inserted more than the cap (queue stays bounded)', async () => {
+  it("a card is never re-inserted more than the cap (queue stays bounded)", async () => {
     // Few cards so the same card id keeps coming back around the re-inserted queue.
     await startWithCards(3);
     const store = useFlashcardStore.getState();
@@ -159,9 +182,9 @@ describe('studySlice rateCard / undoLastRate', () => {
     expect(await db.reviews.count()).toBe(ratings);
   });
 
-  it('drills selected previous levels once without reinserting low ratings', async () => {
+  it("drills selected previous levels once without reinserting low ratings", async () => {
     const { deckId } = await startWithCards(5);
-    const cards = await db.cards.where('deckId').equals(deckId).sortBy('id');
+    const cards = await db.cards.where("deckId").equals(deckId).sortBy("id");
     await Promise.all([
       db.cards.update(cards[1].id!, { lastRating: 1 }),
       db.cards.update(cards[2].id!, { lastRating: 2 }),
@@ -170,7 +193,7 @@ describe('studySlice rateCard / undoLastRate', () => {
     ]);
 
     useFlashcardStore.getState().endStudySession();
-    await useFlashcardStore.getState().startDrillSession(deckId, ['new', 1, 2]);
+    await useFlashcardStore.getState().startDrillSession(deckId, ["new", 1, 2]);
 
     const startingSession = useFlashcardStore.getState().session!;
     expect(startingSession.isDrill).toBe(true);
@@ -192,65 +215,71 @@ describe('studySlice rateCard / undoLastRate', () => {
     expect(await db.reviews.count()).toBe(3);
   });
 
+  it("advances after a durable review even when the optional active-deck cache refresh fails", async () => {
+    const { deckId } = await startWithCards(2);
+    const originalLoadCards = useFlashcardStore.getState().loadCards;
+    useFlashcardStore.setState({
+      activeDeckId: deckId,
+      loadCards: vi.fn(async () => {
+        throw new Error("cache refresh failed");
+      }) as typeof originalLoadCards,
+    });
 
-it('advances after a durable review even when the optional active-deck cache refresh fails', async () => {
-  const { deckId } = await startWithCards(2);
-  const originalLoadCards = useFlashcardStore.getState().loadCards;
-  useFlashcardStore.setState({
-    activeDeckId: deckId,
-    loadCards: vi.fn(async () => {
-      throw new Error('cache refresh failed');
-    }) as typeof originalLoadCards,
+    try {
+      await expect(
+        useFlashcardStore.getState().rateCard(3),
+      ).resolves.toBeUndefined();
+      const session = useFlashcardStore.getState().session!;
+      expect(session.currentIndex).toBe(1);
+      expect(session.completedCount).toBe(1);
+      expect(session.history).toHaveLength(1);
+      expect(await db.reviews.count()).toBe(1);
+    } finally {
+      useFlashcardStore.setState({
+        loadCards: originalLoadCards,
+        activeDeckId: null,
+      });
+    }
   });
 
-  try {
-    await expect(useFlashcardStore.getState().rateCard(3)).resolves.toBeUndefined();
-    const session = useFlashcardStore.getState().session!;
-    expect(session.currentIndex).toBe(1);
-    expect(session.completedCount).toBe(1);
-    expect(session.history).toHaveLength(1);
+  it("keeps the in-memory session unchanged when the database rollback for Undo fails", async () => {
+    await startWithCards(2);
+    await useFlashcardStore.getState().rateCard(3);
+    const beforeUndo = useFlashcardStore.getState().session!;
+    vi.spyOn(db.cards, "put").mockRejectedValueOnce(
+      new Error("storage unavailable"),
+    );
+
+    await useFlashcardStore.getState().undoLastRate();
+
+    const afterUndo = useFlashcardStore.getState().session!;
+    expect(afterUndo).toBe(beforeUndo);
+    expect(afterUndo.currentIndex).toBe(1);
+    expect(afterUndo.completedCount).toBe(1);
+    expect(afterUndo.history).toHaveLength(1);
     expect(await db.reviews.count()).toBe(1);
-  } finally {
-    useFlashcardStore.setState({ loadCards: originalLoadCards, activeDeckId: null });
-  }
-});
+  });
 
-it('keeps the in-memory session unchanged when the database rollback for Undo fails', async () => {
-  await startWithCards(2);
-  await useFlashcardStore.getState().rateCard(3);
-  const beforeUndo = useFlashcardStore.getState().session!;
-  vi.spyOn(db.cards, 'put').mockRejectedValueOnce(new Error('storage unavailable'));
+  it("starts a fresh filtered drill when the learner changes the level selection", async () => {
+    const { deckId } = await startWithCards(3);
+    const cards = await db.cards.where("deckId").equals(deckId).sortBy("id");
+    await Promise.all([
+      db.cards.update(cards[0].id!, { lastRating: 1 }),
+      db.cards.update(cards[1].id!, { lastRating: 4 }),
+      db.cards.update(cards[2].id!, { lastRating: 4 }),
+    ]);
+    useFlashcardStore.getState().endStudySession();
 
-  await useFlashcardStore.getState().undoLastRate();
+    await useFlashcardStore.getState().startDrillSession(deckId, [1]);
+    expect(
+      useFlashcardStore.getState().session?.queue.map((card) => card.id),
+    ).toEqual([cards[0].id]);
 
-  const afterUndo = useFlashcardStore.getState().session!;
-  expect(afterUndo).toBe(beforeUndo);
-  expect(afterUndo.currentIndex).toBe(1);
-  expect(afterUndo.completedCount).toBe(1);
-  expect(afterUndo.history).toHaveLength(1);
-  expect(await db.reviews.count()).toBe(1);
-});
-
-it('starts a fresh filtered drill when the learner changes the level selection', async () => {
-  const { deckId } = await startWithCards(3);
-  const cards = await db.cards.where('deckId').equals(deckId).sortBy('id');
-  await Promise.all([
-    db.cards.update(cards[0].id!, { lastRating: 1 }),
-    db.cards.update(cards[1].id!, { lastRating: 4 }),
-    db.cards.update(cards[2].id!, { lastRating: 4 }),
-  ]);
-  useFlashcardStore.getState().endStudySession();
-
-  await useFlashcardStore.getState().startDrillSession(deckId, [1]);
-  expect(useFlashcardStore.getState().session?.queue.map((card) => card.id)).toEqual([
-    cards[0].id,
-  ]);
-
-  await useFlashcardStore.getState().startDrillSession(deckId, [4]);
-  const replacement = useFlashcardStore.getState().session!;
-  expect(replacement.drillBuckets).toEqual([4]);
-  expect(new Set(replacement.queue.map((card) => card.id))).toEqual(
-    new Set([cards[1].id, cards[2].id]),
-  );
-});
+    await useFlashcardStore.getState().startDrillSession(deckId, [4]);
+    const replacement = useFlashcardStore.getState().session!;
+    expect(replacement.drillBuckets).toEqual([4]);
+    expect(new Set(replacement.queue.map((card) => card.id))).toEqual(
+      new Set([cards[1].id, cards[2].id]),
+    );
+  });
 });
