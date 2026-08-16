@@ -139,7 +139,12 @@ export const StudySessionPage: React.FC = () => {
   };
 
   const handleReviewKeyDown = useEffectEvent(async (e: KeyboardEvent) => {
-    if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) return;
+    const target = e.target instanceof HTMLElement ? e.target : null;
+    if (target?.matches('input, textarea, select, [contenteditable="true"]')) return;
+    if (
+      (e.code === 'Space' || e.code === 'Enter') &&
+      target?.closest('button, a, [role="button"]')
+    ) return;
 
     const session = useFlashcardStore.getState().session;
     if (!session || session.queue.length === 0) {

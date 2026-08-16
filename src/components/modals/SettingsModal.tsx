@@ -10,28 +10,18 @@ import {
   loadSchedulerParams,
   normalizeSchedulerParams,
 } from '../../services/schedulerParams';
+import {
+  SPEECH_SPEED_KEY,
+  SPEECH_SPEED_MAX,
+  SPEECH_SPEED_MIN,
+  loadSpeechRate,
+  normalizeSpeechRate,
+} from '../../services/speech';
 import { confirmDialog, toast } from '../../store/uiStore';
 
 interface SettingsModalProps {
   onClose: () => void;
 }
-
-const SPEECH_SPEED_KEY = 'denki-speech-speed';
-const SPEECH_SPEED_MIN = 0.5;
-const SPEECH_SPEED_MAX = 2;
-
-const clamp = (value: number, min: number, max: number): number =>
-  Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));
-
-const readSpeechSpeed = (): number => {
-  try {
-    const raw = localStorage.getItem(SPEECH_SPEED_KEY);
-    const parsed = raw === null ? 1 : Number.parseFloat(raw);
-    return clamp(parsed, SPEECH_SPEED_MIN, SPEECH_SPEED_MAX);
-  } catch {
-    return 1;
-  }
-};
 
 const sectionStyle: React.CSSProperties = {
   borderTop: '1px solid rgba(211, 220, 207, 0.12)',
@@ -69,7 +59,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
   const [retention, setRetention] = useState(initialScheduler.requestRetention);
   const [easyBonus, setEasyBonus] = useState(initialScheduler.easyBonus);
   const [hardMultiplier, setHardMultiplier] = useState(initialScheduler.hardIntervalMultiplier);
-  const [speechSpeed, setSpeechSpeed] = useState(readSpeechSpeed);
+  const [speechSpeed, setSpeechSpeed] = useState(loadSpeechRate);
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
 
@@ -131,7 +121,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
       easyBonus,
       hardIntervalMultiplier: hardMultiplier,
     });
-    const normalizedSpeech = clamp(speechSpeed, SPEECH_SPEED_MIN, SPEECH_SPEED_MAX);
+    const normalizedSpeech = normalizeSpeechRate(speechSpeed);
 
     persistPreferences(
       normalizedScheduler.requestRetention,

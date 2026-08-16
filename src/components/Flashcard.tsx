@@ -5,6 +5,7 @@ import type { Card } from '../db/schema';
 import Prism from 'prismjs';
 import 'prismjs/themes/prism-tomorrow.css';
 import { renderContent } from '../services/markdown';
+import { getCardSpeechText, loadSpeechRate } from '../services/speech';
 
 interface FlashcardProps {
   card: Card;
@@ -18,9 +19,10 @@ export const Flashcard: React.FC<FlashcardProps> = ({ card, isFlipped, onFlip, a
   const containerRef = useRef<HTMLDivElement>(null);
   const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
 
-  // Cache the preferred English voice without putting it in React state. Voice
-// discovery is asynchronous in some browsers; a ref avoids speaking the
-// same side twice when the voice list becomes available.
+
+// Cache the preferred English voice without putting it in React state. Voice
+// discovery is asynchronous in some browsers; a ref avoids replaying a side
+// when the voice list becomes available.
 useEffect(() => {
   if (!('speechSynthesis' in window)) return;
 
@@ -37,32 +39,33 @@ useEffect(() => {
   return () => window.speechSynthesis.removeEventListener('voiceschanged', loadVoice);
 }, []);
 
-  // Reset scratchpad state during render when card changes to avoid cascading renders
-  const [prevCardId, setPrevCardId] = useState(card.id);
-  if (card.id !== prevCardId) {
-    setPrevCardId(card.id);
-    setShowScratchpad(false);
-  }
+// Reset scratchpad state during render when card changes to avoid cascading renders
+const [prevCardId, setPrevCardId] = useState(card.id);
+if (card.id !== prevCardId) {
+  setPrevCardId(card.id);
+  setShowScratchpad(false);
+}
 
-  // Trigger code highlighting on flip or card change. Scoped to this card's DOM
-  // instead of Prism.highlightAll(), which re-scans the entire document (the
-  // study session can hold several markdown/code subtrees).
-  useEffect(() => {
-    if (!containerRef.current) return;
-    containerRef.current.querySelectorAll('pre code[class*="language-"]').forEach((el) => {
-      if (el instanceof HTMLElement) Prism.highlightElement(el);
-    });
-  }, [card.id, isFlipped]);
+// Trigger code highlighting on flip or card change. Scoped to this card's DOM
+// instead of Prism.highlightAll(), which re-scans the entire document.
+useEffect(() => {
+  if (!containerRef.current) return;
+  containerRef.current.querySelectorAll('pre code[class*="language-"]').forEach((el) => {
+    if (el instanceof HTMLElement) Prism.highlightElement(el);
+  });
+}, [card.id, isFlipped]);
 
-  // Stable speech callback: voice discovery must not replay the current side.
+const questionSpeechText = React.useMemo(
+  () => getCardSpeechText(card, false),
+  [card],
+);
+const answerSpeechText = React.useMemo(
+  () => getCardSpeechText(card, true),
+  [card],
+);
+
 const speakText = React.useCallback((textToRead: string) => {
-  const cleanText = textToRead
-    .replace(/\{\{c\d+::(.*?)\}\}/g, '$1')
-    .replace(/```[\s\S]*?```/g, '')
-    .replace(/[`*#_-]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
+  const cleanText = textToRead.trim();
   if (!cleanText || !('speechSynthesis' in window)) return;
 
   window.speechSynthesis.cancel();
@@ -72,8 +75,7 @@ const speakText = React.useCallback((textToRead: string) => {
     .getVoices()
     .find((voice) => voice.lang.startsWith('en'));
   utterance.voice = selectedVoiceRef.current ?? fallbackVoice ?? null;
-  const savedSpeed = Number.parseFloat(localStorage.getItem('denki-speech-speed') ?? '1.0');
-  utterance.rate = Number.isFinite(savedSpeed) ? savedSpeed : 1;
+  utterance.rate = loadSpeechRate();
   window.speechSynthesis.speak(utterance);
 }, []);
 
@@ -93,7 +95,7 @@ useEffect(() => {
     return;
   }
 
-  const textToSpeak = isFlipped ? card.back : card.front;
+  const textToSpeak = isFlipped ? answerSpeechText : questionSpeechText;
   autoSpeechTimerRef.current = window.setTimeout(() => {
     autoSpeechTimerRef.current = null;
     speakText(textToSpeak);
@@ -105,7 +107,7 @@ useEffect(() => {
       autoSpeechTimerRef.current = null;
     }
   };
-}, [card.id, card.front, card.back, isFlipped, autoSpeak, speakText]);
+}, [card.id, isFlipped, autoSpeak, answerSpeechText, questionSpeechText, speakText]);
 
   // Cleanup speech on unmount
   useEffect(() => {
@@ -118,7 +120,7 @@ useEffect(() => {
 
   const speak = (e: React.MouseEvent) => {
     e.stopPropagation(); // Avoid flipping card on click
-    const textToSpeak = isFlipped ? card.back : card.front;
+    const textToSpeak = isFlipped ? answerSpeechText : questionSpeechText;
     speakText(textToSpeak);
   };
 
@@ -210,15 +212,15 @@ useEffect(() => {
                     padding: 0,
                   }}
                   className="btn-premium-secondary"
-                  aria-label="Pronounce text"
-                  title="Pronounce English Text"
+                  aria-label="Read question aloud"
+                  title="Read question aloud"
                 >
                   <Volume2 size={14} />
                 </button>
               </div>
             </div>
 
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', overflowY: 'hidden', minHeight: 0, zIndex: 5, width: '100%' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', overflowY: 'auto', minHeight: 0, zIndex: 5, width: '100%', overscrollBehavior: 'contain', paddingRight: '6px' }}>
               <div style={{ margin: 'auto 0', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '8px 0' }}>
                 <div
                   className="markdown-content"
@@ -253,15 +255,15 @@ useEffect(() => {
                   padding: 0,
                 }}
                 className="btn-premium-secondary"
-                aria-label="Pronounce text"
-                title="Pronounce English Text"
+                aria-label="Read answer aloud"
+                title="Read answer aloud"
               >
                 <Volume2 size={14} />
               </button>
             </div>
 
             {/* Split layout if cloze deletion, showing card front as well */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', overflowY: 'hidden', minHeight: 0, zIndex: 5, width: '100%' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', overflowY: 'auto', minHeight: 0, zIndex: 5, width: '100%', overscrollBehavior: 'contain', paddingRight: '6px' }}>
               <div style={{ margin: 'auto 0', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', padding: '8px 0' }}>
                 {card.cardType === 'cloze' && (
                   <div style={{ opacity: 0.45, borderBottom: '1px dashed rgba(255,255,255,0.08)', paddingBottom: '12px', width: '100%', textAlign: 'center' }}>

@@ -75,6 +75,11 @@ useFlashcardStore.setState({
     await startGlobalSession(forceCram);
   },
   startDrillSession: async (deckId, buckets) => {
+    if (buckets !== undefined) {
+      await startDeckDrill(deckId, buckets);
+      return;
+    }
+
     const current = useFlashcardStore.getState().session;
     if (current?.deckId === deckId && current.isDrill) return;
     const restored = await restorePersistedStudySession({ deckId, isDrill: true });

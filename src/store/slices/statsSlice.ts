@@ -1,10 +1,5 @@
 import type { StateCreator } from 'zustand';
 import { db } from '../../db';
-import {
-  countNewIntroducedToday,
-  loadNewCardsPerDay,
-  newCardAllowance,
-} from '../../services/studyLimits';
 import type {
   ClassStats,
   DeckStats,
@@ -38,33 +33,17 @@ function dateKeyOrdinal(key: string): number {
   return Math.floor(Date.UTC(year, month - 1, day) / DAY_MS);
 }
 
-async function cappedDeckDueCount(
-  deckId: number,
-  now: Date,
-  introduced: Map<number, number>,
-  limit: number,
-): Promise<number> {
-  const [rawDue, newCount] = await Promise.all([
-    db.cards
-      .where('[deckId+due]')
-      .between([deckId, new Date(0)], [deckId, now])
-      .count(),
-    limit > 0
-      ? db.cards.where('[deckId+state]').equals([deckId, 0]).count()
-      : Promise.resolve(0),
-  ]);
-  if (limit <= 0) return rawDue;
 
-  const dueReviews = Math.max(0, rawDue - newCount);
-  const allowance = newCardAllowance(deckId, introduced, limit);
-  return dueReviews + Math.min(newCount, allowance);
+async function deckDueCount(deckId: number, now: Date): Promise<number> {
+  return db.cards
+    .where('[deckId+due]')
+    .between([deckId, new Date(0)], [deckId, now])
+    .count();
 }
 
 async function computeClassStats(
   classId: number,
   now: Date,
-  introduced: Map<number, number>,
-  limit: number,
 ): Promise<ClassStats> {
   const [total, masteredCount, classDecks] = await Promise.all([
     db.cards.where('classId').equals(classId).count(),
@@ -75,7 +54,7 @@ async function computeClassStats(
   const dueCounts = await Promise.all(
     classDecks
       .filter((deck) => deck.id !== undefined)
-      .map((deck) => cappedDeckDueCount(deck.id!, now, introduced, limit)),
+      .map((deck) => deckDueCount(deck.id!, now)),
   );
 
   return {
@@ -89,12 +68,10 @@ async function computeClassStats(
 async function computeDeckStats(
   deckId: number,
   now: Date,
-  introduced: Map<number, number>,
-  limit: number,
 ): Promise<DeckStats> {
   const [total, dueCount, masteredCount] = await Promise.all([
     db.cards.where('deckId').equals(deckId).count(),
-    cappedDeckDueCount(deckId, now, introduced, limit),
+    deckDueCount(deckId, now),
     db.cards.where('[deckId+state]').equals([deckId, 2]).count(),
   ]);
 
@@ -117,65 +94,53 @@ export const createStatsSlice: StateCreator<
   currentStreak: 0,
   maxStreak: 0,
 
-  loadClassStats: async (classId) => {
-    const now = new Date();
-    const limit = loadNewCardsPerDay();
-    const introduced = limit > 0
-      ? await countNewIntroducedToday()
-      : new Map<number, number>();
-    const stats = await computeClassStats(classId, now, introduced, limit);
 
-    set((state) => ({
-      classStats: { ...state.classStats, [classId]: stats },
-    }));
-  },
+loadClassStats: async (classId) => {
+  const stats = await computeClassStats(classId, new Date());
+  set((state) => ({
+    classStats: { ...state.classStats, [classId]: stats },
+  }));
+},
 
-  loadAllClassStats: async () => {
-    const classIds = get().classes
-      .map((studyClass) => studyClass.id)
-      .filter((id): id is number => id !== undefined);
-    if (classIds.length === 0) {
-      set({ classStats: {} });
-      return;
-    }
 
-    const now = new Date();
-    const limit = loadNewCardsPerDay();
-    const introduced = limit > 0
-      ? await countNewIntroducedToday()
-      : new Map<number, number>();
-    const entries = await Promise.all(
-      classIds.map(async (classId) => [
-        classId,
-        await computeClassStats(classId, now, introduced, limit),
+loadAllClassStats: async () => {
+  const classIds = get().classes
+    .map((studyClass) => studyClass.id)
+    .filter((id): id is number => id !== undefined);
+  if (classIds.length === 0) {
+    set({ classStats: {} });
+    return;
+  }
+
+  const now = new Date();
+  const entries = await Promise.all(
+    classIds.map(async (classId) => [
+      classId,
+      await computeClassStats(classId, now),
+    ] as const),
+  );
+  set({ classStats: Object.fromEntries(entries) });
+},
+
+
+loadDeckStats: async (classId) => {
+  const classDecks = await db.decks.where('classId').equals(classId).toArray();
+  const now = new Date();
+  const entries = await Promise.all(
+    classDecks
+      .filter((deck) => deck.id !== undefined)
+      .map(async (deck) => [
+        deck.id!,
+        await computeDeckStats(deck.id!, now),
       ] as const),
-    );
+  );
 
-    set({ classStats: Object.fromEntries(entries) });
-  },
+  set((state) => ({
+    deckStats: { ...state.deckStats, ...Object.fromEntries(entries) },
+  }));
+},
 
-  loadDeckStats: async (classId) => {
-    const classDecks = await db.decks.where('classId').equals(classId).toArray();
-    const now = new Date();
-    const limit = loadNewCardsPerDay();
-    const introduced = limit > 0
-      ? await countNewIntroducedToday()
-      : new Map<number, number>();
-    const entries = await Promise.all(
-      classDecks
-        .filter((deck) => deck.id !== undefined)
-        .map(async (deck) => [
-          deck.id!,
-          await computeDeckStats(deck.id!, now, introduced, limit),
-        ] as const),
-    );
-
-    set((state) => ({
-      deckStats: { ...state.deckStats, ...Object.fromEntries(entries) },
-    }));
-  },
-
-  loadStats: async (classId) => {
+loadStats: async (classId) => {
     const requestId = ++latestStatsRequest;
     const now = new Date();
     const oneYearAgo = startOfLocalDay(now);
@@ -252,36 +217,6 @@ export const createStatsSlice: StateCreator<
       heatmapData.push(week);
     }
 
-    const relevantDecks = classId
-      ? await db.decks.where('classId').equals(classId).toArray()
-      : await db.decks.toArray();
-    const relevantDeckIds = relevantDecks
-      .map((deck) => deck.id)
-      .filter((id): id is number => id !== undefined);
-
-    const limit = loadNewCardsPerDay();
-    const newCountByDeck = new Map<number, number>();
-    const allowanceByDeck = new Map<number, number>();
-    if (limit > 0) {
-      const [introduced, newCards] = await Promise.all([
-        countNewIntroducedToday(),
-        classId
-          ? db.cards.where('[classId+state]').equals([classId, 0]).toArray()
-          : db.cards.where('state').equals(0).toArray(),
-      ]);
-      for (const deckId of relevantDeckIds) {
-        allowanceByDeck.set(
-          deckId,
-          Math.max(0, limit - (introduced.get(deckId) ?? 0)),
-        );
-      }
-      for (const card of newCards) {
-        if (relevantDeckIds.includes(card.deckId)) {
-          newCountByDeck.set(card.deckId, (newCountByDeck.get(card.deckId) ?? 0) + 1);
-        }
-      }
-    }
-
     const today = startOfLocalDay(now);
     const ranges = Array.from({ length: 7 }, (_, index) => {
       const start = addLocalDays(today, index);
@@ -303,16 +238,6 @@ export const createStatsSlice: StateCreator<
           : db.cards.where('due').between(lowerBound, end).count()),
     );
 
-    if (limit > 0) {
-      let dueReviews = rawForecastCounts[0];
-      let cappedNew = 0;
-      for (const deckId of relevantDeckIds) {
-        const deckNew = newCountByDeck.get(deckId) ?? 0;
-        dueReviews -= deckNew;
-        cappedNew += Math.min(deckNew, allowanceByDeck.get(deckId) ?? 0);
-      }
-      rawForecastCounts[0] = Math.max(0, dueReviews) + cappedNew;
-    }
 
     const workloadForecast = ranges.map(({ start }, index) => ({
       dayName: index === 0

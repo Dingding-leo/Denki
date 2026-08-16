@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { db } from '../../db';
 import type { Card } from '../../db/schema';
 import { useFlashcardStore } from '../../store/useFlashcardStore';
-import { loadNewCardsPerDay, NEW_CARDS_PER_DAY_KEY } from '../studyLimits';
 
 function seedCard(deckId: number, classId: number, front: string): Card {
   return {
@@ -28,13 +27,8 @@ describe('unlimited new-card study', () => {
     await Promise.all([db.cards.clear(), db.reviews.clear(), db.decks.clear(), db.classes.clear()]);
   });
 
-  it('ignores a legacy daily-limit preference', () => {
-    window.localStorage.setItem(NEW_CARDS_PER_DAY_KEY, '1');
-    expect(loadNewCardsPerDay()).toBe(0);
-  });
-
-  it('queues every new card and reports every one as due', async () => {
-    window.localStorage.setItem(NEW_CARDS_PER_DAY_KEY, '1');
+  it('never reads a legacy daily-limit preference', async () => {
+    window.localStorage.setItem('denki-new-cards-per-day', '1');
     const classId = await db.classes.add({ name: 'C', description: '', createdAt: new Date() });
     const deckId = await db.decks.add({ classId, name: 'D', description: '', createdAt: new Date() });
     for (let index = 0; index < 30; index += 1) {
@@ -46,5 +40,8 @@ describe('unlimited new-card study', () => {
 
     await useFlashcardStore.getState().loadDeckStats(classId);
     expect(useFlashcardStore.getState().deckStats[deckId].dueCount).toBe(30);
+
+    await useFlashcardStore.getState().loadStats(null);
+    expect(useFlashcardStore.getState().globalStats?.workloadForecast[0].count).toBe(30);
   });
 });

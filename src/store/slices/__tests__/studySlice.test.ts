@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '../../../db';
 import { useFlashcardStore } from '../../useFlashcardStore';
 import type { Card } from '../../../db/schema';
@@ -27,6 +27,10 @@ async function startWithCards(n: number) {
 }
 
 describe('studySlice rateCard / undoLastRate', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   beforeEach(async () => {
     window.localStorage.clear();
     await Promise.all([db.cards.clear(), db.reviews.clear(), db.decks.clear(), db.classes.clear()]);
@@ -188,4 +192,65 @@ describe('studySlice rateCard / undoLastRate', () => {
     expect(await db.reviews.count()).toBe(3);
   });
 
+
+it('advances after a durable review even when the optional active-deck cache refresh fails', async () => {
+  const { deckId } = await startWithCards(2);
+  const originalLoadCards = useFlashcardStore.getState().loadCards;
+  useFlashcardStore.setState({
+    activeDeckId: deckId,
+    loadCards: vi.fn(async () => {
+      throw new Error('cache refresh failed');
+    }) as typeof originalLoadCards,
+  });
+
+  try {
+    await expect(useFlashcardStore.getState().rateCard(3)).resolves.toBeUndefined();
+    const session = useFlashcardStore.getState().session!;
+    expect(session.currentIndex).toBe(1);
+    expect(session.completedCount).toBe(1);
+    expect(session.history).toHaveLength(1);
+    expect(await db.reviews.count()).toBe(1);
+  } finally {
+    useFlashcardStore.setState({ loadCards: originalLoadCards, activeDeckId: null });
+  }
+});
+
+it('keeps the in-memory session unchanged when the database rollback for Undo fails', async () => {
+  await startWithCards(2);
+  await useFlashcardStore.getState().rateCard(3);
+  const beforeUndo = useFlashcardStore.getState().session!;
+  vi.spyOn(db.cards, 'put').mockRejectedValueOnce(new Error('storage unavailable'));
+
+  await useFlashcardStore.getState().undoLastRate();
+
+  const afterUndo = useFlashcardStore.getState().session!;
+  expect(afterUndo).toBe(beforeUndo);
+  expect(afterUndo.currentIndex).toBe(1);
+  expect(afterUndo.completedCount).toBe(1);
+  expect(afterUndo.history).toHaveLength(1);
+  expect(await db.reviews.count()).toBe(1);
+});
+
+it('starts a fresh filtered drill when the learner changes the level selection', async () => {
+  const { deckId } = await startWithCards(3);
+  const cards = await db.cards.where('deckId').equals(deckId).sortBy('id');
+  await Promise.all([
+    db.cards.update(cards[0].id!, { lastRating: 1 }),
+    db.cards.update(cards[1].id!, { lastRating: 4 }),
+    db.cards.update(cards[2].id!, { lastRating: 4 }),
+  ]);
+  useFlashcardStore.getState().endStudySession();
+
+  await useFlashcardStore.getState().startDrillSession(deckId, [1]);
+  expect(useFlashcardStore.getState().session?.queue.map((card) => card.id)).toEqual([
+    cards[0].id,
+  ]);
+
+  await useFlashcardStore.getState().startDrillSession(deckId, [4]);
+  const replacement = useFlashcardStore.getState().session!;
+  expect(replacement.drillBuckets).toEqual([4]);
+  expect(new Set(replacement.queue.map((card) => card.id))).toEqual(
+    new Set([cards[1].id, cards[2].id]),
+  );
+});
 });
