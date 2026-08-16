@@ -89,8 +89,12 @@ export const createClassSlice: StateCreator<
   },
 
   deleteClass: async (classId) => {
-    const exists = await db.classes.get(classId);
-    if (!exists) return;
+    const studyClass = await db.classes.get(classId);
+    if (!studyClass) return;
+    const classDecks = await db.decks.where('classId').equals(classId).toArray();
+    const deletedDeckIds = new Set(
+      classDecks.map((deck) => deck.id).filter((id): id is number => id !== undefined),
+    );
 
     await db.transaction('rw', [db.classes, db.decks, db.cards, db.reviews], async () => {
       await db.classes.delete(classId);
@@ -100,15 +104,27 @@ export const createClassSlice: StateCreator<
     });
 
     const deletingActiveClass = get().activeClassId === classId;
-    set({
-      activeClassId: deletingActiveClass ? null : get().activeClassId,
-      activeDeckId: deletingActiveClass ? null : get().activeDeckId,
-    });
+    const deletingActiveDeck = get().activeDeckId !== null && deletedDeckIds.has(get().activeDeckId!);
+    const sessionUsesClass = get().session?.queue.some((card) => card.classId === classId) ?? false;
+    const remainingActiveClassId = deletingActiveClass ? null : get().activeClassId;
+    const remainingActiveDeckId = deletingActiveDeck ? null : get().activeDeckId;
+
+    set((state) => ({
+      activeClassId: remainingActiveClassId,
+      activeDeckId: remainingActiveDeckId,
+      cards: deletingActiveDeck ? [] : state.cards,
+      session: sessionUsesClass ? null : state.session,
+      deckStats: Object.fromEntries(
+        Object.entries(state.deckStats).filter(([deckId]) => !deletedDeckIds.has(Number(deckId))),
+      ),
+    }));
 
     await Promise.all([
       get().loadClasses(),
-      get().loadDecks(deletingActiveClass ? undefined : get().activeClassId ?? undefined),
-      get().loadCards(deletingActiveClass ? undefined : get().activeDeckId ?? undefined),
+      get().loadDecks(remainingActiveClassId ?? undefined),
+      remainingActiveDeckId
+        ? get().loadCards(remainingActiveDeckId)
+        : Promise.resolve(),
     ]);
     triggerAutoSave();
   },
