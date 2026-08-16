@@ -1,100 +1,90 @@
-/**
- * High-performance, zero-dependency Markdown & Cloze Deletion Parser
- *
- * Processing order matters — code blocks are extracted first (before HTML
- * escaping) so that HTML-like syntax inside them is preserved literally.
- */
-export const renderContent = (text: string, isCloze: boolean, showAnswer: boolean): string => {
-  // Defense-in-depth: card content can originate from imports (AI/CSV/Anki) and
-  // may not actually be a string at runtime; coerce so `.replace` never throws.
-  let html = String(text ?? '');
+import DOMPurify from 'dompurify';
+import { marked } from 'marked';
 
-  // 1. Extract fenced code blocks BEFORE escaping so their content isn't
-  //    double-escaped (e.g., `<div>` should show as `<div>` inside a code block,
-  //    not `&lt;div&gt;`).
-  const codeBlocks: string[] = [];
-  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
-    const language = lang || 'javascript';
-    // Escape HTML *only* inside the code block content
-    const escapedCode = code
-      .trimEnd()
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
-    const placeholder = `%%CODE_BLOCK_${codeBlocks.length}%%`;
-    codeBlocks.push(
-      `<pre class="language-${language}"><code class="language-${language}">${escapedCode}</code></pre>`
-    );
-    return placeholder;
-  });
+interface ClozeToken {
+  token: string;
+  html: string;
+}
 
-  // 2. Extract inline code before escaping
-  const inlineCode: string[] = [];
-  html = html.replace(/`([^`]+)`/g, (_, code) => {
-    const escaped = code
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
-    const placeholder = `%%INLINE_CODE_${inlineCode.length}%%`;
-    inlineCode.push(`<code class="inline-code">${escaped}</code>`);
-    return placeholder;
-  });
-
-  // 3. Escape remaining HTML to prevent XSS
-  html = html
+const escapeHtml = (value: string): string =>
+  value
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 
-  // 4. Parse Cloze deletions: {{c1::answer}}
+/**
+ * Convert Denki card content into sanitized HTML.
+ *
+ * One renderer is shared by Review, Learn, and Match modes so Markdown, cloze
+ * deletion, imported Anki media, and security rules cannot drift apart. Raw
+ * HTML is accepted only so legitimate imported <img>/<audio> content can work;
+ * DOMPurify is always the final step before anything reaches the DOM.
+ */
+export const renderContent = (
+  text: string,
+  isCloze: boolean,
+  showAnswer: boolean,
+): string => {
+  let source = String(text ?? '').replace(/^\uFEFF/, '');
+  const clozeTokens: ClozeToken[] = [];
+
   if (isCloze) {
-    const clozeRegex = /\{\{c\d+::(.*?)\}\}/g;
-    if (showAnswer) {
-      html = html.replace(clozeRegex, '<span class="cloze-blank revealed">$1</span>');
-    } else {
-      html = html.replace(clozeRegex, '<span class="cloze-blank">[ ... ]</span>');
-    }
+    source = source.replace(/\{\{c\d+::([\s\S]*?)\}\}/g, (_match, innerValue: string) => {
+      const separatorIndex = innerValue.indexOf('::');
+      const answer = separatorIndex >= 0
+        ? innerValue.slice(0, separatorIndex)
+        : innerValue;
+      const hint = separatorIndex >= 0
+        ? innerValue.slice(separatorIndex + 2)
+        : '';
+      const display = showAnswer
+        ? answer
+        : hint.trim()
+          ? `[ ${hint.trim()} ]`
+          : '[ ... ]';
+      const token = `DENKICLOZETOKEN${clozeTokens.length}END`;
+
+      clozeTokens.push({
+        token,
+        html: `<span class="cloze-blank${showAnswer ? ' revealed' : ''}">${escapeHtml(display)}</span>`,
+      });
+      return token;
+    });
   }
 
-  // 5. Parse Bold: **text**
-  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  let rendered = marked.parse(source, {
+    async: false,
+    breaks: true,
+    gfm: true,
+  }) as string;
 
-  // 6. Parse Italics: *text* (avoid matching inside bold)
-  html = html.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+  for (const { token, html } of clozeTokens) {
+    rendered = rendered.replaceAll(token, html);
+  }
 
-  // 7. Parse Headers: ## Header or # Header
-  html = html.replace(/^##\s+(.+)$/gm, '<h3 style="margin: 14px 0 8px 0; color: #a5b4fc; font-size: 1.25rem;">$1</h3>');
-  html = html.replace(/^#\s+(.+)$/gm, '<h2 style="margin: 18px 0 10px 0; color: #6366f1; font-size: 1.5rem;">$1</h2>');
-
-  // 8. Parse Bullet points: - item or * item (wrap in <ul>)
-  html = html.replace(
-    /((?:^\s*[-*]\s+.+$\n?)+)/gm,
-    (block) => {
-      const items = block
-        .split('\n')
-        .filter(line => /^\s*[-*]\s+/.test(line))
-        .map(line => `<li style="margin-bottom: 4px; color: #d1d5db;">${line.replace(/^\s*[-*]\s+/, '')}</li>`)
-        .join('');
-      return `<ul style="margin: 6px 0; padding-left: 20px;">${items}</ul>`;
-    }
-  );
-
-  // 9. Parse blockquotes: > text
-  html = html.replace(
-    /^&gt;\s+(.+)$/gm,
-    '<blockquote style="border-left: 3px solid #6366f1; padding-left: 12px; margin: 8px 0; color: #9ca3af; font-style: italic;">$1</blockquote>'
-  );
-
-  // 10. Convert remaining newlines to breaks (skip lines already wrapped in block elements)
-  html = html.replace(/\n/g, '<br />');
-
-  // 11. Restore code blocks and inline code
-  codeBlocks.forEach((block, i) => {
-    html = html.replace(`%%CODE_BLOCK_${i}%%`, block);
+  return DOMPurify.sanitize(rendered, {
+    USE_PROFILES: { html: true },
+    ADD_TAGS: ['audio', 'video', 'source'],
+    ADD_ATTR: ['controls', 'preload', 'poster', 'playsinline'],
+    ADD_DATA_URI_TAGS: ['img', 'audio', 'video', 'source'],
+    ALLOW_DATA_ATTR: false,
+    FORBID_TAGS: [
+      'script',
+      'iframe',
+      'object',
+      'embed',
+      'form',
+      'input',
+      'button',
+      'textarea',
+      'select',
+      'option',
+      'meta',
+      'link',
+      'base',
+    ],
+    FORBID_ATTR: ['style', 'srcdoc', 'formaction'],
   });
-  inlineCode.forEach((code, i) => {
-    html = html.replace(`%%INLINE_CODE_${i}%%`, code);
-  });
-
-  return html;
 };
