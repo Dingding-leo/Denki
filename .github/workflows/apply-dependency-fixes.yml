@@ -1,4 +1,5 @@
 name: Apply dependency security fixes
+# Final rerun after source stabilization.
 
 on:
   push:
