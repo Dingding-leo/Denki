@@ -1,57 +1,113 @@
-import React, { useEffect, useState, lazy, Suspense } from 'react';
-import { HashRouter, Routes, Route } from 'react-router-dom';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
+import { HashRouter, Route, Routes } from 'react-router-dom';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { MainLayout } from './components/layout/MainLayout';
+import { GlobalUI } from './components/ui/GlobalUI';
+import { restoreFromBackupIfNeeded } from './services/backup';
+import { maybeNudgeBackup, requestPersistentStorage } from './services/dataSafety';
 import { useFlashcardStore } from './store/useFlashcardStore';
 
-// Layout (eager — it's the app shell)
-import { MainLayout } from './components/layout/MainLayout';
-import { ErrorBoundary } from './components/ErrorBoundary';
-import { GlobalUI } from './components/ui/GlobalUI';
-import { requestPersistentStorage, maybeNudgeBackup } from './services/dataSafety';
-import { restoreFromBackupIfNeeded } from './services/backup';
-
-// Pages are route-split so heavy leaves (AI generator, importers, analytics,
-// prism/marked) don't inflate the initial bundle.
-const DashboardPage = lazy(() => import('./pages/DashboardPage').then(m => ({ default: m.DashboardPage })));
-const ClassViewPage = lazy(() => import('./pages/ClassViewPage').then(m => ({ default: m.ClassViewPage })));
-const StudySessionPage = lazy(() => import('./pages/StudySessionPage').then(m => ({ default: m.StudySessionPage })));
+const DashboardPage = lazy(() =>
+  import('./pages/DashboardPage').then((module) => ({ default: module.DashboardPage })));
+const ClassViewPage = lazy(() =>
+  import('./pages/ClassViewPage').then((module) => ({ default: module.ClassViewPage })));
+const StudySessionPage = lazy(() =>
+  import('./pages/StudySessionPage').then((module) => ({ default: module.StudySessionPage })));
 const AIGeneratePage = lazy(() => import('./pages/AIGeneratePage'));
 
-const PageFallback = () => (
-  <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'center', justifyContent: 'center', background: '#09090b', color: '#a1a1aa' }}>
-    Loading…
+const FullPageStatus: React.FC<{ title: string; message?: string; error?: boolean }> = ({
+  title,
+  message,
+  error = false,
+}) => (
+  <div style={{
+    display: 'flex',
+    minHeight: '100vh',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '12px',
+    padding: '24px',
+    textAlign: 'center',
+    background: '#0d1511',
+    color: '#d6ddcf',
+  }}>
+    <h2 style={{ margin: 0, fontSize: '20px' }}>{title}</h2>
+    {message && (
+      <p style={{ margin: 0, maxWidth: '480px', color: error ? '#d69a8f' : '#98a399', lineHeight: 1.5 }}>
+        {message}
+      </p>
+    )}
+    {error && (
+      <button
+        type="button"
+        onClick={() => window.location.reload()}
+        style={{
+          marginTop: '4px',
+          padding: '9px 16px',
+          border: '1px solid #819282',
+          background: '#1a2a21',
+          color: '#d6ddcf',
+          cursor: 'pointer',
+          fontWeight: 700,
+        }}
+      >
+        Reload Denki
+      </button>
+    )}
   </div>
 );
 
+const PageFallback = () => <FullPageStatus title="Opening the archive…" />;
+
 const App: React.FC = () => {
   const [isInitializing, setIsInitializing] = useState(true);
+  const [initializationError, setInitializationError] = useState<string | null>(null);
 
   useEffect(() => {
-    (async () => {
+    let cancelled = false;
+
+    const initialize = async () => {
       try {
-        // If IndexedDB is empty (first run, eviction, "clear site data"),
-        // restore the dev/filesystem backup before anything else loads.
         await restoreFromBackupIfNeeded();
         await Promise.all([
           useFlashcardStore.getState().loadClasses(),
           useFlashcardStore.getState().loadDecks(),
         ]);
-      } catch (err) {
-        console.error('Failed to initialize Denki:', err);
-      } finally {
-        setIsInitializing(false);
-      }
-    })();
 
-    // Data safety: shield IndexedDB from eviction and remind about stale backups
-    requestPersistentStorage();
-    maybeNudgeBackup();
+        // Run safety checks only after the current/restored library is loaded so
+        // the backup reminder sees the correct card count.
+        await requestPersistentStorage();
+        await maybeNudgeBackup();
+      } catch (error) {
+        console.error('Failed to initialize Denki:', error);
+        if (!cancelled) {
+          setInitializationError(
+            error instanceof Error ? error.message : 'The local database could not be opened.',
+          );
+        }
+      } finally {
+        if (!cancelled) setIsInitializing(false);
+      }
+    };
+
+    void initialize();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   if (isInitializing) {
+    return <FullPageStatus title="Opening Denki…" message="Checking your local study archive." />;
+  }
+
+  if (initializationError) {
     return (
-      <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'center', justifyContent: 'center', background: '#09090b', color: '#f3f4f6' }}>
-        <h2>Initializing Denki...</h2>
-      </div>
+      <FullPageStatus
+        title="Denki could not open the local archive"
+        message={initializationError}
+        error
+      />
     );
   }
 
@@ -67,10 +123,9 @@ const App: React.FC = () => {
               <Route path="ai-generate" element={<AIGeneratePage />} />
             </Route>
 
-            {/* Immersion Study Session routes (No sidebar) */}
-            <Route path="/study/all" element={<StudySessionPage />} />
-            <Route path="/study/class/:classId" element={<StudySessionPage />} />
-            <Route path="/study/deck/:deckId" element={<StudySessionPage />} />
+            <Route path="/study/all" element={<ErrorBoundary><StudySessionPage /></ErrorBoundary>} />
+            <Route path="/study/class/:classId" element={<ErrorBoundary><StudySessionPage /></ErrorBoundary>} />
+            <Route path="/study/deck/:deckId" element={<ErrorBoundary><StudySessionPage /></ErrorBoundary>} />
           </Routes>
         </Suspense>
       </HashRouter>
