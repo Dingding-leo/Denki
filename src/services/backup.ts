@@ -5,9 +5,6 @@ import { clearPersistedStudySession } from './studySessionPersistence';
 
 const BACKUP_ENDPOINT = '/api/backup';
 const DEBOUNCE_MS = 2000;
-
-// The filesystem endpoint is supplied only by vite-plugin-backup during local
-// development. Production users still have the explicit JSON export/import UI.
 const BACKUP_ENABLED = import.meta.env.DEV === true;
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -155,7 +152,7 @@ function assertRows<T>(
   }
 }
 
-function normalizeBackup(snapshot: BackupSnapshot): NormalizedBackup {
+function normalizeBackup(snapshot: unknown): NormalizedBackup {
   if (!isRecord(snapshot) || !isRecord(snapshot.data)) {
     throw new Error('Backup is missing its data section; refusing to import.');
   }
@@ -172,7 +169,7 @@ function normalizeBackup(snapshot: BackupSnapshot): NormalizedBackup {
     );
   }
 
-  const data = snapshot.data as Record<string, unknown>;
+  const data = snapshot.data;
   const requiredTables = ['classes', 'decks', 'cards', 'reviews'] as const;
   for (const table of requiredTables) {
     if (!Array.isArray(data[table])) {
@@ -214,11 +211,7 @@ function normalizeBackup(snapshot: BackupSnapshot): NormalizedBackup {
 
   for (const review of reviews) {
     const card = cardById.get(review.cardId);
-    if (
-      !card ||
-      card.deckId !== review.deckId ||
-      card.classId !== review.classId
-    ) {
+    if (!card || card.deckId !== review.deckId || card.classId !== review.classId) {
       throw new Error(`Review ${review.id ?? '(without id)'} has invalid card/deck/class references; refusing to import.`);
     }
   }
@@ -247,7 +240,7 @@ export async function exportDatabase(): Promise<BackupSnapshot> {
  * revival, duplicate detection, and foreign-key checks all finish before the
  * transaction clears a single existing row.
  */
-export async function importDatabase(snapshot: BackupSnapshot): Promise<void> {
+export async function importDatabase(snapshot: unknown): Promise<void> {
   const { classes, decks, cards, reviews } = normalizeBackup(snapshot);
 
   await db.transaction('rw', [db.classes, db.decks, db.cards, db.reviews], async () => {
@@ -264,8 +257,6 @@ export async function importDatabase(snapshot: BackupSnapshot): Promise<void> {
     if (reviews.length > 0) await db.reviews.bulkAdd(reviews);
   });
 
-  // A persisted queue contains card IDs from the old database. Keeping it after
-  // a full restore can resume the wrong cards or fail midway through a session.
   clearPersistedStudySession();
   triggerAutoSave();
 }
@@ -326,12 +317,12 @@ export async function restoreFromBackupIfNeeded(): Promise<boolean> {
 
     const snapshot: unknown = await response.json();
     if (!isRecord(snapshot) || !isRecord(snapshot.data)) return false;
-    const data = snapshot.data as Record<string, unknown>;
+    const data = snapshot.data;
     const hasClasses = Array.isArray(data.classes) && data.classes.length > 0;
     const hasCards = Array.isArray(data.cards) && data.cards.length > 0;
     if (!hasClasses && !hasCards) return false;
 
-    await importDatabase(snapshot as BackupSnapshot);
+    await importDatabase(snapshot);
     console.log('[Denki Backup] Restored development filesystem backup.');
     return true;
   } catch (error) {
