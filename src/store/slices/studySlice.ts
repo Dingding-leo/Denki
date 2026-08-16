@@ -4,6 +4,7 @@ import type { Card } from '../../db/schema';
 import { reviewCard } from '../../services/scheduler';
 import { loadSchedulerParams } from '../../services/schedulerParams';
 import { triggerAutoSave } from '../../services/backup';
+import { ALL_DRILL_BUCKETS, filterDrillCards } from '../../services/drill';
 import { loadNewCardsPerDay, countNewIntroducedToday, newCardAllowance } from '../../services/studyLimits';
 import { buildStudyQueue, pickReinsertIndex } from '../../services/studyQueue';
 import { toast } from '../uiStore';
@@ -196,6 +197,27 @@ export const createStudySlice: StateCreator<
     notifyHeldBack(heldBack);
   },
 
+  startDrillSession: async (deckId, buckets = ALL_DRILL_BUCKETS) => {
+    const deckCards = await db.cards.where('deckId').equals(deckId).toArray();
+    const selectedCards = filterDrillCards(deckCards, buckets);
+    const queue = buildStudyQueue(selectedCards);
+
+    set({
+      session: {
+        deckId,
+        isDrill: true,
+        drillBuckets: [...buckets],
+        queue,
+        currentIndex: 0,
+        completedCount: 0,
+        initialQueueSize: queue.length,
+        totalCards: deckCards.length,
+        isCram: false,
+        history: [],
+      },
+    });
+  },
+
   rateCard: async (rating) => {
     // Serialize rating mutations: drop a concurrent second call so two rapid
     // ratings can't both read the same snapshot and desync the queue/history
@@ -265,7 +287,7 @@ export const createStudySlice: StateCreator<
       // How many times this card has already been re-inserted this session
       // (counting this rating's entry below). History holds the pre-rating card,
       // so match by card id.
-      if (rating <= 2) {
+      if (!sessionRef.isDrill && rating <= 2) {
         const priorReinserts = history.filter(
           (entry) => entry.card.id === currentCard.id && entry.rating <= 2,
         ).length;

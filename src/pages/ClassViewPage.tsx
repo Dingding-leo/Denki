@@ -1,13 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
-import { ChevronRight, Download, Edit2, Play, RotateCcw, Trash2, Upload } from 'lucide-react';
+import { ChevronRight, Download, Edit2, Play, RotateCcw, Shuffle, Trash2, Upload } from 'lucide-react';
 import { AnalyticsDashboard } from '../components/AnalyticsDashboard';
 import { EditEntityModal } from '../components/modals/EditEntityModal';
 import { ImportModal } from '../components/modals/ImportModal';
+import { DrillSetupModal } from '../components/modals/DrillSetupModal';
 import { ManageCardsModal } from '../components/modals/ManageCardsModal';
 import { celebrate } from '../services/celebrate';
 import { exportDeckToCsv } from '../services/deckExport';
+import type { DrillBucket } from '../services/drill';
 import { useFlashcardStore } from '../store/useFlashcardStore';
 import { confirmDialog, toast } from '../store/uiStore';
 
@@ -39,6 +41,7 @@ export const ClassViewPage: React.FC = () => {
     createDeck: state.createDeck,
     startClassStudySession: state.startClassStudySession,
     startStudySession: state.startStudySession,
+    startDrillSession: state.startDrillSession,
     deleteClass: state.deleteClass,
     deleteDeck: state.deleteDeck,
     resetDeckProgress: state.resetDeckProgress,
@@ -51,6 +54,7 @@ export const ClassViewPage: React.FC = () => {
   const [newDeckName, setNewDeckName] = useState('');
   const [newDeckDesc, setNewDeckDesc] = useState('');
   const [managingDeckId, setManagingDeckId] = useState<number | null>(null);
+  const [drillingDeck, setDrillingDeck] = useState<{ id: number; name: string } | null>(null);
   const [importingDeckId, setImportingDeckId] = useState<number | null>(null);
   const [editingClass, setEditingClass] = useState(false);
   const [editingDeck, setEditingDeck] = useState<{
@@ -153,6 +157,27 @@ export const ClassViewPage: React.FC = () => {
       await store.startStudySession(deckId);
       navigate(`/study/deck/${deckId}`);
     }, 'Deck review could not start');
+  };
+
+  const handleStartDeckDrill = async (
+    deckId: number,
+    buckets: readonly DrillBucket[],
+  ) => {
+    if (pendingAction !== null) return;
+    setPendingAction(`drill-deck-${deckId}`);
+    try {
+      await store.startDrillSession(deckId, buckets);
+      setDrillingDeck(null);
+      navigate(`/study/deck/${deckId}/drill`);
+    } catch (error) {
+      toast(
+        `Deck drill could not start: ${error instanceof Error ? error.message : 'unknown error'}`,
+        'error',
+      );
+      throw error;
+    } finally {
+      setPendingAction(null);
+    }
   };
 
   if (!activeClass || activeClassId === null || activeClass.id === undefined) {
@@ -442,6 +467,16 @@ export const ClassViewPage: React.FC = () => {
                             </button>
                             <button
                               type="button"
+                              onClick={() => setDrillingDeck({ id: deck.id!, name: deck.name })}
+                              disabled={deck.total === 0 || pendingAction !== null}
+                              style={{ height: '32px', padding: '0 12px', fontSize: '11px' }}
+                              className="btn-premium-secondary hover-lift"
+                              title={deck.total === 0 ? 'Add cards before drilling' : 'Random one-pass drill'}
+                            >
+                              <Shuffle size={11} /> Drill
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => void handleStartDeckStudy(deck.id!)}
                               disabled={deck.total === 0 || pendingAction !== null}
                               style={{ height: '32px', padding: '0 14px', fontSize: '11px' }}
@@ -467,6 +502,15 @@ export const ClassViewPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {drillingDeck !== null && (
+        <DrillSetupModal
+          deckId={drillingDeck.id}
+          deckName={drillingDeck.name}
+          onClose={() => setDrillingDeck(null)}
+          onStart={(buckets) => handleStartDeckDrill(drillingDeck.id, buckets)}
+        />
+      )}
 
       {managingDeckId !== null && (
         <ManageCardsModal

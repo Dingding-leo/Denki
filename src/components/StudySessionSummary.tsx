@@ -1,17 +1,21 @@
 import React, { useMemo } from 'react';
-import { Award, Timer, CheckCircle, BarChart2 } from 'lucide-react';
+import { Award, BarChart2, CheckCircle, Repeat2, Timer } from 'lucide-react';
 import type { StudySessionHistoryEntry } from '../store/types';
 import { REVIEW_RATINGS, type Rating } from '../services/reviewRatings';
 
 interface StudySessionSummaryProps {
   history: StudySessionHistoryEntry[];
   totalTimeSpent: number; // in seconds
+  mode?: 'review' | 'practice' | 'drill';
+  onRepeat?: () => void;
   onExit: () => void;
 }
 
 export const StudySessionSummary: React.FC<StudySessionSummaryProps> = ({
   history,
   totalTimeSpent,
+  mode = 'review',
+  onRepeat,
   onExit,
 }) => {
   const stats = useMemo(() => {
@@ -46,6 +50,14 @@ export const StudySessionSummary: React.FC<StudySessionSummaryProps> = ({
     };
   }, [history, totalTimeSpent]);
 
+  const isDrill = mode === 'drill';
+  const heading = isDrill ? 'Drill complete' : 'Session complete';
+  const description = isDrill
+    ? 'Every selected card appeared exactly once. Your ratings were saved and will guide future Study sessions.'
+    : mode === 'practice'
+      ? 'You completed an optional all-card practice. Scheduling and review history have been updated.'
+      : 'You completed every card in this scheduled review. FSRS has updated the next review intervals.';
+
   return (
     <div className="glass-panel" style={{
       textAlign: 'center',
@@ -75,10 +87,10 @@ export const StudySessionSummary: React.FC<StudySessionSummaryProps> = ({
 
       <div>
         <h2 className="gradient-text" style={{ fontSize: '26px', fontWeight: 800, marginBottom: '6px' }}>
-          Session Completed! 🎉
+          {heading}
         </h2>
         <p style={{ color: '#9ca3af', fontSize: '14px', maxWidth: '440px', margin: '0 auto', lineHeight: 1.5 }}>
-          You've completed all due reviews in this session. FSRS stability and difficulty variables have been successfully recalculated.
+          {description}
         </p>
       </div>
 
@@ -86,7 +98,7 @@ export const StudySessionSummary: React.FC<StudySessionSummaryProps> = ({
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', width: '100%' }}>
         <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', padding: '16px 12px', borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
           <CheckCircle size={18} style={{ color: '#a5b4fc' }} />
-          <span style={{ fontSize: '10px', color: '#8e8e93', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Reviewed</span>
+          <span style={{ fontSize: '10px', color: '#8e8e93', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{isDrill ? 'Drilled' : 'Reviewed'}</span>
           <h3 style={{ fontSize: '20px', fontWeight: 800, color: '#f3f4f6' }}>{stats.total}</h3>
         </div>
 
@@ -127,20 +139,16 @@ export const StudySessionSummary: React.FC<StudySessionSummaryProps> = ({
         </div>
       )}
 
-      <button
-        onClick={onExit}
-        className="btn-premium-primary hover-lift"
-        style={{
-          marginTop: '8px',
-          padding: '14px 36px',
-          borderRadius: '10px',
-          fontSize: '14px',
-          background: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
-          boxShadow: '0 4px 15px rgba(99, 102, 241, 0.35)',
-        }}
-      >
-        Return to Workspace
-      </button>
+      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center', marginTop: '8px' }}>
+        {isDrill && onRepeat && (
+          <button onClick={onRepeat} className="btn-premium-secondary hover-lift">
+            <Repeat2 size={14} /> Drill again
+          </button>
+        )}
+        <button onClick={onExit} className="btn-premium-primary hover-lift">
+          Return to Workspace
+        </button>
+      </div>
     </div>
   );
 };

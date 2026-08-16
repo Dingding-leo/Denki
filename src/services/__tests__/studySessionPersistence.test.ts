@@ -115,4 +115,16 @@ describe('study session persistence', () => {
     expect(restored?.classId).toBe(classId);
     expect(restored?.deckId).toBeUndefined();
   });
+
+  it('keeps drill snapshots separate from normal deck study and restores the filter', async () => {
+    const { deckId } = await startWithCards();
+    useFlashcardStore.getState().endStudySession();
+    await useFlashcardStore.getState().startDrillSession(deckId, ['new', 1, 2]);
+
+    expect(await restorePersistedStudySession({ deckId, isDrill: false })).toBeNull();
+    const restored = await restorePersistedStudySession({ deckId, isDrill: true });
+    expect(restored?.isDrill).toBe(true);
+    expect(restored?.drillBuckets).toEqual(['new', 1, 2]);
+  });
+
 });

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useEffectEvent } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 import { BookOpen, Volume2, Keyboard, Eye, ArrowLeft, X } from 'lucide-react';
 import { useFlashcardStore } from '../store/useFlashcardStore';
@@ -19,6 +19,8 @@ import { REVIEW_RATINGS } from '../services/reviewRatings';
 export const StudySessionPage: React.FC = () => {
   const { classId, deckId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isDrillRoute = location.pathname.endsWith('/drill');
   const store = useFlashcardStore(useShallow((s) => ({
     session: s.session,
     decks: s.decks,
@@ -27,6 +29,7 @@ export const StudySessionPage: React.FC = () => {
     startClassStudySession: s.startClassStudySession,
     startGlobalStudySession: s.startGlobalStudySession,
     startStudySession: s.startStudySession,
+    startDrillSession: s.startDrillSession,
     rateCard: s.rateCard,
     undoLastRate: s.undoLastRate,
     endStudySession: s.endStudySession,
@@ -55,11 +58,13 @@ export const StudySessionPage: React.FC = () => {
     if (classId) {
       void actions.startClassStudySession(Number.parseInt(classId, 10), false);
     } else if (deckId) {
-      void actions.startStudySession(Number.parseInt(deckId, 10), false);
+      const parsedDeckId = Number.parseInt(deckId, 10);
+      if (isDrillRoute) void actions.startDrillSession(parsedDeckId);
+      else void actions.startStudySession(parsedDeckId, false);
     } else {
       void actions.startGlobalStudySession(false);
     }
-  }, [classId, deckId]);
+  }, [classId, deckId, isDrillRoute]);
 
   const activeStudyDeckId = store.session?.deckId || null;
   const deckName = activeStudyDeckId
@@ -80,7 +85,7 @@ export const StudySessionPage: React.FC = () => {
     const session = useFlashcardStore.getState().session;
     if (!session) return;
 
-    if (session.completedCount > 0 && session.completedCount % 10 === 0 && session.currentIndex < session.queue.length) {
+    if (!session.isDrill && session.completedCount > 0 && session.completedCount % 10 === 0 && session.currentIndex < session.queue.length) {
       const times = roundTimesRef.current;
       const average = times.length
         ? Math.round(times.reduce((sum, value) => sum + value, 0) / times.length)
@@ -111,6 +116,26 @@ export const StudySessionPage: React.FC = () => {
   const handleContinue = () => {
     setCheckpointOpen(false);
     cardStartTimeRef.current = Date.now();
+  };
+
+  const handleRepeatDrill = async () => {
+    const actions = useFlashcardStore.getState();
+    const currentSession = actions.session;
+    if (!currentSession?.isDrill || currentSession.deckId === undefined) return;
+
+    const drillDeckId = currentSession.deckId;
+    const buckets = currentSession.drillBuckets;
+    actions.endStudySession();
+    await actions.startDrillSession(drillDeckId, buckets);
+
+    const now = Date.now();
+    sessionStartTimeRef.current = now;
+    cardStartTimeRef.current = now;
+    roundTimesRef.current = [];
+    setIsFlipped(false);
+    setCheckpointOpen(false);
+    setRoundAverages([]);
+    setTotalTimeSpent(0);
   };
 
   const handleReviewKeyDown = useEffectEvent(async (e: KeyboardEvent) => {
@@ -165,7 +190,7 @@ export const StudySessionPage: React.FC = () => {
     return <div style={{ display: 'flex', height: '100vh', justifyContent: 'center', alignItems: 'center', color: '#f3f4f6' }}>Loading study session...</div>;
   }
 
-  const { queue, currentIndex, completedCount, history, isCram } = store.session;
+  const { queue, currentIndex, completedCount, history, isCram, isDrill } = store.session;
   const currentStreak = store.currentStreak;
   const currentSessionCard = queue[currentIndex];
   const currentDeck = currentSessionCard
@@ -175,16 +200,21 @@ export const StudySessionPage: React.FC = () => {
     ? store.classes.find((studyClass) => studyClass.id === currentSessionCard.classId)
     : undefined;
   const currentSource = [currentClass?.name, currentDeck?.name].filter(Boolean).join(' › ');
-  const sessionTitle = store.session.isGlobal
-    ? "Today's Mixed Review"
-    : store.session.deckId
-      ? store.decks.find((deck) => deck.id === store.session?.deckId)?.name ?? 'Deck'
-      : store.classes.find((studyClass) => studyClass.id === store.session?.classId)?.name ?? 'Study Session';
-  const sessionSubtitle = isCram
-    ? 'Cram session · all active cards'
+  const baseSessionTitle = store.session.deckId
+    ? store.decks.find((deck) => deck.id === store.session?.deckId)?.name ?? 'Deck'
+    : store.classes.find((studyClass) => studyClass.id === store.session?.classId)?.name ?? 'Study Session';
+  const sessionTitle = isDrill
+    ? `${baseSessionTitle} · Drill`
     : store.session.isGlobal
-      ? currentSource || 'Randomized across your library'
-      : 'Spaced Repetition';
+      ? "Today's Mixed Review"
+      : baseSessionTitle;
+  const sessionSubtitle = isDrill
+    ? 'Random one-pass · each selected card appears once'
+    : isCram
+      ? 'Practice session · all active cards'
+      : store.session.isGlobal
+        ? currentSource || 'Randomized across your library'
+        : 'Spaced Repetition';
 
   // Compute intervals for FSRS transparency when card is flipped. Uses the
   // user's saved params and a fixed (no-fuzz) RNG so previews stay stable across
@@ -253,9 +283,9 @@ export const StudySessionPage: React.FC = () => {
             }}
             className={`segmented-control-item ${studyMode === 'review' ? 'active' : ''}`}
           >
-            Review Mode
+            {isDrill ? 'Drill Mode' : 'Review Mode'}
           </button>
-          {store.session.deckId && (
+          {!isDrill && store.session.deckId && (
             <button
               onClick={() => setStudyMode('match')}
               style={{
@@ -270,6 +300,7 @@ export const StudySessionPage: React.FC = () => {
               Match Game
             </button>
           )}
+          {!isDrill && (
           <button
             onClick={() => setStudyMode('learn')}
             style={{
@@ -283,6 +314,7 @@ export const StudySessionPage: React.FC = () => {
           >
             Learn Mode
           </button>
+          )}
         </div>
 
         {/* Right Side: Tools toolbar */}
@@ -402,7 +434,14 @@ export const StudySessionPage: React.FC = () => {
             gap: '16px',
           }}>
             <BookOpen size={48} style={{ color: '#818cf8' }} />
-            {store.session.totalCards === 0 ? (
+            {isDrill ? (
+              <>
+                <h2 className="gradient-text" style={{ fontSize: '22px', fontWeight: 800 }}>No cards match this drill</h2>
+                <p style={{ color: '#9ca3af', fontSize: '14px', lineHeight: 1.5, maxWidth: '400px' }}>
+                  Return to the deck and choose at least one previous-level bucket that contains cards.
+                </p>
+              </>
+            ) : store.session.totalCards === 0 ? (
               <>
                 <h2 className="gradient-text" style={{ fontSize: '22px', fontWeight: 800 }}>{store.session.isGlobal ? 'Your Library Is Empty' : 'This Deck Is Empty'}</h2>
                 <p style={{ color: '#9ca3af', fontSize: '14px', lineHeight: 1.5, maxWidth: '400px' }}>
@@ -415,12 +454,12 @@ export const StudySessionPage: React.FC = () => {
               <>
                 <h2 className="gradient-text" style={{ fontSize: '22px', fontWeight: 800 }}>No Cards Due Today! 🎉</h2>
                 <p style={{ color: '#9ca3af', fontSize: '14px', lineHeight: 1.5, maxWidth: '400px' }}>
-                  You have completed all scheduled spaced reviews {store.session.isGlobal ? 'across your library' : 'for this deck'}. Would you like to Cram study all cards anyway?
+                  Scheduled review is complete. You can leave the cards to rest or run an optional all-card practice.
                 </p>
               </>
             )}
             <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
-              {store.session.totalCards > 0 && (
+              {store.session.totalCards > 0 && !isDrill && (
                 <button
                   onClick={() => {
                     if (store.session?.isGlobal) {
@@ -434,7 +473,7 @@ export const StudySessionPage: React.FC = () => {
                   style={{ background: '#6366f1', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 24px', fontWeight: 600, cursor: 'pointer' }}
                   className="hover-lift"
                 >
-                  Cram Study (All Cards)
+                  Practice All Cards
                 </button>
               )}
               <button
@@ -451,6 +490,8 @@ export const StudySessionPage: React.FC = () => {
           <StudySessionSummary
             history={history}
             totalTimeSpent={totalTimeSpent}
+            mode={isDrill ? 'drill' : isCram ? 'practice' : 'review'}
+            onRepeat={isDrill ? () => void handleRepeatDrill() : undefined}
             onExit={handleExitStudy}
           />
         ) : checkpointOpen ? (

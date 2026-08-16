@@ -1,4 +1,5 @@
 import type { Class, Deck, Card, CardType } from '../db/schema';
+import type { DrillBucket } from '../services/drill';
 import type { Rating } from '../services/scheduler';
 
 export interface StudySessionHistoryEntry {
@@ -20,6 +21,8 @@ export interface StudySession {
   initialQueueSize: number;
   totalCards: number;     // Total cards in the active scope (pre due-filter) — distinguishes "empty" from "nothing due"
   isCram?: boolean;       // If studying all cards instead of strictly due ones
+  isDrill?: boolean;      // Random one-pass deck session; low ratings never reinsert
+  drillBuckets?: DrillBucket[]; // Previous-level buckets included in this drill
   history: StudySessionHistoryEntry[];
 }
 
@@ -89,6 +92,7 @@ export interface StudySlice {
   startStudySession: (deckId: number, forceCram?: boolean) => Promise<void>;
   startClassStudySession: (classId: number, forceCram?: boolean) => Promise<void>;
   startGlobalStudySession: (forceCram?: boolean) => Promise<void>;
+  startDrillSession: (deckId: number, buckets?: readonly DrillBucket[]) => Promise<void>;
   rateCard: (rating: Rating) => Promise<void>;
   undoLastRate: () => Promise<void>;
   previousCard: () => void;

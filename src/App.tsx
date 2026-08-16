@@ -126,6 +126,7 @@ const App: React.FC = () => {
             <Route path="/study/all" element={<ErrorBoundary><StudySessionPage /></ErrorBoundary>} />
             <Route path="/study/class/:classId" element={<ErrorBoundary><StudySessionPage /></ErrorBoundary>} />
             <Route path="/study/deck/:deckId" element={<ErrorBoundary><StudySessionPage /></ErrorBoundary>} />
+            <Route path="/study/deck/:deckId/drill" element={<ErrorBoundary><StudySessionPage /></ErrorBoundary>} />
           </Routes>
         </Suspense>
       </HashRouter>

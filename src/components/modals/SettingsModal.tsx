@@ -10,11 +10,6 @@ import {
   loadSchedulerParams,
   normalizeSchedulerParams,
 } from '../../services/schedulerParams';
-import {
-  DEFAULT_NEW_CARDS_PER_DAY,
-  NEW_CARDS_PER_DAY_KEY,
-  loadNewCardsPerDay,
-} from '../../services/studyLimits';
 import { confirmDialog, toast } from '../../store/uiStore';
 
 interface SettingsModalProps {
@@ -24,7 +19,6 @@ interface SettingsModalProps {
 const SPEECH_SPEED_KEY = 'denki-speech-speed';
 const SPEECH_SPEED_MIN = 0.5;
 const SPEECH_SPEED_MAX = 2;
-const MAX_NEW_CARDS_PER_DAY = 999;
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));
@@ -76,8 +70,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
   const [easyBonus, setEasyBonus] = useState(initialScheduler.easyBonus);
   const [hardMultiplier, setHardMultiplier] = useState(initialScheduler.hardIntervalMultiplier);
   const [speechSpeed, setSpeechSpeed] = useState(readSpeechSpeed);
-  const [newCardsPerDay, setNewCardsPerDay] = useState(() =>
-    clamp(loadNewCardsPerDay(), 0, MAX_NEW_CARDS_PER_DAY));
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
 
@@ -124,13 +116,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
     nextEasyBonus: number,
     nextHardMultiplier: number,
     nextSpeechSpeed: number,
-    nextNewCards: number,
   ) => {
     localStorage.setItem(RETENTION_KEY, String(nextRetention));
     localStorage.setItem(EASY_BONUS_KEY, String(nextEasyBonus));
     localStorage.setItem(HARD_MULTIPLIER_KEY, String(nextHardMultiplier));
     localStorage.setItem(SPEECH_SPEED_KEY, String(nextSpeechSpeed));
-    localStorage.setItem(NEW_CARDS_PER_DAY_KEY, String(nextNewCards));
+    localStorage.removeItem('denki-new-cards-per-day');
   };
 
   const handleSave = (event: React.FormEvent) => {
@@ -141,14 +132,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
       hardIntervalMultiplier: hardMultiplier,
     });
     const normalizedSpeech = clamp(speechSpeed, SPEECH_SPEED_MIN, SPEECH_SPEED_MAX);
-    const normalizedNewCards = Math.round(clamp(newCardsPerDay, 0, MAX_NEW_CARDS_PER_DAY));
 
     persistPreferences(
       normalizedScheduler.requestRetention,
       normalizedScheduler.easyBonus,
       normalizedScheduler.hardIntervalMultiplier,
       normalizedSpeech,
-      normalizedNewCards,
     );
 
     celebrate({
@@ -174,8 +163,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
     setEasyBonus(1.3);
     setHardMultiplier(1.2);
     setSpeechSpeed(1);
-    setNewCardsPerDay(DEFAULT_NEW_CARDS_PER_DAY);
-    persistPreferences(0.9, 1.3, 1.2, 1, DEFAULT_NEW_CARDS_PER_DAY);
+    persistPreferences(0.9, 1.3, 1.2, 1);
     toast('Preferences restored to defaults', 'info');
   };
 
@@ -339,23 +327,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
               </label>
             </div>
 
-            <label>
-              <span style={fieldLabelStyle}>New cards per day, per deck</span>
-              <input
-                type="number"
-                min="0"
-                max={MAX_NEW_CARDS_PER_DAY}
-                step="1"
-                value={newCardsPerDay}
-                onChange={(event) => {
-                  if (Number.isFinite(event.currentTarget.valueAsNumber)) {
-                    setNewCardsPerDay(event.currentTarget.valueAsNumber);
-                  }
-                }}
-                className="input-premium"
-              />
-              <p style={helpStyle}>Reviews are never capped. Set 0 for unlimited new cards.</p>
-            </label>
           </div>
         </section>
 

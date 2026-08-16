@@ -53,8 +53,6 @@ export const DrillSetupModal: React.FC<DrillSetupModalProps> = ({
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError('');
     void db.cards.where('deckId').equals(deckId).toArray()
       .then((rows) => {
         if (!cancelled) setCards(rows);
