@@ -1,4 +1,3 @@
-import React from 'react';
 import { act, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Card } from '../../db/schema';
