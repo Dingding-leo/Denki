@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '../../../db';
 import type { Card, Deck } from '../../../db/schema';
 import { useFlashcardStore } from '../../useFlashcardStore';
@@ -45,7 +45,13 @@ function deck(id: number, classId: number): Deck {
 }
 
 describe('library loader request integrity', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await Promise.all([
+      db.reviews.clear(),
+      db.cards.clear(),
+      db.decks.clear(),
+      db.classes.clear(),
+    ]);
     useFlashcardStore.setState({
       cards: [],
       decks: [],
@@ -54,12 +60,15 @@ describe('library loader request integrity', () => {
     });
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('keeps the newest card scope when IndexedDB requests resolve out of order', async () => {
     const first = deferred<Card[]>();
     const second = deferred<Card[]>();
     const whereSpy = vi.spyOn(db.cards, 'where') as unknown as {
       mockImplementation: (implementation: (index: string) => unknown) => void;
-      mockRestore: () => void;
     };
     whereSpy.mockImplementation((index) => {
       expect(index).toBe('deckId');
@@ -80,14 +89,12 @@ describe('library loader request integrity', () => {
 
     expect(useFlashcardStore.getState().activeDeckId).toBe(2);
     expect(useFlashcardStore.getState().cards.map((item) => item.deckId)).toEqual([2]);
-    whereSpy.mockRestore();
   });
 
   it('does not repopulate cards after their consumer clears the active scope', async () => {
     const pending = deferred<Card[]>();
     const whereSpy = vi.spyOn(db.cards, 'where') as unknown as {
       mockImplementation: (implementation: (index: string) => unknown) => void;
-      mockRestore: () => void;
     };
     whereSpy.mockImplementation(() => ({
       equals: () => ({ toArray: () => pending.promise }),
@@ -100,7 +107,6 @@ describe('library loader request integrity', () => {
 
     expect(useFlashcardStore.getState().activeDeckId).toBeNull();
     expect(useFlashcardStore.getState().cards).toEqual([]);
-    whereSpy.mockRestore();
   });
 
   it('keeps the latest class deck list when route loads finish out of order', async () => {
@@ -108,7 +114,6 @@ describe('library loader request integrity', () => {
     const second = deferred<Deck[]>();
     const whereSpy = vi.spyOn(db.decks, 'where') as unknown as {
       mockImplementation: (implementation: (index: string) => unknown) => void;
-      mockRestore: () => void;
     };
     whereSpy.mockImplementation((index) => {
       expect(index).toBe('classId');
@@ -128,6 +133,5 @@ describe('library loader request integrity', () => {
     await firstLoad;
 
     expect(useFlashcardStore.getState().decks.map((item) => item.classId)).toEqual([2]);
-    whereSpy.mockRestore();
   });
 });
