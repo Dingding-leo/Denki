@@ -76,16 +76,23 @@ export const createDeckSlice: StateCreator<
     });
 
     const deletedActiveDeck = get().activeDeckId === deckId;
+    const remainingActiveDeckId = deletedActiveDeck ? null : get().activeDeckId;
     const sessionUsesDeck = get().session?.queue.some((card) => card.deckId === deckId) ?? false;
-    set({
-      activeDeckId: deletedActiveDeck ? null : get().activeDeckId,
-      cards: deletedActiveDeck ? [] : get().cards,
-      session: sessionUsesDeck ? null : get().session,
+    set((state) => {
+      const { [deckId]: _removed, ...remainingDeckStats } = state.deckStats;
+      return {
+        activeDeckId: remainingActiveDeckId,
+        cards: deletedActiveDeck ? [] : state.cards,
+        session: sessionUsesDeck ? null : state.session,
+        deckStats: remainingDeckStats,
+      };
     });
 
     await Promise.all([
       get().loadDecks(deck.classId),
-      deletedActiveDeck ? Promise.resolve() : get().loadCards(get().activeDeckId ?? undefined),
+      remainingActiveDeckId
+        ? get().loadCards(remainingActiveDeckId)
+        : Promise.resolve(),
       get().loadClassStats(deck.classId),
       get().loadStats(get().activeClassId),
     ]);
@@ -127,8 +134,6 @@ export const createDeckSlice: StateCreator<
       await db.reviews.where('deckId').equals(deckId).delete();
     });
 
-    // A resumable queue contains the old scheduling state; discard it when any
-    // of its cards are reset rather than reviving misleading progress later.
     const sessionUsesDeck = get().session?.queue.some((card) => card.deckId === deckId) ?? false;
     if (sessionUsesDeck) set({ session: null });
 
