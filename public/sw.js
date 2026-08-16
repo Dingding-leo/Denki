@@ -15,7 +15,6 @@ async function cacheIndividually(cache, urls) {
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(async (cache) => {
-      // One missing optional shell file must not invalidate the whole install.
       await cacheIndividually(cache, SHELL);
 
       try {
@@ -46,6 +45,13 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+async function cacheSuccessfulResponse(request, response) {
+  if (!response.ok || response.type !== 'basic') return response;
+  const cache = await caches.open(CACHE_NAME);
+  await cache.put(request, response.clone());
+  return response;
+}
+
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
@@ -58,13 +64,7 @@ self.addEventListener('fetch', (event) => {
   if (isNavigate || isCodeAsset) {
     event.respondWith(
       fetch(event.request)
-        .then((networkResponse) => {
-          if (networkResponse.ok && networkResponse.type === 'basic') {
-            const copy = networkResponse.clone();
-            event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)));
-          }
-          return networkResponse;
-        })
+        .then((response) => cacheSuccessfulResponse(event.request, response))
         .catch(async () => {
           const cached = await caches.match(event.request);
           if (cached) return cached;
@@ -82,12 +82,8 @@ self.addEventListener('fetch', (event) => {
       if (cachedResponse) return cachedResponse;
 
       try {
-        const networkResponse = await fetch(event.request);
-        if (networkResponse.ok && networkResponse.type === 'basic') {
-          const copy = networkResponse.clone();
-          event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)));
-        }
-        return networkResponse;
+        const response = await fetch(event.request);
+        return await cacheSuccessfulResponse(event.request, response);
       } catch {
         return Response.error();
       }
