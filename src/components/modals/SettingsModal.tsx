@@ -1,304 +1,427 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { X, Sliders, Volume2, RotateCcw, Download, Upload } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Download, RotateCcw, Sliders, Upload, Volume2, X } from 'lucide-react';
+import { downloadBackup, importDatabase, type BackupSnapshot } from '../../services/backup';
 import { celebrate } from '../../services/celebrate';
-import { downloadBackup, importDatabase } from '../../services/backup';
+import {
+  EASY_BONUS_KEY,
+  HARD_MULTIPLIER_KEY,
+  RETENTION_KEY,
+  SCHEDULER_SETTING_RANGES,
+  loadSchedulerParams,
+  normalizeSchedulerParams,
+} from '../../services/schedulerParams';
+import {
+  DEFAULT_NEW_CARDS_PER_DAY,
+  NEW_CARDS_PER_DAY_KEY,
+  loadNewCardsPerDay,
+} from '../../services/studyLimits';
 import { confirmDialog, toast } from '../../store/uiStore';
-import { NEW_CARDS_PER_DAY_KEY, DEFAULT_NEW_CARDS_PER_DAY, loadNewCardsPerDay } from '../../services/studyLimits';
 
 interface SettingsModalProps {
   onClose: () => void;
 }
 
-const readNumberSetting = (key: string, fallback: number): number => {
-  const stored = localStorage.getItem(key);
-  if (stored === null) return fallback;
-  const parsed = Number.parseFloat(stored);
-  return Number.isFinite(parsed) ? parsed : fallback;
+const SPEECH_SPEED_KEY = 'denki-speech-speed';
+const SPEECH_SPEED_MIN = 0.5;
+const SPEECH_SPEED_MAX = 2;
+const MAX_NEW_CARDS_PER_DAY = 999;
+
+const clamp = (value: number, min: number, max: number): number =>
+  Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));
+
+const readSpeechSpeed = (): number => {
+  try {
+    const raw = localStorage.getItem(SPEECH_SPEED_KEY);
+    const parsed = raw === null ? 1 : Number.parseFloat(raw);
+    return clamp(parsed, SPEECH_SPEED_MIN, SPEECH_SPEED_MAX);
+  } catch {
+    return 1;
+  }
+};
+
+const sectionStyle: React.CSSProperties = {
+  borderTop: '1px solid rgba(211, 220, 207, 0.12)',
+  paddingTop: '16px',
+};
+
+const sectionHeadingStyle: React.CSSProperties = {
+  fontSize: '11px',
+  color: 'var(--text-muted)',
+  textTransform: 'uppercase',
+  letterSpacing: '0.9px',
+  marginBottom: '14px',
+  fontWeight: 800,
+};
+
+const fieldLabelStyle: React.CSSProperties = {
+  display: 'block',
+  fontSize: '11px',
+  color: 'var(--text-secondary)',
+  marginBottom: '6px',
+  fontWeight: 700,
+  textTransform: 'uppercase',
+  letterSpacing: '0.45px',
+};
+
+const helpStyle: React.CSSProperties = {
+  fontSize: '11px',
+  color: 'var(--text-muted)',
+  marginTop: '5px',
+  lineHeight: 1.4,
 };
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
-  const [retention, setRetention] = useState(() => readNumberSetting('denki-fsrs-retention', 0.9));
-  const [easyBonus, setEasyBonus] = useState(() => readNumberSetting('denki-fsrs-easy-bonus', 1.3));
-  const [hardMultiplier, setHardMultiplier] = useState(() => readNumberSetting('denki-fsrs-hard-multiplier', 1.2));
-  const [speechSpeed, setSpeechSpeed] = useState(() => readNumberSetting('denki-speech-speed', 1.0));
-  const [newCardsPerDay, setNewCardsPerDay] = useState(loadNewCardsPerDay);
+  const initialScheduler = loadSchedulerParams();
+  const [retention, setRetention] = useState(initialScheduler.requestRetention);
+  const [easyBonus, setEasyBonus] = useState(initialScheduler.easyBonus);
+  const [hardMultiplier, setHardMultiplier] = useState(initialScheduler.hardIntervalMultiplier);
+  const [speechSpeed, setSpeechSpeed] = useState(readSpeechSpeed);
+  const [newCardsPerDay, setNewCardsPerDay] = useState(() =>
+    clamp(loadNewCardsPerDay(), 0, MAX_NEW_CARDS_PER_DAY));
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+
+  const dialogRef = useRef<HTMLFormElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+    const previousFocus = document.activeElement as HTMLElement | null;
+    closeButtonRef.current?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+      const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focusable || focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, true);
+      previousFocus?.focus();
+    };
   }, [onClose]);
 
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    localStorage.setItem('denki-fsrs-retention', String(retention));
-    localStorage.setItem('denki-fsrs-easy-bonus', String(easyBonus));
-    localStorage.setItem('denki-fsrs-hard-multiplier', String(hardMultiplier));
-    localStorage.setItem('denki-speech-speed', String(speechSpeed));
-    localStorage.setItem(NEW_CARDS_PER_DAY_KEY, String(Math.max(0, Math.floor(newCardsPerDay) || 0)));
+  const persistPreferences = (
+    nextRetention: number,
+    nextEasyBonus: number,
+    nextHardMultiplier: number,
+    nextSpeechSpeed: number,
+    nextNewCards: number,
+  ) => {
+    localStorage.setItem(RETENTION_KEY, String(nextRetention));
+    localStorage.setItem(EASY_BONUS_KEY, String(nextEasyBonus));
+    localStorage.setItem(HARD_MULTIPLIER_KEY, String(nextHardMultiplier));
+    localStorage.setItem(SPEECH_SPEED_KEY, String(nextSpeechSpeed));
+    localStorage.setItem(NEW_CARDS_PER_DAY_KEY, String(nextNewCards));
+  };
+
+  const handleSave = (event: React.FormEvent) => {
+    event.preventDefault();
+    const normalizedScheduler = normalizeSchedulerParams({
+      requestRetention: retention,
+      easyBonus,
+      hardIntervalMultiplier: hardMultiplier,
+    });
+    const normalizedSpeech = clamp(speechSpeed, SPEECH_SPEED_MIN, SPEECH_SPEED_MAX);
+    const normalizedNewCards = Math.round(clamp(newCardsPerDay, 0, MAX_NEW_CARDS_PER_DAY));
+
+    persistPreferences(
+      normalizedScheduler.requestRetention,
+      normalizedScheduler.easyBonus,
+      normalizedScheduler.hardIntervalMultiplier,
+      normalizedSpeech,
+      normalizedNewCards,
+    );
 
     celebrate({
-      particleCount: 30,
-      spread: 40,
+      particleCount: 24,
+      spread: 36,
       origin: { y: 0.8 },
-      colors: ['#0a84ff', '#30d158']
+      colors: ['#7f9c86', '#a7b79f'],
     });
-
+    toast('Preferences saved', 'success');
     onClose();
   };
 
   const handleReset = async () => {
-    const ok = await confirmDialog({
-      title: 'Reset to defaults',
-      message: 'Restore all preferences to their default values? Your decks and cards are not affected.',
-      confirmLabel: 'Reset',
+    const confirmed = await confirmDialog({
+      title: 'Reset preferences',
+      message: 'Restore all scheduling and speech preferences to their defaults? Your cards and review history are not affected.',
+      confirmLabel: 'Reset preferences',
       danger: true,
     });
-    if (ok) {
-      setRetention(0.9);
-      setEasyBonus(1.3);
-      setHardMultiplier(1.2);
-      setSpeechSpeed(1.0);
-      setNewCardsPerDay(DEFAULT_NEW_CARDS_PER_DAY);
-      // Persist immediately so the reset isn't silently lost if the modal is
-      // closed with X/Cancel instead of Apply Changes.
-      localStorage.setItem('denki-fsrs-retention', String(0.9));
-      localStorage.setItem('denki-fsrs-easy-bonus', String(1.3));
-      localStorage.setItem('denki-fsrs-hard-multiplier', String(1.2));
-      localStorage.setItem('denki-speech-speed', String(1.0));
-      localStorage.setItem(NEW_CARDS_PER_DAY_KEY, String(DEFAULT_NEW_CARDS_PER_DAY));
-      toast('Preferences restored to defaults', 'info');
+    if (!confirmed) return;
+
+    setRetention(0.9);
+    setEasyBonus(1.3);
+    setHardMultiplier(1.2);
+    setSpeechSpeed(1);
+    setNewCardsPerDay(DEFAULT_NEW_CARDS_PER_DAY);
+    persistPreferences(0.9, 1.3, 1.2, 1, DEFAULT_NEW_CARDS_PER_DAY);
+    toast('Preferences restored to defaults', 'info');
+  };
+
+  const handleExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      await downloadBackup();
+      toast('Backup download started', 'success');
+    } catch (error) {
+      toast(
+        `Backup export failed: ${error instanceof Error ? error.message : 'unknown error'}`,
+        'error',
+      );
+    } finally {
+      setExporting(false);
     }
   };
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || importing) return;
 
-  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = ''; // allow re-picking the same file later
-    if (!file) return;
-    const ok = await confirmDialog({
+    const confirmed = await confirmDialog({
       title: 'Import backup',
-      message: 'Importing a backup REPLACES all current decks, cards and review history with the file’s contents. This cannot be undone. Continue?',
+      message: 'This replaces every current class, deck, card, review log, and active study queue with the backup file. The replacement cannot be undone.',
       confirmLabel: 'Replace everything',
       danger: true,
     });
-    if (!ok) return;
+    if (!confirmed) return;
+
+    setImporting(true);
     try {
-      const snapshot = JSON.parse(await file.text());
-      await importDatabase(snapshot);
+      const parsed: unknown = JSON.parse(await file.text());
+      await importDatabase(parsed as BackupSnapshot);
+      toast('Backup restored. Reloading Denki…', 'success');
       window.location.reload();
-    } catch (err) {
-      toast('Import failed: ' + (err instanceof Error ? err.message : 'invalid backup file'), 'error');
+    } catch (error) {
+      toast(
+        `Import failed: ${error instanceof Error ? error.message : 'invalid backup file'}`,
+        'error',
+      );
+    } finally {
+      setImporting(false);
     }
   };
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0, left: 0, right: 0, bottom: 0,
-      background: 'rgba(0, 0, 0, 0.65)',
-      backdropFilter: 'blur(8px)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 2000,
-      padding: '20px',
-    }}>
-      <form onSubmit={handleSave} className="glass-panel" style={{
-        width: '100%',
-        maxWidth: '520px',
+    <div
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(4, 10, 7, 0.76)',
+        backdropFilter: 'blur(8px)',
         display: 'flex',
-        flexDirection: 'column',
-        gap: '20px',
-        animation: 'scaleIn 0.25s ease',
-        background: 'rgba(20, 20, 25, 0.95)',
-        border: '1px solid rgba(255, 255, 255, 0.12)',
-        textAlign: 'left',
-      }}>
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#0a84ff' }}>
-            <Sliders size={18} />
-            <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#f3f4f6' }}>Preferences & Algorithm</h3>
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 2000,
+        padding: '20px',
+      }}
+    >
+      <form
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-dialog-title"
+        onSubmit={handleSave}
+        className="glass-panel"
+        style={{
+          width: '100%',
+          maxWidth: '540px',
+          maxHeight: 'calc(100vh - 40px)',
+          overflowY: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '18px',
+          textAlign: 'left',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '12px', borderBottom: '2px solid var(--border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
+            <Sliders size={18} aria-hidden="true" />
+            <h3 id="settings-dialog-title" style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)' }}>
+              Preferences & Algorithm
+            </h3>
           </div>
           <button
+            ref={closeButtonRef}
             type="button"
             onClick={onClose}
-            aria-label="Close"
-            title="Close"
-            style={{ background: 'transparent', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: '4px' }}
+            className="btn-premium-secondary"
+            aria-label="Close preferences"
+            style={{ width: '32px', height: '32px', padding: 0 }}
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
 
-        {/* Section 1: Spaced Repetition parameters */}
-        <div>
-          <h4 style={{ fontSize: '12px', color: '#8e8e93', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '16px', fontWeight: 700 }}>
-            🧠 Spaced Repetition (FSRS 4.5)
-          </h4>
-          
+        <section>
+          <h4 style={{ ...sectionHeadingStyle, marginTop: 0 }}>Spaced repetition</h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <label style={{ fontSize: '13px', color: '#d1d5db', fontWeight: 500 }}>Target Retention</label>
-                <span style={{ fontSize: '12px', color: '#0a84ff', fontWeight: 600, fontFamily: 'monospace' }}>{Math.round(retention * 100)}%</span>
+                <label htmlFor="retention-setting" style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                  Target retention
+                </label>
+                <span style={{ fontSize: '12px', color: 'var(--accent-color)', fontWeight: 700, fontFamily: 'monospace' }}>
+                  {Math.round(retention * 100)}%
+                </span>
               </div>
               <input
+                id="retention-setting"
                 type="range"
-                min="0.70"
-                max="0.95"
+                min={SCHEDULER_SETTING_RANGES.retention.min}
+                max={SCHEDULER_SETTING_RANGES.retention.max}
                 step="0.01"
                 value={retention}
-                onChange={e => setRetention(parseFloat(e.target.value))}
-                style={{ width: '100%', accentColor: '#0a84ff' }}
+                onChange={(event) => setRetention(event.currentTarget.valueAsNumber)}
+                style={{ width: '100%', accentColor: 'var(--accent-color)' }}
               />
-              <p style={{ fontSize: '11px', color: '#636366', marginTop: '4px', lineHeight: 1.3 }}>
-                Target recall rate. Higher values schedule reviews more frequently to keep retention high.
-              </p>
+              <p style={helpStyle}>Higher retention schedules more frequent reviews. Changes apply to future ratings.</p>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '11px', color: '#8e8e93', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Easy Bonus</label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '14px' }}>
+              <label>
+                <span style={fieldLabelStyle}>Easy bonus</span>
                 <input
                   type="number"
-                  min="1.0"
-                  max="2.0"
+                  min={SCHEDULER_SETTING_RANGES.easyBonus.min}
+                  max={SCHEDULER_SETTING_RANGES.easyBonus.max}
                   step="0.1"
                   value={easyBonus}
-                  onChange={e => setEasyBonus(parseFloat(e.target.value))}
+                  onChange={(event) => {
+                    if (Number.isFinite(event.currentTarget.valueAsNumber)) {
+                      setEasyBonus(event.currentTarget.valueAsNumber);
+                    }
+                  }}
                   className="input-premium"
                 />
-              </div>
+              </label>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '11px', color: '#8e8e93', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Hard Multiplier</label>
+              <label>
+                <span style={fieldLabelStyle}>Hard multiplier</span>
                 <input
                   type="number"
-                  min="1.0"
-                  max="1.5"
+                  min={SCHEDULER_SETTING_RANGES.hardMultiplier.min}
+                  max={SCHEDULER_SETTING_RANGES.hardMultiplier.max}
                   step="0.05"
                   value={hardMultiplier}
-                  onChange={e => setHardMultiplier(parseFloat(e.target.value))}
+                  onChange={(event) => {
+                    if (Number.isFinite(event.currentTarget.valueAsNumber)) {
+                      setHardMultiplier(event.currentTarget.valueAsNumber);
+                    }
+                  }}
                   className="input-premium"
                 />
-              </div>
+              </label>
             </div>
 
-            <div>
-              <label style={{ display: 'block', fontSize: '11px', color: '#8e8e93', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                New Cards Per Day
-              </label>
+            <label>
+              <span style={fieldLabelStyle}>New cards per day, per deck</span>
               <input
                 type="number"
                 min="0"
-                max="999"
+                max={MAX_NEW_CARDS_PER_DAY}
                 step="1"
                 value={newCardsPerDay}
-                onChange={e => setNewCardsPerDay(parseInt(e.target.value, 10) || 0)}
+                onChange={(event) => {
+                  if (Number.isFinite(event.currentTarget.valueAsNumber)) {
+                    setNewCardsPerDay(event.currentTarget.valueAsNumber);
+                  }
+                }}
                 className="input-premium"
               />
-              <p style={{ fontSize: '11px', color: '#636366', marginTop: '4px', lineHeight: 1.3 }}>
-                Max new cards each deck introduces per day. Keeps daily workload sustainable — reviews are never limited. 0 = unlimited.
-              </p>
-            </div>
+              <p style={helpStyle}>Reviews are never capped. Set 0 for unlimited new cards.</p>
+            </label>
           </div>
-        </div>
+        </section>
 
-        {/* Section 2: Speech Speed */}
-        <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '16px' }}>
-          <h4 style={{ fontSize: '12px', color: '#8e8e93', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '16px', fontWeight: 700 }}>
-            🔊 Text-to-Speech (Aloud)
-          </h4>
-          
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-              <label style={{ fontSize: '13px', color: '#d1d5db', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Volume2 size={14} /> Speech Speed
-              </label>
-              <span style={{ fontSize: '12px', color: '#10b981', fontWeight: 600, fontFamily: 'monospace' }}>{speechSpeed}x</span>
-            </div>
-            <input
-              type="range"
-              min="0.5"
-              max="2.0"
-              step="0.1"
-              value={speechSpeed}
-              onChange={e => setSpeechSpeed(parseFloat(e.target.value))}
-              style={{ width: '100%', accentColor: '#10b981' }}
-            />
-            <p style={{ fontSize: '11px', color: '#636366', marginTop: '4px', lineHeight: 1.3 }}>
-              Adjust the pacing of read-aloud descriptions during study sessions.
-            </p>
+        <section style={sectionStyle}>
+          <h4 style={sectionHeadingStyle}>Read aloud</h4>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+            <label htmlFor="speech-speed-setting" style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Volume2 size={14} aria-hidden="true" /> Speech speed
+            </label>
+            <span style={{ fontSize: '12px', color: 'var(--accent-color)', fontWeight: 700, fontFamily: 'monospace' }}>
+              {speechSpeed.toFixed(1)}×
+            </span>
           </div>
-        </div>
+          <input
+            id="speech-speed-setting"
+            type="range"
+            min={SPEECH_SPEED_MIN}
+            max={SPEECH_SPEED_MAX}
+            step="0.1"
+            value={speechSpeed}
+            onChange={(event) => setSpeechSpeed(event.currentTarget.valueAsNumber)}
+            style={{ width: '100%', accentColor: 'var(--accent-color)' }}
+          />
+          <p style={helpStyle}>Used for both automatic question/answer reading and manual speaker buttons.</p>
+        </section>
 
-        {/* Section 3: Data & Backup */}
-        <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '16px' }}>
-          <h4 style={{ fontSize: '12px', color: '#8e8e93', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '12px', fontWeight: 700 }}>
-            💾 Data & Backup
-          </h4>
-          <p style={{ fontSize: '11px', color: '#8e8e93', marginBottom: '12px', lineHeight: 1.4 }}>
-            Your decks live only in this browser. Export a JSON backup to keep it safe or move it to another device.
+        <section style={sectionStyle}>
+          <h4 style={sectionHeadingStyle}>Data & backup</h4>
+          <p style={{ ...helpStyle, marginTop: 0, marginBottom: '12px' }}>
+            Your library is local to this browser. Export a JSON backup regularly and before clearing browser data.
           </p>
-          <div style={{ display: 'flex', gap: '10px' }}>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             <button
               type="button"
-              onClick={() => downloadBackup()}
+              onClick={() => void handleExport()}
+              disabled={exporting || importing}
               className="btn-premium-secondary"
-              style={{ height: '34px', padding: '0 14px', fontSize: '12px' }}
             >
-              <Download size={13} /> Export backup
+              <Download size={13} /> {exporting ? 'Preparing…' : 'Export backup'}
             </button>
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
+              disabled={exporting || importing}
               className="btn-premium-secondary"
-              style={{ height: '34px', padding: '0 14px', fontSize: '12px' }}
             >
-              <Upload size={13} /> Import backup
+              <Upload size={13} /> {importing ? 'Validating…' : 'Import backup'}
             </button>
             <input
               ref={fileInputRef}
               type="file"
               accept="application/json,.json"
-              onChange={handleImportFile}
+              disabled={importing}
+              onChange={(event) => void handleImportFile(event)}
               style={{ display: 'none' }}
             />
           </div>
-        </div>
+        </section>
 
-        {/* Footer Actions */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '16px', marginTop: '8px' }}>
-          <button
-            type="button"
-            onClick={handleReset}
-            style={{ height: '32px', padding: '0 12px', fontSize: '12px' }}
-            className="btn-premium-danger"
-          >
-            <RotateCcw size={12} /> Reset to Defaults
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', borderTop: '2px solid var(--border)', paddingTop: '16px' }}>
+          <button type="button" onClick={() => void handleReset()} className="btn-premium-danger">
+            <RotateCcw size={12} /> Reset defaults
           </button>
-
           <div style={{ display: 'flex', gap: '10px' }}>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{ height: '36px', padding: '0 16px', fontSize: '13px' }}
-              className="btn-premium-secondary"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              style={{ height: '36px', padding: '0 20px', fontSize: '13px' }}
-              className="btn-premium-primary"
-            >
-              Apply Changes
-            </button>
+            <button type="button" onClick={onClose} className="btn-premium-secondary">Cancel</button>
+            <button type="submit" className="btn-premium-primary">Apply changes</button>
           </div>
         </div>
       </form>
