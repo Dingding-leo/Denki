@@ -6,6 +6,7 @@ on:
     paths:
       - .github/workflows/apply-unlimited-drill.yml
       - scripts/apply-unlimited-drill.py
+      - scripts/fix-apply-script.py
 
 permissions:
   contents: write
@@ -22,6 +23,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Repair implementation script
+        run: python3 scripts/fix-apply-script.py
       - name: Apply implementation
         run: python3 scripts/apply-unlimited-drill.py
       - run: npm ci
@@ -31,7 +34,7 @@ jobs:
       - run: npm run build
       - name: Commit verified implementation
         run: |
-          rm .github/workflows/apply-unlimited-drill.yml scripts/apply-unlimited-drill.py
+          rm .github/workflows/apply-unlimited-drill.yml scripts/apply-unlimited-drill.py scripts/fix-apply-script.py
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
