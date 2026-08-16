@@ -98,6 +98,10 @@ export const ManageCardsModal: React.FC<ManageCardsModalProps> = ({ classId, dec
 
     return () => {
       cancelled = true;
+      const current = useFlashcardStore.getState();
+      if (current.activeDeckId === deckId) {
+        useFlashcardStore.setState({ activeDeckId: null, cards: [] });
+      }
     };
   }, [deckId]);
 
