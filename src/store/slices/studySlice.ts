@@ -1,12 +1,12 @@
-import type { StateCreator } from 'zustand';
-import { db } from '../../db';
-import { reviewCard } from '../../services/scheduler';
-import { loadSchedulerParams } from '../../services/schedulerParams';
-import { triggerAutoSave } from '../../services/backup';
-import { ALL_DRILL_BUCKETS, filterDrillCards } from '../../services/drill';
-import { buildStudyQueue, pickReinsertIndex } from '../../services/studyQueue';
-import { toast } from '../uiStore';
-import type { FlashcardState, StudySlice } from '../types';
+import type { StateCreator } from "zustand";
+import { db } from "../../db";
+import { reviewCard } from "../../services/scheduler";
+import { loadSchedulerParams } from "../../services/schedulerParams";
+import { triggerAutoSave } from "../../services/backup";
+import { ALL_DRILL_BUCKETS, filterDrillCards } from "../../services/drill";
+import { buildStudyQueue, pickReinsertIndex } from "../../services/studyQueue";
+import { toast } from "../uiStore";
+import type { FlashcardState, StudySlice } from "../types";
 
 // Guards rateCard/undoLastRate so two concurrent mutations can't read the same
 // pre-await session snapshot and desync the in-memory queue/history from the DB.
@@ -31,8 +31,9 @@ function scheduleStatsRefresh(run: () => Promise<void>) {
   }, 1000);
 }
 
-
-async function refreshActiveDeckCards(get: () => FlashcardState): Promise<void> {
+async function refreshActiveDeckCards(
+  get: () => FlashcardState,
+): Promise<void> {
   const activeDeckId = get().activeDeckId;
   if (!activeDeckId) return;
 
@@ -41,7 +42,10 @@ async function refreshActiveDeckCards(get: () => FlashcardState): Promise<void> 
   } catch (error) {
     // The review transaction is already durable. A non-essential cache refresh
     // must never leave the learner staring at the same card and rating it twice.
-    console.warn('Review saved, but the active deck cache could not refresh:', error);
+    console.warn(
+      "Review saved, but the active deck cache could not refresh:",
+      error,
+    );
   }
 }
 
@@ -54,23 +58,25 @@ export const createStudySlice: StateCreator<
   session: null,
 
   startStudySession: async (deckId, forceCram = false) => {
-    const deckCards = await db.cards.where('deckId').equals(deckId).toArray();
+    const deckCards = await db.cards.where("deckId").equals(deckId).toArray();
     const now = new Date();
 
+    // Normal Study has no usage cap: every new card plus each review due
+    // now is eligible. Optional all-card practice bypasses the due filter.
+    let filteredCards = deckCards;
+    const isCram =
+      forceCram ||
+      (deckCards.length > 0 &&
+        deckCards.every((card) => card.due === undefined));
 
-// Normal Study has no usage cap: every new card plus each review due
-// now is eligible. Optional all-card practice bypasses the due filter.
-let filteredCards = deckCards;
-const isCram = forceCram || (deckCards.length > 0 && deckCards.every((card) => card.due === undefined));
+    if (!forceCram) {
+      filteredCards = deckCards.filter((card) => {
+        if (!card.lastReviewed || card.state === 0) return true;
+        return new Date(card.due).getTime() <= now.getTime();
+      });
+    }
 
-if (!forceCram) {
-  filteredCards = deckCards.filter((card) => {
-    if (!card.lastReviewed || card.state === 0) return true;
-    return new Date(card.due).getTime() <= now.getTime();
-  });
-}
-
-// Every session receives a fresh shuffled order. Class-wide queues also
+    // Every session receives a fresh shuffled order. Class-wide queues also
     // interleave decks when possible, preventing long blocks from one deck.
     const weightedQueue = buildStudyQueue(filteredCards);
 
@@ -89,21 +95,23 @@ if (!forceCram) {
   },
 
   startClassStudySession: async (classId, forceCram = false) => {
-    const classCards = await db.cards.where('classId').equals(classId).toArray();
+    const classCards = await db.cards
+      .where("classId")
+      .equals(classId)
+      .toArray();
     const now = new Date();
 
+    let filteredCards = classCards;
+    const isCram = forceCram;
 
-let filteredCards = classCards;
-const isCram = forceCram;
+    if (!forceCram) {
+      filteredCards = classCards.filter((card) => {
+        if (!card.lastReviewed || card.state === 0) return true;
+        return new Date(card.due).getTime() <= now.getTime();
+      });
+    }
 
-if (!forceCram) {
-  filteredCards = classCards.filter((card) => {
-    if (!card.lastReviewed || card.state === 0) return true;
-    return new Date(card.due).getTime() <= now.getTime();
-  });
-}
-
-// Every session receives a fresh shuffled order. Class-wide queues also
+    // Every session receives a fresh shuffled order. Class-wide queues also
     // interleave decks when possible, preventing long blocks from one deck.
     const weightedQueue = buildStudyQueue(filteredCards);
 
@@ -125,16 +133,15 @@ if (!forceCram) {
     const allCards = await db.cards.toArray();
     const now = new Date();
 
+    let filteredCards = allCards;
+    if (!forceCram) {
+      filteredCards = allCards.filter((card) => {
+        if (!card.lastReviewed || card.state === 0) return true;
+        return new Date(card.due).getTime() <= now.getTime();
+      });
+    }
 
-let filteredCards = allCards;
-if (!forceCram) {
-  filteredCards = allCards.filter((card) => {
-    if (!card.lastReviewed || card.state === 0) return true;
-    return new Date(card.due).getTime() <= now.getTime();
-  });
-}
-
-// A fresh mixed queue is mixed across the whole library. buildStudyQueue
+    // A fresh mixed queue is mixed across the whole library. buildStudyQueue
     // shuffles cards and breaks avoidable same-deck runs.
     const weightedQueue = buildStudyQueue(filteredCards);
 
@@ -157,7 +164,7 @@ if (!forceCram) {
   },
 
   startDrillSession: async (deckId, buckets = ALL_DRILL_BUCKETS) => {
-    const deckCards = await db.cards.where('deckId').equals(deckId).toArray();
+    const deckCards = await db.cards.where("deckId").equals(deckId).toArray();
     const selectedCards = filterDrillCards(deckCards, buckets);
     const queue = buildStudyQueue(selectedCards);
 
@@ -206,7 +213,7 @@ if (!forceCram) {
       // Save to IndexedDB within transaction
       let logId: number | undefined;
       try {
-        await db.transaction('rw', [db.cards, db.reviews], async () => {
+        await db.transaction("rw", [db.cards, db.reviews], async () => {
           if (currentCard.id) {
             await db.cards.put(updatedCard);
             logId = await db.reviews.add({
@@ -220,8 +227,8 @@ if (!forceCram) {
         // The review was NOT persisted — do not advance the session or report
         // success. A quota/storage failure here silently drops the review if we
         // keep going (the card stays due, the log never exists, undo is broken).
-        console.error('Failed to save card review:', err);
-        toast('Failed to save this review — please try again', 'error');
+        console.error("Failed to save card review:", err);
+        toast("Failed to save this review — please try again", "error");
         return;
       }
 
@@ -249,7 +256,11 @@ if (!forceCram) {
         const canReinsert = priorReinserts < MAX_REINSERTIONS;
 
         if (canReinsert) {
-          const insertIndex = pickReinsertIndex(newQueue.length, nextIndex, rating);
+          const insertIndex = pickReinsertIndex(
+            newQueue.length,
+            nextIndex,
+            rating,
+          );
           newQueue.splice(insertIndex, 0, updatedCard);
         }
       }
@@ -315,7 +326,7 @@ if (!forceCram) {
       // never persisted it (rateCard guards on `currentCard.id`), so `put` here
       // would otherwise create a brand-new row that was never rated.
       try {
-        await db.transaction('rw', [db.cards, db.reviews], async () => {
+        await db.transaction("rw", [db.cards, db.reviews], async () => {
           if (lastEntry.card.id) {
             await db.cards.put(lastEntry.card);
           }
@@ -325,8 +336,8 @@ if (!forceCram) {
           }
         });
       } catch (err) {
-        console.error('Failed to undo last rating in DB:', err);
-        toast('Undo failed — the saved review was left unchanged', 'error');
+        console.error("Failed to undo last rating in DB:", err);
+        toast("Undo failed — the saved review was left unchanged", "error");
         return;
       }
 
@@ -357,7 +368,9 @@ if (!forceCram) {
       scheduleStatsRefresh(async () => {
         await get().loadClassStats(lastEntry.card.classId);
         await get().loadDeckStats(lastEntry.card.classId);
-        await get().loadStats(sessionRef.isGlobal ? null : lastEntry.card.classId);
+        await get().loadStats(
+          sessionRef.isGlobal ? null : lastEntry.card.classId,
+        );
       });
 
       triggerAutoSave();

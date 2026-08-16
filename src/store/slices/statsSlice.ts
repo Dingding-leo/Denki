@@ -1,20 +1,20 @@
-import type { StateCreator } from 'zustand';
-import { db } from '../../db';
+import type { StateCreator } from "zustand";
+import { db } from "../../db";
 import type {
   ClassStats,
   DeckStats,
   FlashcardState,
   GlobalStats,
   StatsSlice,
-} from '../types';
+} from "../types";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 let latestStatsRequest = 0;
 
 function localDateKey(date: Date): string {
   const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
 
@@ -29,14 +29,13 @@ function addLocalDays(date: Date, days: number): Date {
 }
 
 function dateKeyOrdinal(key: string): number {
-  const [year, month, day] = key.split('-').map(Number);
+  const [year, month, day] = key.split("-").map(Number);
   return Math.floor(Date.UTC(year, month - 1, day) / DAY_MS);
 }
 
-
 async function deckDueCount(deckId: number, now: Date): Promise<number> {
   return db.cards
-    .where('[deckId+due]')
+    .where("[deckId+due]")
     .between([deckId, new Date(0)], [deckId, now])
     .count();
 }
@@ -46,9 +45,9 @@ async function computeClassStats(
   now: Date,
 ): Promise<ClassStats> {
   const [total, masteredCount, classDecks] = await Promise.all([
-    db.cards.where('classId').equals(classId).count(),
-    db.cards.where('[classId+state]').equals([classId, 2]).count(),
-    db.decks.where('classId').equals(classId).toArray(),
+    db.cards.where("classId").equals(classId).count(),
+    db.cards.where("[classId+state]").equals([classId, 2]).count(),
+    db.decks.where("classId").equals(classId).toArray(),
   ]);
 
   const dueCounts = await Promise.all(
@@ -65,14 +64,11 @@ async function computeClassStats(
   };
 }
 
-async function computeDeckStats(
-  deckId: number,
-  now: Date,
-): Promise<DeckStats> {
+async function computeDeckStats(deckId: number, now: Date): Promise<DeckStats> {
   const [total, dueCount, masteredCount] = await Promise.all([
-    db.cards.where('deckId').equals(deckId).count(),
+    db.cards.where("deckId").equals(deckId).count(),
     deckDueCount(deckId, now),
-    db.cards.where('[deckId+state]').equals([deckId, 2]).count(),
+    db.cards.where("[deckId+state]").equals([deckId, 2]).count(),
   ]);
 
   return {
@@ -94,53 +90,53 @@ export const createStatsSlice: StateCreator<
   currentStreak: 0,
   maxStreak: 0,
 
+  loadClassStats: async (classId) => {
+    const stats = await computeClassStats(classId, new Date());
+    set((state) => ({
+      classStats: { ...state.classStats, [classId]: stats },
+    }));
+  },
 
-loadClassStats: async (classId) => {
-  const stats = await computeClassStats(classId, new Date());
-  set((state) => ({
-    classStats: { ...state.classStats, [classId]: stats },
-  }));
-},
+  loadAllClassStats: async () => {
+    const classIds = get()
+      .classes.map((studyClass) => studyClass.id)
+      .filter((id): id is number => id !== undefined);
+    if (classIds.length === 0) {
+      set({ classStats: {} });
+      return;
+    }
 
+    const now = new Date();
+    const entries = await Promise.all(
+      classIds.map(
+        async (classId) =>
+          [classId, await computeClassStats(classId, now)] as const,
+      ),
+    );
+    set({ classStats: Object.fromEntries(entries) });
+  },
 
-loadAllClassStats: async () => {
-  const classIds = get().classes
-    .map((studyClass) => studyClass.id)
-    .filter((id): id is number => id !== undefined);
-  if (classIds.length === 0) {
-    set({ classStats: {} });
-    return;
-  }
+  loadDeckStats: async (classId) => {
+    const classDecks = await db.decks
+      .where("classId")
+      .equals(classId)
+      .toArray();
+    const now = new Date();
+    const entries = await Promise.all(
+      classDecks
+        .filter((deck) => deck.id !== undefined)
+        .map(
+          async (deck) =>
+            [deck.id!, await computeDeckStats(deck.id!, now)] as const,
+        ),
+    );
 
-  const now = new Date();
-  const entries = await Promise.all(
-    classIds.map(async (classId) => [
-      classId,
-      await computeClassStats(classId, now),
-    ] as const),
-  );
-  set({ classStats: Object.fromEntries(entries) });
-},
+    set((state) => ({
+      deckStats: { ...state.deckStats, ...Object.fromEntries(entries) },
+    }));
+  },
 
-
-loadDeckStats: async (classId) => {
-  const classDecks = await db.decks.where('classId').equals(classId).toArray();
-  const now = new Date();
-  const entries = await Promise.all(
-    classDecks
-      .filter((deck) => deck.id !== undefined)
-      .map(async (deck) => [
-        deck.id!,
-        await computeDeckStats(deck.id!, now),
-      ] as const),
-  );
-
-  set((state) => ({
-    deckStats: { ...state.deckStats, ...Object.fromEntries(entries) },
-  }));
-},
-
-loadStats: async (classId) => {
+  loadStats: async (classId) => {
     const requestId = ++latestStatsRequest;
     const now = new Date();
     const oneYearAgo = startOfLocalDay(now);
@@ -148,19 +144,20 @@ loadStats: async (classId) => {
 
     const reviews = classId
       ? await db.reviews
-          .where('[classId+reviewedAt]')
+          .where("[classId+reviewedAt]")
           .between([classId, oneYearAgo], [classId, now])
           .toArray()
-      : await db.reviews.where('reviewedAt').above(oneYearAgo).toArray();
+      : await db.reviews.where("reviewedAt").above(oneYearAgo).toArray();
 
     const totalReviews = reviews.length;
     const positiveReviews = reviews.reduce(
       (count, review) => count + (review.rating >= 3 ? 1 : 0),
       0,
     );
-    const avgRecallRate = totalReviews > 0
-      ? Math.round((positiveReviews / totalReviews) * 100)
-      : 100;
+    const avgRecallRate =
+      totalReviews > 0
+        ? Math.round((positiveReviews / totalReviews) * 100)
+        : 100;
 
     const reviewDates = new Set(
       reviews.map((review) => localDateKey(new Date(review.reviewedAt))),
@@ -206,7 +203,9 @@ loadStats: async (classId) => {
 
     const heatmapData: { date: string; count: number }[][] = [];
     const heatmapCursor = startOfLocalDay(now);
-    heatmapCursor.setDate(heatmapCursor.getDate() - 52 * 7 - heatmapCursor.getDay());
+    heatmapCursor.setDate(
+      heatmapCursor.getDate() - 52 * 7 - heatmapCursor.getDay(),
+    );
     for (let weekIndex = 0; weekIndex < 53; weekIndex += 1) {
       const week: { date: string; count: number }[] = [];
       for (let dayIndex = 0; dayIndex < 7; dayIndex += 1) {
@@ -232,36 +231,38 @@ loadStats: async (classId) => {
       ranges.map(({ lowerBound, end }) =>
         classId
           ? db.cards
-              .where('[classId+due]')
+              .where("[classId+due]")
               .between([classId, lowerBound], [classId, end])
               .count()
-          : db.cards.where('due').between(lowerBound, end).count()),
+          : db.cards.where("due").between(lowerBound, end).count(),
+      ),
     );
 
-
     const workloadForecast = ranges.map(({ start }, index) => ({
-      dayName: index === 0
-        ? 'Today'
-        : index === 1
-          ? 'Tomorrow'
-          : start.toLocaleDateString('en-US', { weekday: 'short' }),
+      dayName:
+        index === 0
+          ? "Today"
+          : index === 1
+            ? "Tomorrow"
+            : start.toLocaleDateString("en-US", { weekday: "short" }),
       count: rawForecastCounts[index],
     }));
 
     const stateCounts = classId
       ? await Promise.all([
-          db.cards.where('[classId+state]').equals([classId, 0]).count(),
-          db.cards.where('[classId+state]').equals([classId, 1]).count(),
-          db.cards.where('[classId+state]').equals([classId, 3]).count(),
-          db.cards.where('[classId+state]').equals([classId, 2]).count(),
+          db.cards.where("[classId+state]").equals([classId, 0]).count(),
+          db.cards.where("[classId+state]").equals([classId, 1]).count(),
+          db.cards.where("[classId+state]").equals([classId, 3]).count(),
+          db.cards.where("[classId+state]").equals([classId, 2]).count(),
         ])
       : await Promise.all([
-          db.cards.where('state').equals(0).count(),
-          db.cards.where('state').equals(1).count(),
-          db.cards.where('state').equals(3).count(),
-          db.cards.where('state').equals(2).count(),
+          db.cards.where("state").equals(0).count(),
+          db.cards.where("state").equals(1).count(),
+          db.cards.where("state").equals(3).count(),
+          db.cards.where("state").equals(2).count(),
         ]);
-    const [newCount, learningCountRaw, relearningCount, reviewCount] = stateCounts;
+    const [newCount, learningCountRaw, relearningCount, reviewCount] =
+      stateCounts;
     const learningCount = learningCountRaw + relearningCount;
     const totalCards = newCount + learningCount + reviewCount;
     const denominator = totalCards || 1;
