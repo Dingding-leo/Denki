@@ -1,60 +1,12 @@
-import type { StateCreator } from 'zustand';
-import { db } from '../../db';
-import type { Card } from '../../db/schema';
-import { reviewCard } from '../../services/scheduler';
-import { loadSchedulerParams } from '../../services/schedulerParams';
-import { triggerAutoSave } from '../../services/backup';
-import { ALL_DRILL_BUCKETS, filterDrillCards } from '../../services/drill';
-import { loadNewCardsPerDay, countNewIntroducedToday, newCardAllowance } from '../../services/studyLimits';
-import { buildStudyQueue, pickReinsertIndex } from '../../services/studyQueue';
-import { toast } from '../uiStore';
-import type { FlashcardState, StudySlice } from '../types';
-
-const isNewCard = (card: Card) => card.state === 0 || !card.lastReviewed;
-
-/**
- * Enforce the daily new-card limit: keep every due review, but only as many
- * new cards per deck as today's remaining allowance permits. Returns the
- * capped list and how many new cards were held back for tomorrow.
- */
-async function applyNewCardLimit(cards: Card[]): Promise<{ cards: Card[]; heldBack: number }> {
-  const limit = loadNewCardsPerDay();
-  if (limit <= 0) return { cards, heldBack: 0 };
-
-  const introduced = await countNewIntroducedToday();
-  const remainingByDeck = new Map<number, number>();
-  const kept: Card[] = [];
-  let heldBack = 0;
-
-  // Cards arrive in creation order after the caller's sort; process in id
-  // order here so the oldest new cards are introduced first.
-  const sorted = [...cards].sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
-  for (const card of sorted) {
-    if (!isNewCard(card)) {
-      kept.push(card);
-      continue;
-    }
-    const remaining =
-      remainingByDeck.get(card.deckId) ?? newCardAllowance(card.deckId, introduced, limit);
-    if (remaining > 0) {
-      remainingByDeck.set(card.deckId, remaining - 1);
-      kept.push(card);
-    } else {
-      remainingByDeck.set(card.deckId, 0);
-      heldBack++;
-    }
-  }
-  return { cards: kept, heldBack };
-}
-
-const notifyHeldBack = (heldBack: number) => {
-  if (heldBack > 0) {
-    toast(
-      `Daily new-card limit reached — ${heldBack} new card${heldBack === 1 ? '' : 's'} saved for tomorrow`,
-      'info',
-    );
-  }
-};
+import type { StateCreator } from "zustand";
+import { db } from "../../db";
+import { reviewCard } from "../../services/scheduler";
+import { loadSchedulerParams } from "../../services/schedulerParams";
+import { triggerAutoSave } from "../../services/backup";
+import { ALL_DRILL_BUCKETS, filterDrillCards } from "../../services/drill";
+import { buildStudyQueue, pickReinsertIndex } from "../../services/studyQueue";
+import { toast } from "../uiStore";
+import type { FlashcardState, StudySlice } from "../types";
 
 // Guards rateCard/undoLastRate so two concurrent mutations can't read the same
 // pre-await session snapshot and desync the in-memory queue/history from the DB.
@@ -79,6 +31,24 @@ function scheduleStatsRefresh(run: () => Promise<void>) {
   }, 1000);
 }
 
+async function refreshActiveDeckCards(
+  get: () => FlashcardState,
+): Promise<void> {
+  const activeDeckId = get().activeDeckId;
+  if (!activeDeckId) return;
+
+  try {
+    await get().loadCards(activeDeckId);
+  } catch (error) {
+    // The review transaction is already durable. A non-essential cache refresh
+    // must never leave the learner staring at the same card and rating it twice.
+    console.warn(
+      "Review saved, but the active deck cache could not refresh:",
+      error,
+    );
+  }
+}
+
 export const createStudySlice: StateCreator<
   FlashcardState,
   [],
@@ -88,22 +58,22 @@ export const createStudySlice: StateCreator<
   session: null,
 
   startStudySession: async (deckId, forceCram = false) => {
-    const deckCards = await db.cards.where('deckId').equals(deckId).toArray();
+    const deckCards = await db.cards.where("deckId").equals(deckId).toArray();
     const now = new Date();
 
-    // Spaced repetition due card filter (due <= now)
+    // Normal Study has no usage cap: every new card plus each review due
+    // now is eligible. Optional all-card practice bypasses the due filter.
     let filteredCards = deckCards;
-    const isCram = forceCram || deckCards.length > 0 && deckCards.every(c => c.due === undefined);
-    
-    let heldBack = 0;
+    const isCram =
+      forceCram ||
+      (deckCards.length > 0 &&
+        deckCards.every((card) => card.due === undefined));
+
     if (!forceCram) {
-      filteredCards = deckCards.filter(card => {
-        // If it's a new card (no lastReviewed or state is 0), it's due
+      filteredCards = deckCards.filter((card) => {
         if (!card.lastReviewed || card.state === 0) return true;
-        // Otherwise, check if due date is in the past
         return new Date(card.due).getTime() <= now.getTime();
       });
-      ({ cards: filteredCards, heldBack } = await applyNewCardLimit(filteredCards));
     }
 
     // Every session receives a fresh shuffled order. Class-wide queues also
@@ -122,23 +92,23 @@ export const createStudySlice: StateCreator<
         history: [],
       },
     });
-    notifyHeldBack(heldBack);
   },
 
   startClassStudySession: async (classId, forceCram = false) => {
-    const classCards = await db.cards.where('classId').equals(classId).toArray();
+    const classCards = await db.cards
+      .where("classId")
+      .equals(classId)
+      .toArray();
     const now = new Date();
 
     let filteredCards = classCards;
     const isCram = forceCram;
 
-    let heldBack = 0;
     if (!forceCram) {
-      filteredCards = classCards.filter(card => {
+      filteredCards = classCards.filter((card) => {
         if (!card.lastReviewed || card.state === 0) return true;
         return new Date(card.due).getTime() <= now.getTime();
       });
-      ({ cards: filteredCards, heldBack } = await applyNewCardLimit(filteredCards));
     }
 
     // Every session receives a fresh shuffled order. Class-wide queues also
@@ -157,7 +127,6 @@ export const createStudySlice: StateCreator<
         history: [],
       },
     });
-    notifyHeldBack(heldBack);
   },
 
   startGlobalStudySession: async (forceCram = false) => {
@@ -165,16 +134,14 @@ export const createStudySlice: StateCreator<
     const now = new Date();
 
     let filteredCards = allCards;
-    let heldBack = 0;
     if (!forceCram) {
       filteredCards = allCards.filter((card) => {
         if (!card.lastReviewed || card.state === 0) return true;
         return new Date(card.due).getTime() <= now.getTime();
       });
-      ({ cards: filteredCards, heldBack } = await applyNewCardLimit(filteredCards));
     }
 
-    // A fresh daily queue is mixed across the whole library. buildStudyQueue
+    // A fresh mixed queue is mixed across the whole library. buildStudyQueue
     // shuffles cards and breaks avoidable same-deck runs.
     const weightedQueue = buildStudyQueue(filteredCards);
 
@@ -194,11 +161,10 @@ export const createStudySlice: StateCreator<
         history: [],
       },
     });
-    notifyHeldBack(heldBack);
   },
 
   startDrillSession: async (deckId, buckets = ALL_DRILL_BUCKETS) => {
-    const deckCards = await db.cards.where('deckId').equals(deckId).toArray();
+    const deckCards = await db.cards.where("deckId").equals(deckId).toArray();
     const selectedCards = filterDrillCards(deckCards, buckets);
     const queue = buildStudyQueue(selectedCards);
 
@@ -247,7 +213,7 @@ export const createStudySlice: StateCreator<
       // Save to IndexedDB within transaction
       let logId: number | undefined;
       try {
-        await db.transaction('rw', [db.cards, db.reviews], async () => {
+        await db.transaction("rw", [db.cards, db.reviews], async () => {
           if (currentCard.id) {
             await db.cards.put(updatedCard);
             logId = await db.reviews.add({
@@ -261,16 +227,12 @@ export const createStudySlice: StateCreator<
         // The review was NOT persisted — do not advance the session or report
         // success. A quota/storage failure here silently drops the review if we
         // keep going (the card stays due, the log never exists, undo is broken).
-        console.error('Failed to save card review:', err);
-        toast('Failed to save this review — please try again', 'error');
+        console.error("Failed to save card review:", err);
+        toast("Failed to save this review — please try again", "error");
         return;
       }
 
-      // Refresh database buffers for 'cards' in memory (if managing card view is active)
-      const activeDeckId = get().activeDeckId;
-      if (activeDeckId) {
-        await get().loadCards(activeDeckId);
-      }
+      await refreshActiveDeckCards(get);
 
       // The session may have been ended or replaced during the awaits above
       // (e.g. the user exited). Bail rather than resurrecting a dead session.
@@ -294,7 +256,11 @@ export const createStudySlice: StateCreator<
         const canReinsert = priorReinserts < MAX_REINSERTIONS;
 
         if (canReinsert) {
-          const insertIndex = pickReinsertIndex(newQueue.length, nextIndex, rating);
+          const insertIndex = pickReinsertIndex(
+            newQueue.length,
+            nextIndex,
+            rating,
+          );
           newQueue.splice(insertIndex, 0, updatedCard);
         }
       }
@@ -360,7 +326,7 @@ export const createStudySlice: StateCreator<
       // never persisted it (rateCard guards on `currentCard.id`), so `put` here
       // would otherwise create a brand-new row that was never rated.
       try {
-        await db.transaction('rw', [db.cards, db.reviews], async () => {
+        await db.transaction("rw", [db.cards, db.reviews], async () => {
           if (lastEntry.card.id) {
             await db.cards.put(lastEntry.card);
           }
@@ -370,14 +336,12 @@ export const createStudySlice: StateCreator<
           }
         });
       } catch (err) {
-        console.error('Failed to undo last rating in DB:', err);
+        console.error("Failed to undo last rating in DB:", err);
+        toast("Undo failed — the saved review was left unchanged", "error");
+        return;
       }
 
-      // Refresh database buffers for 'cards' in memory (if managing card view is active)
-      const activeDeckId = get().activeDeckId;
-      if (activeDeckId) {
-        await get().loadCards(activeDeckId);
-      }
+      await refreshActiveDeckCards(get);
 
       // Bail if the session ended or was replaced during the awaits.
       if (get().session !== sessionRef) return;
@@ -404,7 +368,9 @@ export const createStudySlice: StateCreator<
       scheduleStatsRefresh(async () => {
         await get().loadClassStats(lastEntry.card.classId);
         await get().loadDeckStats(lastEntry.card.classId);
-        await get().loadStats(sessionRef.isGlobal ? null : lastEntry.card.classId);
+        await get().loadStats(
+          sessionRef.isGlobal ? null : lastEntry.card.classId,
+        );
       });
 
       triggerAutoSave();

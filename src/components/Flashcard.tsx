@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Volume2, Edit3, RotateCw } from 'lucide-react';
-import { Scratchpad } from './Scratchpad';
-import type { Card } from '../db/schema';
-import Prism from 'prismjs';
-import 'prismjs/themes/prism-tomorrow.css';
-import { renderContent } from '../services/markdown';
+import React, { useState, useEffect, useRef } from "react";
+import { Volume2, Edit3, RotateCw } from "lucide-react";
+import { Scratchpad } from "./Scratchpad";
+import type { Card } from "../db/schema";
+import Prism from "prismjs";
+import "prismjs/themes/prism-tomorrow.css";
+import { renderContent } from "../services/markdown";
+import { getCardSpeechText, loadSpeechRate } from "../services/speech";
 
 interface FlashcardProps {
   card: Card;
@@ -13,29 +14,38 @@ interface FlashcardProps {
   autoSpeak?: boolean;
 }
 
-export const Flashcard: React.FC<FlashcardProps> = ({ card, isFlipped, onFlip, autoSpeak = false }) => {
+export const Flashcard: React.FC<FlashcardProps> = ({
+  card,
+  isFlipped,
+  onFlip,
+  autoSpeak = false,
+}) => {
   const [showScratchpad, setShowScratchpad] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
 
   // Cache the preferred English voice without putting it in React state. Voice
-// discovery is asynchronous in some browsers; a ref avoids speaking the
-// same side twice when the voice list becomes available.
-useEffect(() => {
-  if (!('speechSynthesis' in window)) return;
+  // discovery is asynchronous in some browsers; a ref avoids replaying a side
+  // when the voice list becomes available.
+  useEffect(() => {
+    if (!("speechSynthesis" in window)) return;
 
-  const loadVoice = () => {
-    const voices = window.speechSynthesis.getVoices();
-    selectedVoiceRef.current =
-      voices.find((voice) => voice.lang.startsWith('en') && voice.name.includes('Google')) ??
-      voices.find((voice) => voice.lang.startsWith('en')) ??
-      null;
-  };
+    const loadVoice = () => {
+      const voices = window.speechSynthesis.getVoices();
+      selectedVoiceRef.current =
+        voices.find(
+          (voice) =>
+            voice.lang.startsWith("en") && voice.name.includes("Google"),
+        ) ??
+        voices.find((voice) => voice.lang.startsWith("en")) ??
+        null;
+    };
 
-  loadVoice();
-  window.speechSynthesis.addEventListener('voiceschanged', loadVoice);
-  return () => window.speechSynthesis.removeEventListener('voiceschanged', loadVoice);
-}, []);
+    loadVoice();
+    window.speechSynthesis.addEventListener("voiceschanged", loadVoice);
+    return () =>
+      window.speechSynthesis.removeEventListener("voiceschanged", loadVoice);
+  }, []);
 
   // Reset scratchpad state during render when card changes to avoid cascading renders
   const [prevCardId, setPrevCardId] = useState(card.id);
@@ -45,72 +55,81 @@ useEffect(() => {
   }
 
   // Trigger code highlighting on flip or card change. Scoped to this card's DOM
-  // instead of Prism.highlightAll(), which re-scans the entire document (the
-  // study session can hold several markdown/code subtrees).
+  // instead of Prism.highlightAll(), which re-scans the entire document.
   useEffect(() => {
     if (!containerRef.current) return;
-    containerRef.current.querySelectorAll('pre code[class*="language-"]').forEach((el) => {
-      if (el instanceof HTMLElement) Prism.highlightElement(el);
-    });
+    containerRef.current
+      .querySelectorAll('pre code[class*="language-"]')
+      .forEach((el) => {
+        if (el instanceof HTMLElement) Prism.highlightElement(el);
+      });
   }, [card.id, isFlipped]);
 
-  // Stable speech callback: voice discovery must not replay the current side.
-const speakText = React.useCallback((textToRead: string) => {
-  const cleanText = textToRead
-    .replace(/\{\{c\d+::(.*?)\}\}/g, '$1')
-    .replace(/```[\s\S]*?```/g, '')
-    .replace(/[`*#_-]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  const questionSpeechText = React.useMemo(
+    () => getCardSpeechText(card, false),
+    [card],
+  );
+  const answerSpeechText = React.useMemo(
+    () => getCardSpeechText(card, true),
+    [card],
+  );
 
-  if (!cleanText || !('speechSynthesis' in window)) return;
+  const speakText = React.useCallback((textToRead: string) => {
+    const cleanText = textToRead.trim();
+    if (!cleanText || !("speechSynthesis" in window)) return;
 
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(cleanText);
-  utterance.lang = 'en-US';
-  const fallbackVoice = window.speechSynthesis
-    .getVoices()
-    .find((voice) => voice.lang.startsWith('en'));
-  utterance.voice = selectedVoiceRef.current ?? fallbackVoice ?? null;
-  const savedSpeed = Number.parseFloat(localStorage.getItem('denki-speech-speed') ?? '1.0');
-  utterance.rate = Number.isFinite(savedSpeed) ? savedSpeed : 1;
-  window.speechSynthesis.speak(utterance);
-}, []);
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.lang = "en-US";
+    const fallbackVoice = window.speechSynthesis
+      .getVoices()
+      .find((voice) => voice.lang.startsWith("en"));
+    utterance.voice = selectedVoiceRef.current ?? fallbackVoice ?? null;
+    utterance.rate = loadSpeechRate();
+    window.speechSynthesis.speak(utterance);
+  }, []);
 
-const autoSpeechTimerRef = useRef<number | null>(null);
+  const autoSpeechTimerRef = useRef<number | null>(null);
 
-// A newly advanced card briefly inherits the previous card's flipped
-// state. Deferring one task lets that stale answer task be cancelled;
-// the settled front/question is then read automatically.
-useEffect(() => {
-  if (autoSpeechTimerRef.current !== null) {
-    window.clearTimeout(autoSpeechTimerRef.current);
-    autoSpeechTimerRef.current = null;
-  }
-
-  if (!autoSpeak) {
-    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-    return;
-  }
-
-  const textToSpeak = isFlipped ? card.back : card.front;
-  autoSpeechTimerRef.current = window.setTimeout(() => {
-    autoSpeechTimerRef.current = null;
-    speakText(textToSpeak);
-  }, 0);
-
-  return () => {
+  // A newly advanced card briefly inherits the previous card's flipped
+  // state. Deferring one task lets that stale answer task be cancelled;
+  // the settled front/question is then read automatically.
+  useEffect(() => {
     if (autoSpeechTimerRef.current !== null) {
       window.clearTimeout(autoSpeechTimerRef.current);
       autoSpeechTimerRef.current = null;
     }
-  };
-}, [card.id, card.front, card.back, isFlipped, autoSpeak, speakText]);
+
+    if (!autoSpeak) {
+      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+      return;
+    }
+
+    const textToSpeak = isFlipped ? answerSpeechText : questionSpeechText;
+    autoSpeechTimerRef.current = window.setTimeout(() => {
+      autoSpeechTimerRef.current = null;
+      speakText(textToSpeak);
+    }, 0);
+
+    return () => {
+      if (autoSpeechTimerRef.current !== null) {
+        window.clearTimeout(autoSpeechTimerRef.current);
+        autoSpeechTimerRef.current = null;
+      }
+    };
+  }, [
+    card.id,
+    isFlipped,
+    autoSpeak,
+    answerSpeechText,
+    questionSpeechText,
+    speakText,
+  ]);
 
   // Cleanup speech on unmount
   useEffect(() => {
     return () => {
-      if ('speechSynthesis' in window) {
+      if ("speechSynthesis" in window) {
         window.speechSynthesis.cancel();
       }
     };
@@ -118,7 +137,7 @@ useEffect(() => {
 
   const speak = (e: React.MouseEvent) => {
     e.stopPropagation(); // Avoid flipping card on click
-    const textToSpeak = isFlipped ? card.back : card.front;
+    const textToSpeak = isFlipped ? answerSpeechText : questionSpeechText;
     speakText(textToSpeak);
   };
 
@@ -128,14 +147,18 @@ useEffect(() => {
   };
 
   const getFontSize = (text: string) => {
-    const hasList = text.includes('\n') || text.includes('- ') || text.includes('1. ') || text.includes('* ');
+    const hasList =
+      text.includes("\n") ||
+      text.includes("- ") ||
+      text.includes("1. ") ||
+      text.includes("* ");
     if (text.length > 250 || hasList) {
-      return '1.15rem';
+      return "1.15rem";
     }
     if (text.length > 100) {
-      return '1.4rem';
+      return "1.4rem";
     }
-    return '1.75rem';
+    return "1.75rem";
   };
 
   // Memoize the markdown parse: renderContent is ~11 regex passes over both
@@ -144,7 +167,7 @@ useEffect(() => {
   // (remounted per card), so the card reference is stable per mount and the
   // memo only recomputes when content or flip state changes.
   const cardFrontHTML = React.useMemo(
-    () => renderContent(card.front, card.cardType === 'cloze', isFlipped),
+    () => renderContent(card.front, card.cardType === "cloze", isFlipped),
     [card.front, card.cardType, isFlipped],
   );
   const cardBackHTML = React.useMemo(
@@ -153,14 +176,21 @@ useEffect(() => {
   );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%', margin: '0 auto' }}>
-      
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "16px",
+        width: "100%",
+        margin: "0 auto",
+      }}
+    >
       {/* 3D Perspective Card Container */}
       <div
         ref={containerRef}
         onClick={onFlip}
         onKeyDown={(e: React.KeyboardEvent) => {
-          if (e.key === 'Enter' || e.key === ' ') {
+          if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
             // Stop the page-level window keydown handler from ALSO toggling the
             // flip — two toggles cancel out and the card appears stuck.
@@ -171,29 +201,60 @@ useEffect(() => {
         tabIndex={0}
         role="button"
         aria-label="Flip flashcard"
-        className={`perspective-container ${isFlipped ? 'flipped' : ''}`}
+        className={`perspective-container ${isFlipped ? "flipped" : ""}`}
       >
         <div className="flip-card-inner">
-          
           {/* FRONT OF THE CARD */}
-          <div className="flip-card-front" style={{ padding: '24px 32px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', width: '100%', zIndex: 5 }}>
-              <span className="badge-premium badge-premium-blue" style={{ fontSize: '10px', textTransform: 'uppercase', padding: '4px 10px', borderRadius: '30px', fontWeight: 700 }}>
-                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#6366f1', marginRight: '6px', display: 'inline-block', boxShadow: '0 0 8px #6366f1' }} />
-                {card.cardType === 'cloze' ? 'Cloze Deletion' : 'Front'}
+          <div className="flip-card-front" style={{ padding: "24px 32px" }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "16px",
+                width: "100%",
+                zIndex: 5,
+              }}
+            >
+              <span
+                className="badge-premium badge-premium-blue"
+                style={{
+                  fontSize: "10px",
+                  textTransform: "uppercase",
+                  padding: "4px 10px",
+                  borderRadius: "30px",
+                  fontWeight: 700,
+                }}
+              >
+                <span
+                  style={{
+                    width: "6px",
+                    height: "6px",
+                    borderRadius: "50%",
+                    background: "#6366f1",
+                    marginRight: "6px",
+                    display: "inline-block",
+                    boxShadow: "0 0 8px #6366f1",
+                  }}
+                />
+                {card.cardType === "cloze" ? "Cloze Deletion" : "Front"}
               </span>
-              
-              <div style={{ display: 'flex', gap: '8px' }}>
+
+              <div style={{ display: "flex", gap: "8px" }}>
                 <button
                   onClick={toggleScratchpad}
                   style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '50%',
+                    width: "32px",
+                    height: "32px",
+                    borderRadius: "50%",
                     padding: 0,
-                    background: showScratchpad ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.03)',
-                    borderColor: showScratchpad ? 'rgba(99,102,241,0.4)' : 'rgba(255,255,255,0.08)',
-                    color: showScratchpad ? '#a5b4fc' : '#9ca3af',
+                    background: showScratchpad
+                      ? "rgba(99,102,241,0.2)"
+                      : "rgba(255,255,255,0.03)",
+                    borderColor: showScratchpad
+                      ? "rgba(99,102,241,0.4)"
+                      : "rgba(255,255,255,0.08)",
+                    color: showScratchpad ? "#a5b4fc" : "#9ca3af",
                   }}
                   className="btn-premium-secondary"
                   aria-label="Toggle scratchpad"
@@ -204,32 +265,79 @@ useEffect(() => {
                 <button
                   onClick={speak}
                   style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '50%',
+                    width: "32px",
+                    height: "32px",
+                    borderRadius: "50%",
                     padding: 0,
                   }}
                   className="btn-premium-secondary"
-                  aria-label="Pronounce text"
-                  title="Pronounce English Text"
+                  aria-label="Read question aloud"
+                  title="Read question aloud"
                 >
                   <Volume2 size={14} />
                 </button>
               </div>
             </div>
 
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', overflowY: 'hidden', minHeight: 0, zIndex: 5, width: '100%' }}>
-              <div style={{ margin: 'auto 0', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '8px 0' }}>
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "flex-start",
+                overflowY: "auto",
+                minHeight: 0,
+                zIndex: 5,
+                width: "100%",
+                overscrollBehavior: "contain",
+                paddingRight: "6px",
+              }}
+            >
+              <div
+                style={{
+                  margin: "auto 0",
+                  width: "100%",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  padding: "8px 0",
+                }}
+              >
                 <div
                   className="markdown-content"
                   dangerouslySetInnerHTML={{ __html: cardFrontHTML }}
-                  style={{ fontSize: getFontSize(card.front), color: '#ffffff', fontWeight: 600, letterSpacing: '-0.012em', lineHeight: 1.4, textAlign: 'center', maxWidth: '100%', margin: '0 auto' }}
+                  style={{
+                    fontSize: getFontSize(card.front),
+                    color: "#ffffff",
+                    fontWeight: 600,
+                    letterSpacing: "-0.012em",
+                    lineHeight: 1.4,
+                    textAlign: "center",
+                    maxWidth: "100%",
+                    margin: "0 auto",
+                  }}
                 />
               </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px', color: '#8e8e93', fontSize: '11px', letterSpacing: '0.5px', textTransform: 'uppercase', fontWeight: 700, marginTop: '16px', zIndex: 5, opacity: 0.8 }}>
-              <RotateCw size={11} style={{ color: '#818cf8' }} /> Click card to flip
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: "6px",
+                color: "#8e8e93",
+                fontSize: "11px",
+                letterSpacing: "0.5px",
+                textTransform: "uppercase",
+                fontWeight: 700,
+                marginTop: "16px",
+                zIndex: 5,
+                opacity: 0.8,
+              }}
+            >
+              <RotateCw size={11} style={{ color: "#818cf8" }} /> Click card to
+              flip
             </div>
 
             {/* Canvas Sketchpad Overlay */}
@@ -237,51 +345,138 @@ useEffect(() => {
           </div>
 
           {/* BACK OF THE CARD */}
-          <div className="flip-card-back" style={{ padding: '24px 32px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', width: '100%', zIndex: 5 }}>
-              <span className="badge-premium badge-premium-green" style={{ fontSize: '10px', textTransform: 'uppercase', padding: '4px 10px', borderRadius: '30px', fontWeight: 700 }}>
-                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', marginRight: '6px', display: 'inline-block', boxShadow: '0 0 8px #10b981' }} />
+          <div className="flip-card-back" style={{ padding: "24px 32px" }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "16px",
+                width: "100%",
+                zIndex: 5,
+              }}
+            >
+              <span
+                className="badge-premium badge-premium-green"
+                style={{
+                  fontSize: "10px",
+                  textTransform: "uppercase",
+                  padding: "4px 10px",
+                  borderRadius: "30px",
+                  fontWeight: 700,
+                }}
+              >
+                <span
+                  style={{
+                    width: "6px",
+                    height: "6px",
+                    borderRadius: "50%",
+                    background: "#10b981",
+                    marginRight: "6px",
+                    display: "inline-block",
+                    boxShadow: "0 0 8px #10b981",
+                  }}
+                />
                 Back / Answer
               </span>
-              
+
               <button
                 onClick={speak}
                 style={{
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '50%',
+                  width: "32px",
+                  height: "32px",
+                  borderRadius: "50%",
                   padding: 0,
                 }}
                 className="btn-premium-secondary"
-                aria-label="Pronounce text"
-                title="Pronounce English Text"
+                aria-label="Read answer aloud"
+                title="Read answer aloud"
               >
                 <Volume2 size={14} />
               </button>
             </div>
 
             {/* Split layout if cloze deletion, showing card front as well */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', overflowY: 'hidden', minHeight: 0, zIndex: 5, width: '100%' }}>
-              <div style={{ margin: 'auto 0', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', padding: '8px 0' }}>
-                {card.cardType === 'cloze' && (
-                  <div style={{ opacity: 0.45, borderBottom: '1px dashed rgba(255,255,255,0.08)', paddingBottom: '12px', width: '100%', textAlign: 'center' }}>
-                    <div className="markdown-content" dangerouslySetInnerHTML={{ __html: cardFrontHTML }} style={{ fontSize: '1.2rem', fontWeight: 500 }} />
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "flex-start",
+                overflowY: "auto",
+                minHeight: 0,
+                zIndex: 5,
+                width: "100%",
+                overscrollBehavior: "contain",
+                paddingRight: "6px",
+              }}
+            >
+              <div
+                style={{
+                  margin: "auto 0",
+                  width: "100%",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "12px",
+                  padding: "8px 0",
+                }}
+              >
+                {card.cardType === "cloze" && (
+                  <div
+                    style={{
+                      opacity: 0.45,
+                      borderBottom: "1px dashed rgba(255,255,255,0.08)",
+                      paddingBottom: "12px",
+                      width: "100%",
+                      textAlign: "center",
+                    }}
+                  >
+                    <div
+                      className="markdown-content"
+                      dangerouslySetInnerHTML={{ __html: cardFrontHTML }}
+                      style={{ fontSize: "1.2rem", fontWeight: 500 }}
+                    />
                   </div>
                 )}
-                
+
                 <div
                   className="markdown-content"
                   dangerouslySetInnerHTML={{ __html: cardBackHTML }}
-                  style={{ fontSize: getFontSize(card.back), color: '#ffffff', fontWeight: 600, letterSpacing: '-0.012em', lineHeight: 1.4, textAlign: 'center', maxWidth: '100%', margin: '0 auto' }}
+                  style={{
+                    fontSize: getFontSize(card.back),
+                    color: "#ffffff",
+                    fontWeight: 600,
+                    letterSpacing: "-0.012em",
+                    lineHeight: 1.4,
+                    textAlign: "center",
+                    maxWidth: "100%",
+                    margin: "0 auto",
+                  }}
                 />
               </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px', color: '#8e8e93', fontSize: '11px', letterSpacing: '0.5px', textTransform: 'uppercase', fontWeight: 700, marginTop: '16px', zIndex: 5, opacity: 0.8 }}>
-              <RotateCw size={11} style={{ color: '#34d399' }} /> Flip back to front
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: "6px",
+                color: "#8e8e93",
+                fontSize: "11px",
+                letterSpacing: "0.5px",
+                textTransform: "uppercase",
+                fontWeight: 700,
+                marginTop: "16px",
+                zIndex: 5,
+                opacity: 0.8,
+              }}
+            >
+              <RotateCw size={11} style={{ color: "#34d399" }} /> Flip back to
+              front
             </div>
           </div>
-
         </div>
       </div>
     </div>
