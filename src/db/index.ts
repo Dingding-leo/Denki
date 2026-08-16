@@ -1,22 +1,17 @@
-import Dexie, { type Table } from "dexie";
-import type { Card, Class, Deck, ReviewLog } from "./schema";
+import Dexie, { type Table } from 'dexie';
+import type { Card, Class, Deck, ReviewLog } from './schema';
 
 const STORES = {
-  classes: "++id, name, createdAt",
-  decks: "++id, classId, name, createdAt",
-  cards:
-    "++id, classId, deckId, state, due, lastReviewed, cardType, lastRating, [classId+due], [deckId+due], [classId+state], [deckId+state]",
-  reviews:
-    "++id, cardId, deckId, classId, reviewedAt, rating, [classId+reviewedAt]",
+  classes: '++id, name, createdAt',
+  decks: '++id, classId, name, createdAt',
+  cards: '++id, classId, deckId, state, due, lastReviewed, cardType, lastRating, [classId+due], [deckId+due], [classId+state], [deckId+state]',
+  reviews: '++id, cardId, deckId, classId, reviewedAt, rating, [classId+reviewedAt]',
 } as const;
 
 export function deriveLatestRatings(
   reviews: readonly ReviewLog[],
 ): Map<number, number> {
-  const latestByCard = new Map<
-    number,
-    { rating: number; reviewedAt: number }
-  >();
+  const latestByCard = new Map<number, { rating: number; reviewedAt: number }>();
 
   for (const review of reviews) {
     const reviewedAt = new Date(review.reviewedAt).getTime();
@@ -32,10 +27,7 @@ export function deriveLatestRatings(
   }
 
   return new Map(
-    [...latestByCard.entries()].map(([cardId, value]) => [
-      cardId,
-      value.rating,
-    ]),
+    [...latestByCard.entries()].map(([cardId, value]) => [cardId, value.rating]),
   );
 }
 
@@ -46,7 +38,7 @@ class DenkiDatabase extends Dexie {
   reviews!: Table<ReviewLog, number>;
 
   constructor() {
-    super("DenkiDatabase");
+    super('DenkiDatabase');
 
     // Version 3 adds compound indices for optimized stats calculations and FSRS queue queries.
     this.version(3).stores(STORES);
@@ -57,13 +49,10 @@ class DenkiDatabase extends Dexie {
     this.version(4)
       .stores(STORES)
       .upgrade(async (transaction) => {
-        const cards = transaction.table<Card, number>("cards");
-        const reviews = transaction.table<ReviewLog, number>("reviews");
+        const cards = transaction.table<Card, number>('cards');
+        const reviews = transaction.table<ReviewLog, number>('reviews');
         const legacyCards = await cards
-          .filter(
-            (card) =>
-              card.lastReviewed !== undefined && card.lastRating === undefined,
-          )
+          .filter((card) => card.lastReviewed !== undefined && card.lastRating === undefined)
           .toArray();
         const cardIds = legacyCards
           .map((card) => card.id)
@@ -71,12 +60,11 @@ class DenkiDatabase extends Dexie {
         if (cardIds.length === 0) return;
 
         const latestRatings = deriveLatestRatings(
-          await reviews.where("cardId").anyOf(cardIds).toArray(),
+          await reviews.where('cardId').anyOf(cardIds).toArray(),
         );
         for (const cardId of cardIds) {
           const rating = latestRatings.get(cardId);
-          if (rating !== undefined)
-            await cards.update(cardId, { lastRating: rating });
+          if (rating !== undefined) await cards.update(cardId, { lastRating: rating });
         }
       });
   }
