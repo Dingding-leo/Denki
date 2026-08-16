@@ -1,7 +1,7 @@
-import React, { useRef, useState } from 'react';
-import { Upload, FileText, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
-import { useFlashcardStore } from '../store/useFlashcardStore';
+import React, { useEffect, useRef, useState } from 'react';
+import { AlertCircle, CheckCircle, FileText, RefreshCw, Upload } from 'lucide-react';
 import { celebrate } from '../services/celebrate';
+import { useFlashcardStore } from '../store/useFlashcardStore';
 
 interface CSVImporterProps {
   classId: number;
@@ -9,24 +9,33 @@ interface CSVImporterProps {
   onComplete?: () => void;
 }
 
+interface ImportStatus {
+  type: 'idle' | 'success' | 'error';
+  message: string;
+  failedCount?: number;
+}
+
 export const CSVImporter: React.FC<CSVImporterProps> = ({ classId, deckId, onComplete }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const importFromCSV = useFlashcardStore(state => state.importFromCSV);
-  
+  const completionTimerRef = useRef<number | null>(null);
+  const importFromCSV = useFlashcardStore((state) => state.importFromCSV);
+
   const [isDragging, setIsDragging] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState<{
-    type: 'idle' | 'success' | 'error';
-    message: string;
-    successCount?: number;
-    failedCount?: number;
-  }>({ type: 'idle', message: '' });
+  const [status, setStatus] = useState<ImportStatus>({ type: 'idle', message: '' });
 
-  const processFile = (file: File) => {
-    if (!file.name.endsWith('.csv')) {
+  useEffect(() => () => {
+    if (completionTimerRef.current !== null) {
+      window.clearTimeout(completionTimerRef.current);
+    }
+  }, []);
+
+  const processFile = async (file: File) => {
+    if (loading) return;
+    if (!/\.csv$/i.test(file.name)) {
       setStatus({
         type: 'error',
-        message: 'Invalid file format. Please upload a valid .csv file.',
+        message: 'Invalid file format. Choose a CSV file and try again.',
       });
       return;
     }
@@ -34,169 +43,173 @@ export const CSVImporter: React.FC<CSVImporterProps> = ({ classId, deckId, onCom
     setLoading(true);
     setStatus({ type: 'idle', message: '' });
 
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const text = e.target?.result as string;
-      try {
-        const result = await importFromCSV(classId, deckId, text);
-        setLoading(false);
-        
-        if (result.success > 0) {
-          setStatus({
-            type: 'success',
-            message: `Successfully imported ${result.success} cards!`,
-            successCount: result.success,
-            failedCount: result.failed,
-          });
-          
-          // Celebrate with confetti
-          celebrate({
-            particleCount: 80,
-            spread: 60,
-            origin: { y: 0.7 },
-            colors: ['#6366f1', '#10b981', '#6ee7b7'],
-          });
+    try {
+      const text = await file.text();
+      const result = await importFromCSV(classId, deckId, text);
 
-          if (onComplete) {
-            setTimeout(onComplete, 2000);
-          }
-        } else {
-          setStatus({
-            type: 'error',
-            message: 'No valid cards found. Ensure your CSV has at least 2 columns: Front, Back.',
-            successCount: 0,
-            failedCount: result.failed,
-          });
-        }
-      } catch {
-        setLoading(false);
+      if (result.success === 0) {
         setStatus({
           type: 'error',
-          message: 'An error occurred while parsing the CSV. Please try again.',
+          message: result.failed > 0
+            ? 'No valid cards were found. Every row needs a Front and Back value.'
+            : 'The CSV is empty.',
+          failedCount: result.failed,
         });
+        return;
       }
-    };
-    reader.readAsText(file);
-  };
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
+      setStatus({
+        type: 'success',
+        message: `Imported ${result.success} card${result.success === 1 ? '' : 's'}.`,
+        failedCount: result.failed,
+      });
 
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
+      celebrate({
+        particleCount: 80,
+        spread: 60,
+        origin: { y: 0.7 },
+        colors: ['#7f9c86', '#a7b79f', '#d4d9c8'],
+      });
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      processFile(e.dataTransfer.files[0]);
-    }
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      processFile(e.target.files[0]);
+      if (onComplete) {
+        completionTimerRef.current = window.setTimeout(() => {
+          completionTimerRef.current = null;
+          onComplete();
+        }, 2000);
+      }
+    } catch (error) {
+      setStatus({
+        type: 'error',
+        message: error instanceof Error
+          ? error.message
+          : 'The CSV could not be imported.',
+      });
+    } finally {
+      setLoading(false);
+      setIsDragging(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
   const triggerFileInput = () => {
-    fileInputRef.current?.click();
+    if (!loading) fileInputRef.current?.click();
+  };
+
+  const handleDropzoneKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      triggerFileInput();
+    }
   };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
+        role="button"
+        tabIndex={loading ? -1 : 0}
+        aria-disabled={loading}
+        aria-label="Import cards from a CSV file"
+        onDragOver={(event) => {
+          event.preventDefault();
+          if (!loading) setIsDragging(true);
+        }}
+        onDragLeave={() => setIsDragging(false)}
+        onDrop={(event) => {
+          event.preventDefault();
+          setIsDragging(false);
+          const file = event.dataTransfer.files[0];
+          if (file) void processFile(file);
+        }}
         onClick={triggerFileInput}
+        onKeyDown={handleDropzoneKeyDown}
         style={{
-          border: isDragging ? '2px dashed #6366f1' : '2px dashed rgba(255, 255, 255, 0.15)',
-          borderRadius: '12px',
+          border: isDragging ? '2px dashed var(--accent-color)' : '2px dashed rgba(220, 226, 211, 0.24)',
+          borderRadius: '10px',
           padding: '40px 20px',
           textAlign: 'center',
-          cursor: 'pointer',
-          background: isDragging ? 'rgba(99, 102, 241, 0.05)' : 'rgba(255, 255, 255, 0.01)',
-          transition: 'all 0.2s ease',
+          cursor: loading ? 'progress' : 'pointer',
+          background: isDragging ? 'rgba(127, 156, 134, 0.08)' : 'rgba(255, 255, 255, 0.015)',
+          transition: 'border-color 0.15s ease, background 0.15s ease',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
           gap: '12px',
+          outline: 'none',
         }}
       >
         <input
           ref={fileInputRef}
           type="file"
-          accept=".csv"
-          onChange={handleFileChange}
+          accept=".csv,text/csv"
+          aria-label="Choose a CSV file"
+          disabled={loading}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) void processFile(file);
+          }}
           style={{ display: 'none' }}
         />
 
         {loading ? (
-          <RefreshCw size={36} className="animate-spin" style={{ color: '#6366f1', animation: 'spin 1.5s linear infinite' }} />
+          <RefreshCw size={36} aria-hidden="true" style={{ color: 'var(--accent-color)', animation: 'spin 1.5s linear infinite' }} />
         ) : (
-          <Upload size={36} style={{ color: isDragging ? '#6366f1' : '#9ca3af' }} />
+          <Upload size={36} aria-hidden="true" style={{ color: isDragging ? 'var(--accent-color)' : 'var(--text-muted)' }} />
         )}
 
         <div>
-          <p style={{ fontWeight: 600, fontSize: '15px', color: '#f3f4f6', marginBottom: '4px' }}>
-            {loading ? 'Parsing CSV data...' : 'Drag and drop your CSV file here'}
+          <p style={{ fontWeight: 600, fontSize: '15px', color: 'var(--text-primary)', marginBottom: '4px' }}>
+            {loading ? 'Validating and importing the complete file…' : 'Drop a CSV file here'}
           </p>
-          <p style={{ fontSize: '13px', color: '#9ca3af' }}>
-            or click to browse from your device
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+            or press Enter to browse from this device
           </p>
         </div>
 
         <div style={{
           fontSize: '11px',
-          color: '#6b7280',
-          background: 'rgba(255, 255, 255, 0.03)',
-          padding: '4px 10px',
-          borderRadius: '6px',
+          color: 'var(--text-secondary)',
+          background: 'rgba(255, 255, 255, 0.025)',
+          padding: '5px 10px',
+          border: '1px solid rgba(220, 226, 211, 0.14)',
           display: 'flex',
           alignItems: 'center',
           gap: '6px',
         }}>
-          <FileText size={12} /> CSV columns: Front, Back, Type (optional)
+          <FileText size={12} aria-hidden="true" /> Front, Back, Type (optional)
         </div>
       </div>
 
       {status.type !== 'idle' && (
-        <div style={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          gap: '12px',
-          padding: '16px',
-          borderRadius: '10px',
-          background: status.type === 'success' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-          border: `1px solid ${status.type === 'success' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`,
-        }}>
+        <div
+          role={status.type === 'error' ? 'alert' : 'status'}
+          aria-live="polite"
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '12px',
+            padding: '16px',
+            borderRadius: '8px',
+            background: status.type === 'success' ? 'rgba(127, 156, 134, 0.1)' : 'rgba(180, 96, 82, 0.1)',
+            border: `1px solid ${status.type === 'success' ? 'rgba(127, 156, 134, 0.3)' : 'rgba(180, 96, 82, 0.3)'}`,
+          }}
+        >
           {status.type === 'success' ? (
-            <CheckCircle size={20} style={{ color: '#10b981', flexShrink: 0, marginTop: '2px' }} />
+            <CheckCircle size={20} style={{ color: '#9eb3a1', flexShrink: 0, marginTop: '2px' }} />
           ) : (
-            <AlertCircle size={20} style={{ color: '#ef4444', flexShrink: 0, marginTop: '2px' }} />
+            <AlertCircle size={20} style={{ color: '#cf8e82', flexShrink: 0, marginTop: '2px' }} />
           )}
 
           <div style={{ flex: 1 }}>
-            <p style={{
-              fontWeight: 600,
-              fontSize: '14px',
-              color: status.type === 'success' ? '#6ee7b7' : '#fca5a5',
-              marginBottom: '2px',
-            }}>
-              {status.type === 'success' ? 'Import Complete' : 'Import Failed'}
+            <p style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)', marginBottom: '2px' }}>
+              {status.type === 'success' ? 'CSV import complete' : 'CSV import stopped safely'}
             </p>
-            <p style={{ fontSize: '13px', color: '#d1d5db', lineHeight: 1.4 }}>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
               {status.message}
             </p>
-            {status.type === 'success' && status.failedCount !== undefined && status.failedCount > 0 && (
-              <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '6px' }}>
-                Note: {status.failedCount} rows were skipped due to missing front/back values.
+            {status.failedCount !== undefined && status.failedCount > 0 && (
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
+                {status.failedCount} invalid row{status.failedCount === 1 ? ' was' : 's were'} skipped.
               </p>
             )}
           </div>
