@@ -1,0 +1,1523 @@
+name: Apply unlimited study and drill mode
+
+on:
+  push:
+    branches: [feat/unlimited-study-drill-mode]
+    paths:
+      - .github/workflows/apply-unlimited-drill.yml
+
+permissions:
+  contents: write
+
+jobs:
+  implement-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/unlimited-study-drill-mode
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Implement unlimited study and deck drill mode
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          def read(path: str) -> str:
+              return Path(path).read_text()
+
+          def write(path: str, content: str) -> None:
+              target = Path(path)
+              target.parent.mkdir(parents=True, exist_ok=True)
+              target.write_text(content)
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              text = read(path)
+              if old not in text:
+                  raise AssertionError(f"Expected text not found in {path}: {old[:100]!r}")
+              write(path, text.replace(old, new, 1))
+
+          def sub_once(path: str, pattern: str, replacement: str, flags: int = 0) -> None:
+              text = read(path)
+              updated, count = re.subn(pattern, replacement, text, count=1, flags=flags)
+              if count != 1:
+                  raise AssertionError(f"Expected one regex match in {path}, got {count}: {pattern[:100]!r}")
+              write(path, updated)
+
+          # ---------- Drill-domain helpers ----------
+          write('src/services/drill.ts', '''import type { Card } from '../db/schema';
+          import { normalizeStoredRating, type Rating } from './reviewRatings';
+
+          export type DrillBucket = 'new' | Rating;
+
+          export const ALL_DRILL_BUCKETS: readonly DrillBucket[] = ['new', 1, 2, 3, 4];
+
+          export type DrillBucketCounts = Record<DrillBucket, number>;
+
+          export function getDrillBucket(
+            card: Pick<Card, 'lastRating'>,
+          ): DrillBucket {
+            return normalizeStoredRating(card.lastRating) ?? 'new';
+          }
+
+          export function filterDrillCards(
+            cards: readonly Card[],
+            buckets: readonly DrillBucket[],
+          ): Card[] {
+            const selected = new Set<DrillBucket>(buckets);
+            return cards.filter((card) => selected.has(getDrillBucket(card)));
+          }
+
+          export function countDrillBuckets(cards: readonly Card[]): DrillBucketCounts {
+            const counts: DrillBucketCounts = { new: 0, 1: 0, 2: 0, 3: 0, 4: 0 };
+            for (const card of cards) counts[getDrillBucket(card)] += 1;
+            return counts;
+          }
+          '''.replace('\n          ', '\n').lstrip())
+
+          write('src/components/modals/DrillSetupModal.tsx', '''import React, { useEffect, useMemo, useRef, useState } from 'react';
+          import { Check, Shuffle, X } from 'lucide-react';
+          import { db } from '../../db';
+          import type { Card } from '../../db/schema';
+          import {
+            ALL_DRILL_BUCKETS,
+            countDrillBuckets,
+            filterDrillCards,
+            type DrillBucket,
+          } from '../../services/drill';
+          import { REVIEW_RATINGS } from '../../services/reviewRatings';
+
+          interface DrillSetupModalProps {
+            deckId: number;
+            deckName: string;
+            onClose: () => void;
+            onStart: (buckets: readonly DrillBucket[]) => Promise<void>;
+          }
+
+          const bucketDefinitions: readonly {
+            bucket: DrillBucket;
+            label: string;
+            description: string;
+            color: string;
+          }[] = [
+            {
+              bucket: 'new',
+              label: 'New / unrated',
+              description: 'Cards without a previous confidence result',
+              color: '#8c9584',
+            },
+            ...REVIEW_RATINGS.map((rating) => ({
+              bucket: rating.rating as DrillBucket,
+              label: `${rating.rating} · ${rating.label}`,
+              description: rating.description,
+              color: rating.color,
+            })),
+          ];
+
+          export const DrillSetupModal: React.FC<DrillSetupModalProps> = ({
+            deckId,
+            deckName,
+            onClose,
+            onStart,
+          }) => {
+            const [cards, setCards] = useState<Card[]>([]);
+            const [selected, setSelected] = useState<DrillBucket[]>(() => [...ALL_DRILL_BUCKETS]);
+            const [loading, setLoading] = useState(true);
+            const [starting, setStarting] = useState(false);
+            const [error, setError] = useState('');
+            const dialogRef = useRef<HTMLDivElement>(null);
+            const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+            useEffect(() => {
+              let cancelled = false;
+              setLoading(true);
+              setError('');
+              void db.cards.where('deckId').equals(deckId).toArray()
+                .then((rows) => {
+                  if (!cancelled) setCards(rows);
+                })
+                .catch((caughtError: unknown) => {
+                  if (!cancelled) {
+                    setError(caughtError instanceof Error ? caughtError.message : 'The deck could not be read.');
+                  }
+                })
+                .finally(() => {
+                  if (!cancelled) setLoading(false);
+                });
+              return () => {
+                cancelled = true;
+              };
+            }, [deckId]);
+
+            useEffect(() => {
+              const previousFocus = document.activeElement as HTMLElement | null;
+              closeButtonRef.current?.focus();
+
+              const handleKeyDown = (event: KeyboardEvent) => {
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  onClose();
+                  return;
+                }
+                if (event.key !== 'Tab') return;
+
+                const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+                  'button:not(:disabled), [href], input:not(:disabled), [tabindex]:not([tabindex="-1"])',
+                );
+                if (!focusable || focusable.length === 0) return;
+                const first = focusable[0];
+                const last = focusable[focusable.length - 1];
+                if (event.shiftKey && document.activeElement === first) {
+                  event.preventDefault();
+                  last.focus();
+                } else if (!event.shiftKey && document.activeElement === last) {
+                  event.preventDefault();
+                  first.focus();
+                }
+              };
+
+              window.addEventListener('keydown', handleKeyDown, true);
+              return () => {
+                window.removeEventListener('keydown', handleKeyDown, true);
+                previousFocus?.focus();
+              };
+            }, [onClose]);
+
+            const counts = useMemo(() => countDrillBuckets(cards), [cards]);
+            const selectedCount = useMemo(
+              () => filterDrillCards(cards, selected).length,
+              [cards, selected],
+            );
+
+            const toggleBucket = (bucket: DrillBucket) => {
+              setSelected((current) => current.includes(bucket)
+                ? current.filter((item) => item !== bucket)
+                : [...current, bucket]);
+            };
+
+            const handleStart = async () => {
+              if (starting || loading || selectedCount === 0) return;
+              setStarting(true);
+              setError('');
+              try {
+                await onStart(selected);
+              } catch (caughtError) {
+                setError(caughtError instanceof Error ? caughtError.message : 'The drill could not start.');
+                setStarting(false);
+              }
+            };
+
+            return (
+              <div
+                onMouseDown={(event) => {
+                  if (event.target === event.currentTarget && !starting) onClose();
+                }}
+                style={{
+                  position: 'fixed',
+                  inset: 0,
+                  zIndex: 2400,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '20px',
+                  background: 'rgba(4, 10, 7, 0.8)',
+                  backdropFilter: 'blur(8px)',
+                }}
+              >
+                <div
+                  ref={dialogRef}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="drill-setup-title"
+                  className="glass-panel"
+                  style={{
+                    width: 'min(620px, 100%)',
+                    maxHeight: 'calc(100vh - 40px)',
+                    overflowY: 'auto',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '18px',
+                    borderTop: '6px solid var(--accent-color)',
+                  }}
+                >
+                  <header style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', borderBottom: '2px solid var(--border)', paddingBottom: '14px' }}>
+                    <div>
+                      <p className="zine-section-kicker">Prepare to drill / one pass</p>
+                      <h2 id="drill-setup-title" style={{ marginTop: '5px', fontSize: '24px' }}>{deckName}</h2>
+                      <p style={{ marginTop: '7px', color: 'var(--text-secondary)', fontSize: '13px', lineHeight: 1.5 }}>
+                        Randomize the selected cards, see each exactly once, and keep every rating for future spaced-review scheduling.
+                      </p>
+                    </div>
+                    <button
+                      ref={closeButtonRef}
+                      type="button"
+                      onClick={onClose}
+                      disabled={starting}
+                      className="btn-premium-secondary"
+                      aria-label="Close drill setup"
+                      style={{ width: '34px', height: '34px', padding: 0, flexShrink: 0 }}
+                    >
+                      <X size={16} />
+                    </button>
+                  </header>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: '16px', alignItems: 'end' }}>
+                    <div>
+                      <span className="zine-field-label">Cards selected</span>
+                      <div style={{ marginTop: '5px', fontFamily: 'var(--font-display)', fontSize: '48px', lineHeight: 0.9, color: 'var(--text-primary)' }}>
+                        {loading ? '—' : selectedCount}
+                      </div>
+                      <p style={{ marginTop: '7px', color: 'var(--text-muted)', fontSize: '11px', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>
+                        of {cards.length} cards · no repeats · no usage limit
+                      </p>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                      <button type="button" className="btn-premium-secondary" onClick={() => setSelected([...ALL_DRILL_BUCKETS])}>
+                        Select all
+                      </button>
+                      <button type="button" className="btn-premium-secondary" onClick={() => setSelected([1, 2])}>
+                        Again + Hard
+                      </button>
+                    </div>
+                  </div>
+
+                  <section>
+                    <div className="zine-section-heading" style={{ marginBottom: '10px' }}>
+                      <span className="zine-section-number">01</span>
+                      <h3>Previous level filter</h3>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '9px' }}>
+                      {bucketDefinitions.map((definition) => {
+                        const active = selected.includes(definition.bucket);
+                        return (
+                          <button
+                            key={definition.bucket}
+                            type="button"
+                            aria-pressed={active}
+                            onClick={() => toggleBucket(definition.bucket)}
+                            style={{
+                              minHeight: '76px',
+                              display: 'grid',
+                              gridTemplateColumns: '26px minmax(0, 1fr) auto',
+                              gap: '9px',
+                              alignItems: 'start',
+                              padding: '11px',
+                              textAlign: 'left',
+                              color: active ? 'var(--text-primary)' : 'var(--text-muted)',
+                              background: active ? 'rgba(127, 156, 134, 0.12)' : 'rgba(255,255,255,0.015)',
+                              border: `1px solid ${active ? definition.color : 'var(--border)'}`,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <span style={{ width: '22px', height: '22px', display: 'grid', placeItems: 'center', border: `1px solid ${active ? definition.color : 'var(--border)'}`, background: active ? definition.color : 'transparent', color: '#0d1511' }}>
+                              {active && <Check size={13} />}
+                            </span>
+                            <span>
+                              <strong style={{ display: 'block', fontSize: '12px' }}>{definition.label}</strong>
+                              <small style={{ display: 'block', marginTop: '4px', color: 'var(--text-muted)', fontSize: '10px', lineHeight: 1.35 }}>{definition.description}</small>
+                            </span>
+                            <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: definition.color }}>
+                              {counts[definition.bucket]}
+                            </strong>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+
+                  {error && (
+                    <div role="alert" style={{ padding: '10px 12px', border: '1px solid #a87869', color: '#d6a193', fontSize: '12px' }}>
+                      {error}
+                    </div>
+                  )}
+
+                  <footer style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center', borderTop: '2px solid var(--border)', paddingTop: '14px' }}>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '10px', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', lineHeight: 1.45 }}>
+                      Low ratings will not repeat during this drill.<br />They will affect later Study sessions.
+                    </p>
+                    <div style={{ display: 'flex', gap: '9px' }}>
+                      <button type="button" className="btn-premium-secondary" onClick={onClose} disabled={starting}>Cancel</button>
+                      <button
+                        type="button"
+                        className="btn-premium-primary"
+                        onClick={() => void handleStart()}
+                        disabled={loading || starting || selectedCount === 0}
+                      >
+                        <Shuffle size={15} /> {starting ? 'Building drill…' : `Drill ${selectedCount} cards`}
+                      </button>
+                    </div>
+                  </footer>
+                </div>
+              </div>
+            );
+          };
+          '''.replace('\n          ', '\n').lstrip())
+
+          # ---------- Remove daily new-card caps and add drill sessions ----------
+          study_path = 'src/store/slices/studySlice.ts'
+          study = read(study_path)
+          study = study.replace(
+              "import { loadNewCardsPerDay, countNewIntroducedToday, newCardAllowance } from '../../services/studyLimits';\n",
+              "import { ALL_DRILL_BUCKETS, filterDrillCards } from '../../services/drill';\n",
+              1,
+          )
+          study, count = re.subn(
+              r"const isNewCard = .*?\n\n// Guards rateCard/undoLastRate",
+              "// Guards rateCard/undoLastRate",
+              study,
+              count=1,
+              flags=re.S,
+          )
+          assert count == 1
+          study, count = re.subn(
+              r"    // Spaced repetition due card filter \(due <= now\)\n    let filteredCards = deckCards;.*?\n    // Every session receives",
+              """    // Normal study includes every new card plus scheduled reviews due now.
+    // There is intentionally no daily introduction cap.
+    let filteredCards = deckCards;
+    const isCram = forceCram || (deckCards.length > 0 && deckCards.every((card) => card.due === undefined));
+
+    if (!forceCram) {
+      filteredCards = deckCards.filter((card) => {
+        if (!card.lastReviewed || card.state === 0) return true;
+        return new Date(card.due).getTime() <= now.getTime();
+      });
+    }
+
+    // Every session receives""",
+              study,
+              count=1,
+              flags=re.S,
+          )
+          assert count == 1
+          study, count = re.subn(
+              r"    let filteredCards = classCards;\n    const isCram = forceCram;.*?\n    // Every session receives",
+              """    let filteredCards = classCards;
+    const isCram = forceCram;
+
+    if (!forceCram) {
+      filteredCards = classCards.filter((card) => {
+        if (!card.lastReviewed || card.state === 0) return true;
+        return new Date(card.due).getTime() <= now.getTime();
+      });
+    }
+
+    // Every session receives""",
+              study,
+              count=1,
+              flags=re.S,
+          )
+          assert count == 1
+          study, count = re.subn(
+              r"    let filteredCards = allCards;\n    let heldBack = 0;.*?\n    // A fresh daily queue",
+              """    let filteredCards = allCards;
+    if (!forceCram) {
+      filteredCards = allCards.filter((card) => {
+        if (!card.lastReviewed || card.state === 0) return true;
+        return new Date(card.due).getTime() <= now.getTime();
+      });
+    }
+
+    // A fresh daily queue""",
+              study,
+              count=1,
+              flags=re.S,
+          )
+          assert count == 1
+          study = study.replace('    notifyHeldBack(heldBack);\n', '')
+          drill_action = '''  startDrillSession: async (deckId, buckets = ALL_DRILL_BUCKETS) => {
+            const deckCards = await db.cards.where('deckId').equals(deckId).toArray();
+            const selectedCards = filterDrillCards(deckCards, buckets);
+            const queue = buildStudyQueue(selectedCards);
+
+            set({
+              session: {
+                deckId,
+                isDrill: true,
+                drillBuckets: [...buckets],
+                queue,
+                currentIndex: 0,
+                completedCount: 0,
+                initialQueueSize: queue.length,
+                totalCards: deckCards.length,
+                isCram: false,
+                history: [],
+              },
+            });
+          },
+
+          '''.replace('\n          ', '\n')
+          marker = '  rateCard: async (rating) => {'
+          assert marker in study
+          study = study.replace(marker, drill_action + marker, 1)
+          study = study.replace('      if (rating <= 2) {', '      if (!sessionRef.isDrill && rating <= 2) {', 1)
+          write(study_path, study)
+
+          # ---------- Session/store types ----------
+          types_path = 'src/store/types.ts'
+          types = read(types_path)
+          types = types.replace(
+              "import type { Rating } from '../services/scheduler';\n",
+              "import type { DrillBucket } from '../services/drill';\nimport type { Rating } from '../services/scheduler';\n",
+              1,
+          )
+          types = types.replace(
+              "  isCram?: boolean;       // If studying all cards instead of strictly due ones\n",
+              "  isCram?: boolean;       // If studying all cards instead of strictly due ones\n  isDrill?: boolean;      // Random one-pass deck session; low ratings never reinsert\n  drillBuckets?: DrillBucket[]; // Previous-level buckets included in this drill\n",
+              1,
+          )
+          types = types.replace(
+              "  startGlobalStudySession: (forceCram?: boolean) => Promise<void>;\n",
+              "  startGlobalStudySession: (forceCram?: boolean) => Promise<void>;\n  startDrillSession: (deckId: number, buckets?: readonly DrillBucket[]) => Promise<void>;\n",
+              1,
+          )
+          write(types_path, types)
+
+          # ---------- Persist and resume Drill separately from normal Study ----------
+          write('src/services/studySessionPersistence.ts', '''import { db } from '../db';
+          import { ALL_DRILL_BUCKETS, type DrillBucket } from './drill';
+          import type { StudySession } from '../store/types';
+
+          const STORAGE_KEY = 'denki.study-session.v1';
+          const SNAPSHOT_VERSION = 1;
+          const MAX_SESSION_AGE_MS = 24 * 60 * 60 * 1000;
+          const VALID_DRILL_BUCKETS = new Set<DrillBucket>(ALL_DRILL_BUCKETS);
+
+          interface PersistedStudySession {
+            version: typeof SNAPSHOT_VERSION;
+            savedAt: number;
+            deckId?: number;
+            classId?: number;
+            isGlobal?: boolean;
+            queueCardIds: number[];
+            currentIndex: number;
+            completedCount: number;
+            initialQueueSize: number;
+            totalCards: number;
+            isCram?: boolean;
+            isDrill?: boolean;
+            drillBuckets?: DrillBucket[];
+          }
+
+          export interface StudySessionScope {
+            deckId?: number;
+            classId?: number;
+            isGlobal?: boolean;
+            isDrill?: boolean;
+          }
+
+          function getStorage(): Storage | null {
+            if (typeof window === 'undefined') return null;
+            try {
+              return window.localStorage;
+            } catch {
+              return null;
+            }
+          }
+
+          function isFiniteNonNegativeInteger(value: unknown): value is number {
+            return Number.isInteger(value) && Number(value) >= 0;
+          }
+
+          function isValidDrillBucket(value: unknown): value is DrillBucket {
+            return VALID_DRILL_BUCKETS.has(value as DrillBucket);
+          }
+
+          function isValidSnapshot(value: unknown): value is PersistedStudySession {
+            if (!value || typeof value !== 'object') return false;
+            const snapshot = value as Partial<PersistedStudySession>;
+
+            return (
+              snapshot.version === SNAPSHOT_VERSION &&
+              typeof snapshot.savedAt === 'number' &&
+              Number.isFinite(snapshot.savedAt) &&
+              Array.isArray(snapshot.queueCardIds) &&
+              snapshot.queueCardIds.every((id) => Number.isInteger(id) && id > 0) &&
+              isFiniteNonNegativeInteger(snapshot.currentIndex) &&
+              isFiniteNonNegativeInteger(snapshot.completedCount) &&
+              isFiniteNonNegativeInteger(snapshot.initialQueueSize) &&
+              isFiniteNonNegativeInteger(snapshot.totalCards) &&
+              (snapshot.deckId === undefined || (Number.isInteger(snapshot.deckId) && snapshot.deckId > 0)) &&
+              (snapshot.classId === undefined || (Number.isInteger(snapshot.classId) && snapshot.classId > 0)) &&
+              (snapshot.isGlobal === undefined || typeof snapshot.isGlobal === 'boolean') &&
+              (snapshot.isCram === undefined || typeof snapshot.isCram === 'boolean') &&
+              (snapshot.isDrill === undefined || typeof snapshot.isDrill === 'boolean') &&
+              (snapshot.drillBuckets === undefined || (
+                Array.isArray(snapshot.drillBuckets) &&
+                snapshot.drillBuckets.every(isValidDrillBucket)
+              )) &&
+              (!snapshot.isDrill || snapshot.deckId !== undefined) &&
+              (snapshot.deckId !== undefined || snapshot.classId !== undefined || snapshot.isGlobal === true)
+            );
+          }
+
+          function scopeMatches(snapshot: PersistedStudySession, scope: StudySessionScope): boolean {
+            if (scope.isDrill !== undefined && Boolean(snapshot.isDrill) !== scope.isDrill) return false;
+            if (scope.isGlobal) return snapshot.isGlobal === true;
+            if (scope.deckId !== undefined) return snapshot.deckId === scope.deckId;
+            if (scope.classId !== undefined) return snapshot.classId === scope.classId;
+            return false;
+          }
+
+          export function persistStudySession(session: StudySession): void {
+            const storage = getStorage();
+            if (!storage) return;
+
+            const queueCardIds = session.queue.map((card) => card.id);
+            if (
+              queueCardIds.length === 0 ||
+              queueCardIds.some((id): id is undefined => id === undefined)
+            ) {
+              clearPersistedStudySession();
+              return;
+            }
+
+            const snapshot: PersistedStudySession = {
+              version: SNAPSHOT_VERSION,
+              savedAt: Date.now(),
+              deckId: session.deckId,
+              classId: session.classId,
+              isGlobal: session.isGlobal,
+              queueCardIds: queueCardIds as number[],
+              currentIndex: session.currentIndex,
+              completedCount: session.completedCount,
+              initialQueueSize: session.initialQueueSize,
+              totalCards: session.totalCards,
+              isCram: session.isCram,
+              isDrill: session.isDrill,
+              drillBuckets: session.drillBuckets,
+            };
+
+            try {
+              storage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+            } catch (error) {
+              console.warn('Unable to persist study session:', error);
+            }
+          }
+
+          export function clearPersistedStudySession(): void {
+            const storage = getStorage();
+            if (!storage) return;
+
+            try {
+              storage.removeItem(STORAGE_KEY);
+            } catch (error) {
+              console.warn('Unable to clear persisted study session:', error);
+            }
+          }
+
+          export async function restorePersistedStudySession(
+            scope: StudySessionScope,
+          ): Promise<StudySession | null> {
+            const storage = getStorage();
+            if (!storage) return null;
+
+            let snapshot: PersistedStudySession;
+            try {
+              const raw = storage.getItem(STORAGE_KEY);
+              if (!raw) return null;
+
+              const parsed: unknown = JSON.parse(raw);
+              if (!isValidSnapshot(parsed)) {
+                clearPersistedStudySession();
+                return null;
+              }
+              snapshot = parsed;
+            } catch (error) {
+              console.warn('Unable to read persisted study session:', error);
+              clearPersistedStudySession();
+              return null;
+            }
+
+            if (!scopeMatches(snapshot, scope)) return null;
+
+            if (Date.now() - snapshot.savedAt > MAX_SESSION_AGE_MS) {
+              clearPersistedStudySession();
+              return null;
+            }
+
+            if (snapshot.currentIndex > snapshot.queueCardIds.length) {
+              clearPersistedStudySession();
+              return null;
+            }
+
+            try {
+              const cards = await db.cards.bulkGet(snapshot.queueCardIds);
+              if (cards.some((card) => card === undefined)) {
+                clearPersistedStudySession();
+                return null;
+              }
+
+              const queue = cards.map((card) => card!);
+              const queueMatchesScope = scope.isGlobal
+                ? true
+                : scope.deckId !== undefined
+                  ? queue.every((card) => card.deckId === scope.deckId)
+                  : queue.every((card) => card.classId === scope.classId);
+
+              if (!queueMatchesScope) {
+                clearPersistedStudySession();
+                return null;
+              }
+
+              return {
+                deckId: snapshot.deckId,
+                classId: snapshot.classId,
+                isGlobal: snapshot.isGlobal,
+                queue,
+                currentIndex: snapshot.currentIndex,
+                completedCount: Math.min(snapshot.completedCount, queue.length),
+                initialQueueSize: snapshot.initialQueueSize,
+                totalCards: snapshot.totalCards,
+                isCram: snapshot.isCram,
+                isDrill: snapshot.isDrill,
+                drillBuckets: snapshot.isDrill
+                  ? snapshot.drillBuckets ?? [...ALL_DRILL_BUCKETS]
+                  : undefined,
+                // Undo history remains in-memory only to keep snapshots compact.
+                history: [],
+              };
+            } catch (error) {
+              console.warn('Unable to restore persisted study session:', error);
+              return null;
+            }
+          }
+          '''.replace('\n          ', '\n').lstrip())
+
+          write('src/store/useFlashcardStore.ts', '''import { create } from 'zustand';
+          import {
+            clearPersistedStudySession,
+            persistStudySession,
+            restorePersistedStudySession,
+          } from '../services/studySessionPersistence';
+          import { createClassSlice } from './slices/classSlice';
+          import { createDeckSlice } from './slices/deckSlice';
+          import { createCardSlice } from './slices/cardSlice';
+          import { createStudySlice } from './slices/studySlice';
+          import { createStatsSlice } from './slices/statsSlice';
+          import type { FlashcardState } from './types';
+          import { toast } from './uiStore';
+
+          export const useFlashcardStore = create<FlashcardState>((...args) => ({
+            ...createClassSlice(...args),
+            ...createDeckSlice(...args),
+            ...createCardSlice(...args),
+            ...createStudySlice(...args),
+            ...createStatsSlice(...args),
+          }));
+
+          let lastSession = useFlashcardStore.getState().session;
+          useFlashcardStore.subscribe((state) => {
+            if (state.session === lastSession) return;
+            lastSession = state.session;
+
+            if (state.session) persistStudySession(state.session);
+            else clearPersistedStudySession();
+          });
+
+          const startDeckSession = useFlashcardStore.getState().startStudySession;
+          const startClassSession = useFlashcardStore.getState().startClassStudySession;
+          const startGlobalSession = useFlashcardStore.getState().startGlobalStudySession;
+          const startDeckDrill = useFlashcardStore.getState().startDrillSession;
+
+          useFlashcardStore.setState({
+            startStudySession: async (deckId, forceCram = false) => {
+              if (!forceCram) {
+                const current = useFlashcardStore.getState().session;
+                if (current?.deckId === deckId && !current.isDrill) return;
+
+                const restored = await restorePersistedStudySession({ deckId, isDrill: false });
+                if (restored) {
+                  useFlashcardStore.setState({ session: restored });
+                  toast('Resumed your previous study session', 'info');
+                  return;
+                }
+              }
+
+              await startDeckSession(deckId, forceCram);
+            },
+            startClassStudySession: async (classId, forceCram = false) => {
+              if (!forceCram) {
+                const current = useFlashcardStore.getState().session;
+                if (current?.classId === classId && !current.isDrill) return;
+
+                const restored = await restorePersistedStudySession({ classId, isDrill: false });
+                if (restored) {
+                  useFlashcardStore.setState({ session: restored });
+                  toast('Resumed your previous study session', 'info');
+                  return;
+                }
+              }
+
+              await startClassSession(classId, forceCram);
+            },
+            startGlobalStudySession: async (forceCram = false) => {
+              if (!forceCram) {
+                const current = useFlashcardStore.getState().session;
+                if (current?.isGlobal && !current.isDrill) return;
+
+                const restored = await restorePersistedStudySession({ isGlobal: true, isDrill: false });
+                if (restored) {
+                  await useFlashcardStore.getState().loadDecks();
+                  useFlashcardStore.setState({ session: restored });
+                  toast('Resumed your previous mixed review', 'info');
+                  return;
+                }
+              }
+
+              await startGlobalSession(forceCram);
+            },
+            startDrillSession: async (deckId, buckets) => {
+              const current = useFlashcardStore.getState().session;
+              if (current?.deckId === deckId && current.isDrill) return;
+
+              const restored = await restorePersistedStudySession({ deckId, isDrill: true });
+              if (restored) {
+                useFlashcardStore.setState({ session: restored });
+                toast('Resumed your previous drill', 'info');
+                return;
+              }
+
+              await startDeckDrill(deckId, buckets);
+            },
+          });
+          '''.replace('\n          ', '\n').lstrip())
+
+          # ---------- Remove daily-limit calculations from analytics ----------
+          stats_path = 'src/store/slices/statsSlice.ts'
+          stats = read(stats_path)
+          stats = re.sub(
+              r"import \{\n  countNewIntroducedToday,\n  loadNewCardsPerDay,\n  newCardAllowance,\n\} from '../../services/studyLimits';\n",
+              '',
+              stats,
+              count=1,
+          )
+          stats, count = re.subn(
+              r"async function cappedDeckDueCount\(.*?\n\}\n\nexport const createStatsSlice",
+              '''async function deckDueCount(deckId: number, now: Date): Promise<number> {
+            return db.cards
+              .where('[deckId+due]')
+              .between([deckId, new Date(0)], [deckId, now])
+              .count();
+          }
+
+          async function computeClassStats(classId: number, now: Date): Promise<ClassStats> {
+            const [total, masteredCount, classDecks] = await Promise.all([
+              db.cards.where('classId').equals(classId).count(),
+              db.cards.where('[classId+state]').equals([classId, 2]).count(),
+              db.decks.where('classId').equals(classId).toArray(),
+            ]);
+
+            const dueCounts = await Promise.all(
+              classDecks
+                .filter((deck) => deck.id !== undefined)
+                .map((deck) => deckDueCount(deck.id!, now)),
+            );
+
+            return {
+              total,
+              dueCount: dueCounts.reduce((sum, count) => sum + count, 0),
+              masteryPct: total > 0 ? Math.round((masteredCount / total) * 100) : 0,
+              decksCount: classDecks.length,
+            };
+          }
+
+          async function computeDeckStats(deckId: number, now: Date): Promise<DeckStats> {
+            const [total, dueCount, masteredCount] = await Promise.all([
+              db.cards.where('deckId').equals(deckId).count(),
+              deckDueCount(deckId, now),
+              db.cards.where('[deckId+state]').equals([deckId, 2]).count(),
+            ]);
+
+            return {
+              total,
+              dueCount,
+              masteryPct: total > 0 ? Math.round((masteredCount / total) * 100) : 0,
+            };
+          }
+
+          export const createStatsSlice''',
+              stats,
+              count=1,
+              flags=re.S,
+          )
+          assert count == 1
+          stats, count = re.subn(
+              r"  loadClassStats: async \(classId\) => \{.*?\n  \},\n\n  loadAllClassStats",
+              '''  loadClassStats: async (classId) => {
+            const stats = await computeClassStats(classId, new Date());
+            set((state) => ({
+              classStats: { ...state.classStats, [classId]: stats },
+            }));
+          },
+
+          loadAllClassStats''',
+              stats,
+              count=1,
+              flags=re.S,
+          )
+          assert count == 1
+          stats, count = re.subn(
+              r"  loadAllClassStats: async \(\) => \{.*?\n  \},\n\n  loadDeckStats",
+              '''  loadAllClassStats: async () => {
+            const classIds = get().classes
+              .map((studyClass) => studyClass.id)
+              .filter((id): id is number => id !== undefined);
+            if (classIds.length === 0) {
+              set({ classStats: {} });
+              return;
+            }
+
+            const now = new Date();
+            const entries = await Promise.all(
+              classIds.map(async (classId) => [
+                classId,
+                await computeClassStats(classId, now),
+              ] as const),
+            );
+
+            set({ classStats: Object.fromEntries(entries) });
+          },
+
+          loadDeckStats''',
+              stats,
+              count=1,
+              flags=re.S,
+          )
+          assert count == 1
+          stats, count = re.subn(
+              r"  loadDeckStats: async \(classId\) => \{.*?\n  \},\n\n  loadStats",
+              '''  loadDeckStats: async (classId) => {
+            const classDecks = await db.decks.where('classId').equals(classId).toArray();
+            const now = new Date();
+            const entries = await Promise.all(
+              classDecks
+                .filter((deck) => deck.id !== undefined)
+                .map(async (deck) => [
+                  deck.id!,
+                  await computeDeckStats(deck.id!, now),
+                ] as const),
+            );
+
+            set((state) => ({
+              deckStats: { ...state.deckStats, ...Object.fromEntries(entries) },
+            }));
+          },
+
+          loadStats''',
+              stats,
+              count=1,
+              flags=re.S,
+          )
+          assert count == 1
+          stats, count = re.subn(
+              r"    const relevantDecks = classId.*?\n    const today = startOfLocalDay\(now\);",
+              "    const today = startOfLocalDay(now);",
+              stats,
+              count=1,
+              flags=re.S,
+          )
+          assert count == 1
+          stats, count = re.subn(
+              r"\n    if \(limit > 0\) \{.*?\n    \}\n\n    const workloadForecast",
+              "\n    const workloadForecast",
+              stats,
+              count=1,
+              flags=re.S,
+          )
+          assert count == 1
+          write(stats_path, stats)
+
+          # ---------- Remove the limit from Settings ----------
+          settings_path = 'src/components/modals/SettingsModal.tsx'
+          settings = read(settings_path)
+          settings = re.sub(
+              r"import \{\n  DEFAULT_NEW_CARDS_PER_DAY,\n  NEW_CARDS_PER_DAY_KEY,\n  loadNewCardsPerDay,\n\} from '../../services/studyLimits';\n",
+              '',
+              settings,
+              count=1,
+          )
+          settings = settings.replace('const MAX_NEW_CARDS_PER_DAY = 999;\n', '')
+          settings = re.sub(
+              r"  const \[newCardsPerDay, setNewCardsPerDay\] = useState\(\(\) =>\n    clamp\(loadNewCardsPerDay\(\), 0, MAX_NEW_CARDS_PER_DAY\)\);\n",
+              '',
+              settings,
+              count=1,
+          )
+          settings = settings.replace(
+              "    nextSpeechSpeed: number,\n    nextNewCards: number,\n",
+              "    nextSpeechSpeed: number,\n",
+              1,
+          )
+          settings = settings.replace(
+              "    localStorage.setItem(SPEECH_SPEED_KEY, String(nextSpeechSpeed));\n    localStorage.setItem(NEW_CARDS_PER_DAY_KEY, String(nextNewCards));\n",
+              "    localStorage.setItem(SPEECH_SPEED_KEY, String(nextSpeechSpeed));\n    // Remove the retired preference so old installations cannot imply a hidden cap.\n    localStorage.removeItem('denki-new-cards-per-day');\n",
+              1,
+          )
+          settings = settings.replace(
+              "    const normalizedSpeech = clamp(speechSpeed, SPEECH_SPEED_MIN, SPEECH_SPEED_MAX);\n    const normalizedNewCards = Math.round(clamp(newCardsPerDay, 0, MAX_NEW_CARDS_PER_DAY));\n",
+              "    const normalizedSpeech = clamp(speechSpeed, SPEECH_SPEED_MIN, SPEECH_SPEED_MAX);\n",
+              1,
+          )
+          settings = settings.replace(
+              "      normalizedScheduler.hardIntervalMultiplier,\n      normalizedSpeech,\n      normalizedNewCards,\n",
+              "      normalizedScheduler.hardIntervalMultiplier,\n      normalizedSpeech,\n",
+              1,
+          )
+          settings = settings.replace('    setNewCardsPerDay(DEFAULT_NEW_CARDS_PER_DAY);\n', '')
+          settings = settings.replace(
+              '    persistPreferences(0.9, 1.3, 1.2, 1, DEFAULT_NEW_CARDS_PER_DAY);\n',
+              '    persistPreferences(0.9, 1.3, 1.2, 1);\n',
+              1,
+          )
+          settings, count = re.subn(
+              r"\n            <label>\n              <span style=\{fieldLabelStyle\}>New cards per day, per deck</span>.*?\n            </label>",
+              '',
+              settings,
+              count=1,
+              flags=re.S,
+          )
+          assert count == 1
+          write(settings_path, settings)
+
+          # ---------- Deck Drill entry point ----------
+          class_path = 'src/pages/ClassViewPage.tsx'
+          class_view = read(class_path)
+          class_view = class_view.replace(
+              "import { ChevronRight, Download, Edit2, Play, RotateCcw, Trash2, Upload } from 'lucide-react';",
+              "import { ChevronRight, Download, Edit2, Play, RotateCcw, Shuffle, Trash2, Upload } from 'lucide-react';",
+              1,
+          )
+          class_view = class_view.replace(
+              "import { ManageCardsModal } from '../components/modals/ManageCardsModal';\n",
+              "import { DrillSetupModal } from '../components/modals/DrillSetupModal';\nimport { ManageCardsModal } from '../components/modals/ManageCardsModal';\n",
+              1,
+          )
+          class_view = class_view.replace(
+              "import { exportDeckToCsv } from '../services/deckExport';\n",
+              "import { exportDeckToCsv } from '../services/deckExport';\nimport type { DrillBucket } from '../services/drill';\n",
+              1,
+          )
+          class_view = class_view.replace(
+              "    startStudySession: state.startStudySession,\n",
+              "    startStudySession: state.startStudySession,\n    startDrillSession: state.startDrillSession,\n",
+              1,
+          )
+          class_view = class_view.replace(
+              "  const [managingDeckId, setManagingDeckId] = useState<number | null>(null);\n",
+              "  const [managingDeckId, setManagingDeckId] = useState<number | null>(null);\n  const [drillingDeck, setDrillingDeck] = useState<{ id: number; name: string } | null>(null);\n",
+              1,
+          )
+          class_view = class_view.replace(
+              "  const handleStartDeckStudy = async (deckId: number) => {\n    await runAction(`study-deck-${deckId}`, async () => {\n      await store.startStudySession(deckId);\n      navigate(`/study/deck/${deckId}`);\n    }, 'Deck review could not start');\n  };\n",
+              """  const handleStartDeckStudy = async (deckId: number) => {
+            await runAction(`study-deck-${deckId}`, async () => {
+              await store.startStudySession(deckId);
+              navigate(`/study/deck/${deckId}`);
+            }, 'Deck review could not start');
+          };
+
+          const handleStartDeckDrill = async (
+            deckId: number,
+            buckets: readonly DrillBucket[],
+          ) => {
+            await runAction(`drill-deck-${deckId}`, async () => {
+              await store.startDrillSession(deckId, buckets);
+              setDrillingDeck(null);
+              navigate(`/study/deck/${deckId}/drill`);
+            }, 'Deck drill could not start');
+          };
+          """.replace('\n          ', '\n'),
+              1,
+          )
+          study_button = '''                            <button
+                              type="button"
+                              onClick={() => void handleStartDeckStudy(deck.id!)}
+                              disabled={deck.total === 0 || pendingAction !== null}
+                              style={{ height: '32px', padding: '0 14px', fontSize: '11px' }}
+                              className="btn-premium-primary hover-lift"
+                              title={deck.total === 0 ? 'Add cards before studying' : undefined}
+                            >
+                              Study <ChevronRight size={11} />
+                            </button>'''
+          assert study_button in class_view
+          drill_and_study = '''                            <button
+                              type="button"
+                              onClick={() => setDrillingDeck({ id: deck.id!, name: deck.name })}
+                              disabled={deck.total === 0 || pendingAction !== null}
+                              style={{ height: '32px', padding: '0 12px', fontSize: '11px' }}
+                              className="btn-premium-secondary hover-lift"
+                              title={deck.total === 0 ? 'Add cards before drilling' : 'Random one-pass drill'}
+                            >
+                              <Shuffle size={11} /> Drill
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleStartDeckStudy(deck.id!)}
+                              disabled={deck.total === 0 || pendingAction !== null}
+                              style={{ height: '32px', padding: '0 14px', fontSize: '11px' }}
+                              className="btn-premium-primary hover-lift"
+                              title={deck.total === 0 ? 'Add cards before studying' : undefined}
+                            >
+                              Study <ChevronRight size={11} />
+                            </button>'''
+          class_view = class_view.replace(study_button, drill_and_study, 1)
+          modal_marker = "      {managingDeckId !== null && (\n"
+          assert modal_marker in class_view
+          drill_modal = '''      {drillingDeck !== null && (
+            <DrillSetupModal
+              deckId={drillingDeck.id}
+              deckName={drillingDeck.name}
+              onClose={() => setDrillingDeck(null)}
+              onStart={(buckets) => handleStartDeckDrill(drillingDeck.id, buckets)}
+            />
+          )}
+
+          '''.replace('\n          ', '\n')
+          class_view = class_view.replace(modal_marker, drill_modal + modal_marker, 1)
+          write(class_path, class_view)
+
+          # ---------- Route and study-screen behavior ----------
+          app_path = 'src/App.tsx'
+          app = read(app_path)
+          app = app.replace(
+              '            <Route path="/study/deck/:deckId" element={<ErrorBoundary><StudySessionPage /></ErrorBoundary>} />\n',
+              '            <Route path="/study/deck/:deckId" element={<ErrorBoundary><StudySessionPage /></ErrorBoundary>} />\n            <Route path="/study/deck/:deckId/drill" element={<ErrorBoundary><StudySessionPage /></ErrorBoundary>} />\n',
+              1,
+          )
+          write(app_path, app)
+
+          page_path = 'src/pages/StudySessionPage.tsx'
+          page = read(page_path)
+          page = page.replace(
+              "import { useParams, useNavigate } from 'react-router-dom';",
+              "import { useLocation, useNavigate, useParams } from 'react-router-dom';",
+              1,
+          )
+          page = page.replace(
+              "  const navigate = useNavigate();\n",
+              "  const navigate = useNavigate();\n  const location = useLocation();\n  const isDrillRoute = location.pathname.endsWith('/drill');\n",
+              1,
+          )
+          page = page.replace(
+              "    startStudySession: s.startStudySession,\n",
+              "    startStudySession: s.startStudySession,\n    startDrillSession: s.startDrillSession,\n",
+              1,
+          )
+          old_effect = '''    if (classId) {
+              void actions.startClassStudySession(Number.parseInt(classId, 10), false);
+            } else if (deckId) {
+              void actions.startStudySession(Number.parseInt(deckId, 10), false);
+            } else {
+              void actions.startGlobalStudySession(false);
+            }
+          }, [classId, deckId]);'''.replace('\n          ', '\n')
+          new_effect = '''    if (classId) {
+              void actions.startClassStudySession(Number.parseInt(classId, 10), false);
+            } else if (deckId) {
+              const parsedDeckId = Number.parseInt(deckId, 10);
+              if (isDrillRoute) void actions.startDrillSession(parsedDeckId);
+              else void actions.startStudySession(parsedDeckId, false);
+            } else {
+              void actions.startGlobalStudySession(false);
+            }
+          }, [classId, deckId, isDrillRoute]);'''.replace('\n          ', '\n')
+          assert old_effect in page
+          page = page.replace(old_effect, new_effect, 1)
+          page = page.replace(
+              "    if (session.completedCount > 0 && session.completedCount % 10 === 0 && session.currentIndex < session.queue.length) {",
+              "    if (!session.isDrill && session.completedCount > 0 && session.completedCount % 10 === 0 && session.currentIndex < session.queue.length) {",
+              1,
+          )
+          continue_marker = '''  const handleContinue = () => {
+            setCheckpointOpen(false);
+            cardStartTimeRef.current = Date.now();
+          };
+          '''.replace('\n          ', '\n')
+          assert continue_marker in page
+          repeat_handler = '''  const handleContinue = () => {
+            setCheckpointOpen(false);
+            cardStartTimeRef.current = Date.now();
+          };
+
+          const handleRepeatDrill = async () => {
+            const actions = useFlashcardStore.getState();
+            const currentSession = actions.session;
+            if (!currentSession?.isDrill || currentSession.deckId === undefined) return;
+
+            const drillDeckId = currentSession.deckId;
+            const buckets = currentSession.drillBuckets;
+            actions.endStudySession();
+            await actions.startDrillSession(drillDeckId, buckets);
+
+            const now = Date.now();
+            sessionStartTimeRef.current = now;
+            cardStartTimeRef.current = now;
+            roundTimesRef.current = [];
+            setIsFlipped(false);
+            setCheckpointOpen(false);
+            setRoundAverages([]);
+            setTotalTimeSpent(0);
+          };
+          '''.replace('\n          ', '\n')
+          page = page.replace(continue_marker, repeat_handler, 1)
+          page = page.replace(
+              "  const { queue, currentIndex, completedCount, history, isCram } = store.session;",
+              "  const { queue, currentIndex, completedCount, history, isCram, isDrill } = store.session;",
+              1,
+          )
+          old_title = '''  const sessionTitle = store.session.isGlobal
+            ? "Today's Mixed Review"
+            : store.session.deckId
+              ? store.decks.find((deck) => deck.id === store.session?.deckId)?.name ?? 'Deck'
+              : store.classes.find((studyClass) => studyClass.id === store.session?.classId)?.name ?? 'Study Session';
+          const sessionSubtitle = isCram
+            ? 'Cram session · all active cards'
+            : store.session.isGlobal
+              ? currentSource || 'Randomized across your library'
+              : 'Spaced Repetition';'''.replace('\n          ', '\n')
+          new_title = '''  const baseSessionTitle = store.session.deckId
+            ? store.decks.find((deck) => deck.id === store.session?.deckId)?.name ?? 'Deck'
+            : store.classes.find((studyClass) => studyClass.id === store.session?.classId)?.name ?? 'Study Session';
+          const sessionTitle = isDrill
+            ? `${baseSessionTitle} · Drill`
+            : store.session.isGlobal
+              ? "Today's Mixed Review"
+              : baseSessionTitle;
+          const sessionSubtitle = isDrill
+            ? 'Random one-pass · each selected card appears once'
+            : isCram
+              ? 'Practice session · all active cards'
+              : store.session.isGlobal
+                ? currentSource || 'Randomized across your library'
+                : 'Spaced Repetition';'''.replace('\n          ', '\n')
+          assert old_title in page
+          page = page.replace(old_title, new_title, 1)
+          page = page.replace('            Review Mode\n', "            {isDrill ? 'Drill Mode' : 'Review Mode'}\n", 1)
+          page = page.replace('{store.session.deckId && (', '{!isDrill && store.session.deckId && (', 1)
+          learn_pattern = re.compile(r"\n          <button\n            onClick=\{\(\) => setStudyMode\('learn'\)\}.*?\n          </button>", re.S)
+          learn_match = learn_pattern.search(page)
+          assert learn_match is not None
+          learn_block = learn_match.group(0)
+          page = page[:learn_match.start()] + "\n          {!isDrill && (" + learn_block + "\n          )}" + page[learn_match.end():]
+
+          old_empty = '''            {store.session.totalCards === 0 ? (
+              <>
+                <h2 className="gradient-text" style={{ fontSize: '22px', fontWeight: 800 }}>{store.session.isGlobal ? 'Your Library Is Empty' : 'This Deck Is Empty'}</h2>
+                <p style={{ color: '#9ca3af', fontSize: '14px', lineHeight: 1.5, maxWidth: '400px' }}>
+                  {store.session.isGlobal
+                    ? 'There are no cards in your library yet. Create or import a deck to begin.'
+                    : 'There are no cards here yet. Head back and add some cards to start studying.'}
+                </p>
+              </>
+            ) : (
+              <>
+                <h2 className="gradient-text" style={{ fontSize: '22px', fontWeight: 800 }}>No Cards Due Today! 🎉</h2>
+                <p style={{ color: '#9ca3af', fontSize: '14px', lineHeight: 1.5, maxWidth: '400px' }}>
+                  You have completed all scheduled spaced reviews {store.session.isGlobal ? 'across your library' : 'for this deck'}. Would you like to Cram study all cards anyway?
+                </p>
+              </>
+            )}'''.replace('\n          ', '\n')
+          new_empty = '''            {isDrill ? (
+              <>
+                <h2 className="gradient-text" style={{ fontSize: '22px', fontWeight: 800 }}>No cards match this drill</h2>
+                <p style={{ color: '#9ca3af', fontSize: '14px', lineHeight: 1.5, maxWidth: '400px' }}>
+                  Return to the deck and choose at least one previous-level bucket that contains cards.
+                </p>
+              </>
+            ) : store.session.totalCards === 0 ? (
+              <>
+                <h2 className="gradient-text" style={{ fontSize: '22px', fontWeight: 800 }}>{store.session.isGlobal ? 'Your Library Is Empty' : 'This Deck Is Empty'}</h2>
+                <p style={{ color: '#9ca3af', fontSize: '14px', lineHeight: 1.5, maxWidth: '400px' }}>
+                  {store.session.isGlobal
+                    ? 'There are no cards in your library yet. Create or import a deck to begin.'
+                    : 'There are no cards here yet. Head back and add some cards to start studying.'}
+                </p>
+              </>
+            ) : (
+              <>
+                <h2 className="gradient-text" style={{ fontSize: '22px', fontWeight: 800 }}>No Cards Due Today! 🎉</h2>
+                <p style={{ color: '#9ca3af', fontSize: '14px', lineHeight: 1.5, maxWidth: '400px' }}>
+                  Scheduled review is complete. You can leave the cards to rest or run an optional all-card practice.
+                </p>
+              </>
+            )}'''.replace('\n          ', '\n')
+          assert old_empty in page
+          page = page.replace(old_empty, new_empty, 1)
+          page = page.replace('{store.session.totalCards > 0 && (', '{store.session.totalCards > 0 && !isDrill && (', 1)
+          old_cram_click = '''                    if (store.session?.isGlobal) {
+                      store.startGlobalStudySession(true);
+                    } else if (classId) {
+                      store.startClassStudySession(parseInt(classId, 10), true);
+                    } else if (deckId) {
+                      store.startStudySession(parseInt(deckId, 10), true);
+                    }'''.replace('\n          ', '\n')
+          new_cram_click = '''                    if (store.session?.isGlobal) {
+                      store.startGlobalStudySession(true);
+                    } else if (classId) {
+                      store.startClassStudySession(parseInt(classId, 10), true);
+                    } else if (deckId) {
+                      const parsedDeckId = parseInt(deckId, 10);
+                      store.endStudySession();
+                      void store.startDrillSession(parsedDeckId).then(() => {
+                        navigate(`/study/deck/${parsedDeckId}/drill`);
+                      });
+                    }'''.replace('\n          ', '\n')
+          assert old_cram_click in page
+          page = page.replace(old_cram_click, new_cram_click, 1)
+          page = page.replace('                  Cram Study (All Cards)\n', "                  {deckId ? 'Drill all cards once' : 'Practice all cards'}\n", 1)
+          old_summary = '''          <StudySessionSummary
+            history={history}
+            totalTimeSpent={totalTimeSpent}
+            onExit={handleExitStudy}
+          />'''.replace('\n          ', '\n')
+          new_summary = '''          <StudySessionSummary
+            history={history}
+            totalTimeSpent={totalTimeSpent}
+            mode={isDrill ? 'drill' : isCram ? 'practice' : 'review'}
+            onRepeat={isDrill ? () => void handleRepeatDrill() : undefined}
+            onExit={handleExitStudy}
+          />'''.replace('\n          ', '\n')
+          assert old_summary in page
+          page = page.replace(old_summary, new_summary, 1)
+          write(page_path, page)
+
+          # ---------- Drill-aware completion summary ----------
+          summary_path = 'src/components/StudySessionSummary.tsx'
+          summary = read(summary_path)
+          summary = summary.replace(
+              "import { Award, Timer, CheckCircle, BarChart2 } from 'lucide-react';",
+              "import { Award, BarChart2, CheckCircle, Repeat2, Timer } from 'lucide-react';",
+              1,
+          )
+          summary = summary.replace(
+              "  onExit: () => void;\n",
+              "  mode?: 'review' | 'practice' | 'drill';\n  onRepeat?: () => void;\n  onExit: () => void;\n",
+              1,
+          )
+          summary = summary.replace(
+              "  totalTimeSpent,\n  onExit,\n",
+              "  totalTimeSpent,\n  mode = 'review',\n  onRepeat,\n  onExit,\n",
+              1,
+          )
+          return_marker = '  return (\n'
+          assert return_marker in summary
+          summary = summary.replace(
+              return_marker,
+              """  const isDrill = mode === 'drill';
+            const heading = isDrill ? 'Drill complete' : 'Session complete';
+            const description = isDrill
+              ? 'Every selected card appeared exactly once. Your ratings were saved and will guide future Study sessions.'
+              : mode === 'practice'
+                ? 'You completed an optional all-card practice. Scheduling and review history have been updated.'
+                : 'You completed every card in this scheduled review. FSRS has updated the next review intervals.';
+
+            return (
+          """.replace('\n          ', '\n'),
+              1,
+          )
+          summary = summary.replace('          Session Completed! 🎉\n', '          {heading}\n', 1)
+          summary, count = re.subn(
+              r"        <p style=\{\{ color: '#9ca3af'.*?\n        </p>",
+              """        <p style={{ color: '#9ca3af', fontSize: '14px', maxWidth: '440px', margin: '0 auto', lineHeight: 1.5 }}>
+              {description}
+            </p>""".replace('\n          ', '\n'),
+              summary,
+              count=1,
+              flags=re.S,
+          )
+          assert count == 1
+          summary = summary.replace('>Reviewed</span>', ">{isDrill ? 'Drilled' : 'Reviewed'}</span>", 1)
+          old_return_button = '''      <button
+            onClick={onExit}
+            className="btn-premium-primary hover-lift"
+            style={{
+              marginTop: '8px',
+              padding: '14px 36px',
+              borderRadius: '10px',
+              fontSize: '14px',
+              background: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)',
+              boxShadow: '0 4px 15px rgba(99, 102, 241, 0.35)',
+            }}
+          >
+            Return to Workspace
+          </button>'''.replace('\n          ', '\n')
+          new_return_buttons = '''      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center', marginTop: '8px' }}>
+            {isDrill && onRepeat && (
+              <button onClick={onRepeat} className="btn-premium-secondary hover-lift">
+                <Repeat2 size={14} /> Drill again
+              </button>
+            )}
+            <button onClick={onExit} className="btn-premium-primary hover-lift">
+              Return to Workspace
+            </button>
+          </div>'''.replace('\n          ', '\n')
+          assert old_return_button in summary
+          summary = summary.replace(old_return_button, new_return_buttons, 1)
+          write(summary_path, summary)
+
+          # ---------- Dashboard and docs wording ----------
+          replace_once(
+              'src/components/TodayQueueCard.tsx',
+              "          {forceCram ? 'Cram mode · schedules still update' : 'Due cards only · new-card limits apply'}",
+              "          {forceCram ? 'Optional practice · schedules still update' : 'Due + new cards · no daily cap'}",
+          )
+          replace_once(
+              'README.md',
+              '- **One daily mixed queue** that randomises all due cards across the library, plus focused deck and class sessions.\n',
+              '- **Unlimited new-card study** with no daily introduction cap.\n- **Deck Drill Mode** for a fully random, one-pass sweep filtered by previous confidence level; ratings still update future scheduling.\n- **One mixed review queue** that randomises all due cards across the library, plus focused deck and class sessions.\n',
+          )
+
+          # ---------- Regression tests ----------
+          write('src/services/__tests__/drill.test.ts', '''import { describe, expect, it } from 'vitest';
+          import type { Card } from '../../db/schema';
+          import {
+            ALL_DRILL_BUCKETS,
+            countDrillBuckets,
+            filterDrillCards,
+            getDrillBucket,
+          } from '../drill';
+
+          function card(id: number, lastRating?: number): Card {
+            return {
+              id,
+              classId: 1,
+              deckId: 1,
+              front: `Q${id}`,
+              back: `A${id}`,
+              cardType: 'standard',
+              createdAt: new Date(),
+              state: 0,
+              stability: 0,
+              difficulty: 0,
+              elapsedDays: 0,
+              scheduledDays: 0,
+              due: new Date(),
+              lastRating,
+            };
+          }
+
+          describe('drill filters', () => {
+            const cards = [card(1), card(2, 1), card(3, 2), card(4, 3), card(5, 4), card(6, 5)];
+
+            it('maps unrated cards to New and legacy score 5 to Easy', () => {
+              expect(getDrillBucket(cards[0])).toBe('new');
+              expect(getDrillBucket(cards[5])).toBe(4);
+            });
+
+            it('filters by any combination of previous confidence buckets', () => {
+              expect(filterDrillCards(cards, [1, 2]).map((item) => item.id)).toEqual([2, 3]);
+              expect(filterDrillCards(cards, ['new', 4]).map((item) => item.id)).toEqual([1, 5, 6]);
+              expect(filterDrillCards(cards, ALL_DRILL_BUCKETS)).toHaveLength(cards.length);
+            });
+
+            it('counts every bucket using the canonical four-level scale', () => {
+              expect(countDrillBuckets(cards)).toEqual({ new: 1, 1: 1, 2: 1, 3: 1, 4: 2 });
+            });
+          });
+          '''.replace('\n          ', '\n').lstrip())
+
+          slice_test_path = 'src/store/slices/__tests__/studySlice.test.ts'
+          slice_test = read(slice_test_path)
+          slice_test = slice_test.replace(
+              "  beforeEach(async () => {\n    await Promise.all",
+              "  beforeEach(async () => {\n    window.localStorage.clear();\n    await Promise.all",
+              1,
+          )
+          extra_slice_tests = '''
+
+            it('ignores the retired daily-limit preference and queues every new card', async () => {
+              window.localStorage.setItem('denki-new-cards-per-day', '1');
+              await startWithCards(30);
+              expect(useFlashcardStore.getState().session!.queue).toHaveLength(30);
+            });
+
+            it('drills selected previous levels once without reinserting low ratings', async () => {
+              const { deckId } = await startWithCards(5);
+              const cards = await db.cards.where('deckId').equals(deckId).sortBy('id');
+              await Promise.all([
+                db.cards.update(cards[1].id!, { lastRating: 1 }),
+                db.cards.update(cards[2].id!, { lastRating: 2 }),
+                db.cards.update(cards[3].id!, { lastRating: 3 }),
+                db.cards.update(cards[4].id!, { lastRating: 4 }),
+              ]);
+
+              useFlashcardStore.getState().endStudySession();
+              await useFlashcardStore.getState().startDrillSession(deckId, ['new', 1, 2]);
+
+              const startingSession = useFlashcardStore.getState().session!;
+              expect(startingSession.isDrill).toBe(true);
+              expect(startingSession.queue).toHaveLength(3);
+              expect(new Set(startingSession.queue.map((card) => card.id))).toEqual(
+                new Set([cards[0].id, cards[1].id, cards[2].id]),
+              );
+
+              while (true) {
+                const session = useFlashcardStore.getState().session!;
+                if (session.currentIndex >= session.queue.length) break;
+                await useFlashcardStore.getState().rateCard(1);
+              }
+
+              const completed = useFlashcardStore.getState().session!;
+              expect(completed.queue).toHaveLength(3);
+              expect(completed.completedCount).toBe(3);
+              expect(completed.history).toHaveLength(3);
+              expect(await db.reviews.count()).toBe(3);
+            });
+          '''.replace('\n          ', '\n')
+          head, sep, tail = slice_test.rpartition('\n});')
+          assert sep
+          write(slice_test_path, head + extra_slice_tests + '\n});' + tail)
+
+          persistence_test_path = 'src/services/__tests__/studySessionPersistence.test.ts'
+          persistence_test = read(persistence_test_path)
+          extra_persistence_test = '''
+
+            it('keeps drill snapshots separate from normal deck study and restores the filter', async () => {
+              const { deckId } = await startWithCards();
+              useFlashcardStore.getState().endStudySession();
+              await useFlashcardStore.getState().startDrillSession(deckId, ['new', 1, 2]);
+
+              expect(await restorePersistedStudySession({ deckId, isDrill: false })).toBeNull();
+              const restored = await restorePersistedStudySession({ deckId, isDrill: true });
+              expect(restored?.isDrill).toBe(true);
+              expect(restored?.drillBuckets).toEqual(['new', 1, 2]);
+            });
+          '''.replace('\n          ', '\n')
+          head, sep, tail = persistence_test.rpartition('\n});')
+          assert sep
+          write(persistence_test_path, head + extra_persistence_test + '\n});' + tail)
+
+          # Retired daily-limit implementation and its tests are intentionally removed.
+          Path('src/services/studyLimits.ts').unlink()
+          Path('src/services/__tests__/studyLimits.test.ts').unlink()
+
+          # No production code should continue to enforce or advertise a daily cap.
+          forbidden = re.compile(r"studyLimits|NEW_CARDS_PER_DAY|new-card limits apply|New cards per day", re.I)
+          offenders = []
+          for path in Path('src').rglob('*'):
+              if path.is_file() and path.suffix in {'.ts', '.tsx'}:
+                  if forbidden.search(path.read_text()):
+                      offenders.append(str(path))
+          if offenders:
+              raise AssertionError(f'Retired daily-limit references remain: {offenders}')
+          PY
+
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run lint
+      - run: npm run test:run
+      - run: npm run build
+
+      - name: Commit verified implementation
+        run: |
+          rm .github/workflows/apply-unlimited-drill.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat(study): remove daily cap and add deck drill mode"
+          git push origin HEAD:feat/unlimited-study-drill-mode
