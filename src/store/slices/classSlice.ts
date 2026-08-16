@@ -3,33 +3,7 @@ import { db } from '../../db';
 import { triggerAutoSave } from '../../services/backup';
 import type { ClassSlice, FlashcardState } from '../types';
 
-/** Backfill lastRating for legacy cards without issuing one review query per card. */
-async function syncLastRatings(): Promise<void> {
-  const cards = await db.cards
-    .filter((card) => card.lastReviewed !== undefined && card.lastRating === undefined)
-    .toArray();
-  const cardIds = cards
-    .map((card) => card.id)
-    .filter((id): id is number => id !== undefined);
-  if (cardIds.length === 0) return;
-
-  const reviews = await db.reviews.where('cardId').anyOf(cardIds).toArray();
-  const latestByCard = new Map<number, { rating: number; reviewedAt: number }>();
-  for (const review of reviews) {
-    const reviewedAt = new Date(review.reviewedAt).getTime();
-    const current = latestByCard.get(review.cardId);
-    if (!current || reviewedAt > current.reviewedAt) {
-      latestByCard.set(review.cardId, { rating: review.rating, reviewedAt });
-    }
-  }
-
-  await db.transaction('rw', db.cards, async () => {
-    for (const cardId of cardIds) {
-      const latest = latestByCard.get(cardId);
-      if (latest) await db.cards.update(cardId, { lastRating: latest.rating });
-    }
-  });
-}
+let latestClassesRequest = 0;
 
 function cleanName(name: string, label: string): string {
   const cleaned = name.trim();
@@ -47,10 +21,13 @@ export const createClassSlice: StateCreator<
   activeClassId: null,
 
   loadClasses: async () => {
-    await syncLastRatings();
+    const requestId = ++latestClassesRequest;
     const classes = await db.classes.toArray();
     classes.sort((left, right) =>
       new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+
+    // A slower startup/CRUD refresh must not overwrite a newer class list.
+    if (requestId !== latestClassesRequest) return;
     set({ classes });
 
     await Promise.all([
