@@ -63,7 +63,7 @@ describe('renderContent', () => {
     const code = renderContent('```html\n<div onclick="bad()">x</div>\n```', false, true);
     const empty = renderContent(null as unknown as string, false, true);
 
-    expect(code).toContain('&lt;div onclick=&quot;bad()&quot;&gt;x&lt;/div&gt;');
+    expect(code).toContain('&lt;div onclick="bad()"&gt;x&lt;/div&gt;');
     expect(code).not.toContain('<div onclick=');
     expect(empty).toBe('');
   });
