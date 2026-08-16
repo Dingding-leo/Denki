@@ -79,7 +79,8 @@ export const createDeckSlice: StateCreator<
     const remainingActiveDeckId = deletedActiveDeck ? null : get().activeDeckId;
     const sessionUsesDeck = get().session?.queue.some((card) => card.deckId === deckId) ?? false;
     set((state) => {
-      const { [deckId]: _removed, ...remainingDeckStats } = state.deckStats;
+      const remainingDeckStats = { ...state.deckStats };
+      delete remainingDeckStats[deckId];
       return {
         activeDeckId: remainingActiveDeckId,
         cards: deletedActiveDeck ? [] : state.cards,
