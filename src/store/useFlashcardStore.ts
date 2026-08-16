@@ -12,73 +12,59 @@ import { createStatsSlice } from './slices/statsSlice';
 import type { FlashcardState } from './types';
 import { toast } from './uiStore';
 
-export const useFlashcardStore = create<FlashcardState>((...a) => ({
-  ...createClassSlice(...a),
-  ...createDeckSlice(...a),
-  ...createCardSlice(...a),
-  ...createStudySlice(...a),
-  ...createStatsSlice(...a),
+export const useFlashcardStore = create<FlashcardState>((...args) => ({
+  ...createClassSlice(...args),
+  ...createDeckSlice(...args),
+  ...createCardSlice(...args),
+  ...createStudySlice(...args),
+  ...createStatsSlice(...args),
 }));
 
-// Keep a compact, resumable study-session snapshot in localStorage. Watching
-// only the session reference means unrelated stats/deck/class updates do not
-// touch storage, while every study mutation (rate, undo, next/previous, end)
-// is captured automatically without persistence logic leaking into the slice.
 let lastSession = useFlashcardStore.getState().session;
 useFlashcardStore.subscribe((state) => {
   if (state.session === lastSession) return;
   lastSession = state.session;
-
   if (state.session) persistStudySession(state.session);
   else clearPersistedStudySession();
 });
 
-// StudySessionPage starts a session on mount, while ClassViewPage also starts it
-// immediately before navigating. Wrap the two start actions once at store setup
-// so the second call becomes a no-op. The same wrapper also restores a recent
-// persisted session after a browser/PWA/Tauri reload. Explicit cram sessions
-// always start fresh rather than reviving a normal review session.
 const startDeckSession = useFlashcardStore.getState().startStudySession;
 const startClassSession = useFlashcardStore.getState().startClassStudySession;
 const startGlobalSession = useFlashcardStore.getState().startGlobalStudySession;
+const startDeckDrill = useFlashcardStore.getState().startDrillSession;
 
 useFlashcardStore.setState({
   startStudySession: async (deckId, forceCram = false) => {
     if (!forceCram) {
       const current = useFlashcardStore.getState().session;
-      if (current?.deckId === deckId) return;
-
-      const restored = await restorePersistedStudySession({ deckId });
+      if (current?.deckId === deckId && !current.isDrill) return;
+      const restored = await restorePersistedStudySession({ deckId, isDrill: false });
       if (restored) {
         useFlashcardStore.setState({ session: restored });
         toast('Resumed your previous study session', 'info');
         return;
       }
     }
-
     await startDeckSession(deckId, forceCram);
   },
   startClassStudySession: async (classId, forceCram = false) => {
     if (!forceCram) {
       const current = useFlashcardStore.getState().session;
-      if (current?.classId === classId) return;
-
-      const restored = await restorePersistedStudySession({ classId });
+      if (current?.classId === classId && !current.isDrill) return;
+      const restored = await restorePersistedStudySession({ classId, isDrill: false });
       if (restored) {
         useFlashcardStore.setState({ session: restored });
         toast('Resumed your previous study session', 'info');
         return;
       }
     }
-
     await startClassSession(classId, forceCram);
   },
   startGlobalStudySession: async (forceCram = false) => {
     if (!forceCram) {
       const current = useFlashcardStore.getState().session;
-      if (current?.isGlobal) return;
-
-      const restored = await restorePersistedStudySession({ isGlobal: true });
+      if (current?.isGlobal && !current.isDrill) return;
+      const restored = await restorePersistedStudySession({ isGlobal: true, isDrill: false });
       if (restored) {
         await useFlashcardStore.getState().loadDecks();
         useFlashcardStore.setState({ session: restored });
@@ -86,7 +72,17 @@ useFlashcardStore.setState({
         return;
       }
     }
-
     await startGlobalSession(forceCram);
+  },
+  startDrillSession: async (deckId, buckets) => {
+    const current = useFlashcardStore.getState().session;
+    if (current?.deckId === deckId && current.isDrill) return;
+    const restored = await restorePersistedStudySession({ deckId, isDrill: true });
+    if (restored) {
+      useFlashcardStore.setState({ session: restored });
+      toast('Resumed your previous drill', 'info');
+      return;
+    }
+    await startDeckDrill(deckId, buckets);
   },
 });

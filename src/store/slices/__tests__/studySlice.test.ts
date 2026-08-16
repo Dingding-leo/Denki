@@ -28,6 +28,7 @@ async function startWithCards(n: number) {
 
 describe('studySlice rateCard / undoLastRate', () => {
   beforeEach(async () => {
+    window.localStorage.clear();
     await Promise.all([db.cards.clear(), db.reviews.clear(), db.decks.clear(), db.classes.clear()]);
     useFlashcardStore.setState({ session: null, activeDeckId: null, activeClassId: null });
   });
@@ -153,4 +154,38 @@ describe('studySlice rateCard / undoLastRate', () => {
     expect(ratings).toBeGreaterThan(startQueueLen);
     expect(await db.reviews.count()).toBe(ratings);
   });
+
+  it('drills selected previous levels once without reinserting low ratings', async () => {
+    const { deckId } = await startWithCards(5);
+    const cards = await db.cards.where('deckId').equals(deckId).sortBy('id');
+    await Promise.all([
+      db.cards.update(cards[1].id!, { lastRating: 1 }),
+      db.cards.update(cards[2].id!, { lastRating: 2 }),
+      db.cards.update(cards[3].id!, { lastRating: 3 }),
+      db.cards.update(cards[4].id!, { lastRating: 4 }),
+    ]);
+
+    useFlashcardStore.getState().endStudySession();
+    await useFlashcardStore.getState().startDrillSession(deckId, ['new', 1, 2]);
+
+    const startingSession = useFlashcardStore.getState().session!;
+    expect(startingSession.isDrill).toBe(true);
+    expect(startingSession.queue).toHaveLength(3);
+    expect(new Set(startingSession.queue.map((card) => card.id))).toEqual(
+      new Set([cards[0].id, cards[1].id, cards[2].id]),
+    );
+
+    while (true) {
+      const session = useFlashcardStore.getState().session!;
+      if (session.currentIndex >= session.queue.length) break;
+      await useFlashcardStore.getState().rateCard(1);
+    }
+
+    const completed = useFlashcardStore.getState().session!;
+    expect(completed.queue).toHaveLength(3);
+    expect(completed.completedCount).toBe(3);
+    expect(completed.history).toHaveLength(3);
+    expect(await db.reviews.count()).toBe(3);
+  });
+
 });

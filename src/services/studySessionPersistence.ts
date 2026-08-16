@@ -1,9 +1,11 @@
 import { db } from '../db';
+import { ALL_DRILL_BUCKETS, type DrillBucket } from './drill';
 import type { StudySession } from '../store/types';
 
 const STORAGE_KEY = 'denki.study-session.v1';
 const SNAPSHOT_VERSION = 1;
 const MAX_SESSION_AGE_MS = 24 * 60 * 60 * 1000;
+const VALID_DRILL_BUCKETS = new Set<DrillBucket>(ALL_DRILL_BUCKETS);
 
 interface PersistedStudySession {
   version: typeof SNAPSHOT_VERSION;
@@ -17,12 +19,15 @@ interface PersistedStudySession {
   initialQueueSize: number;
   totalCards: number;
   isCram?: boolean;
+  isDrill?: boolean;
+  drillBuckets?: DrillBucket[];
 }
 
 export interface StudySessionScope {
   deckId?: number;
   classId?: number;
   isGlobal?: boolean;
+  isDrill?: boolean;
 }
 
 function getStorage(): Storage | null {
@@ -36,6 +41,10 @@ function getStorage(): Storage | null {
 
 function isFiniteNonNegativeInteger(value: unknown): value is number {
   return Number.isInteger(value) && Number(value) >= 0;
+}
+
+function isValidDrillBucket(value: unknown): value is DrillBucket {
+  return VALID_DRILL_BUCKETS.has(value as DrillBucket);
 }
 
 function isValidSnapshot(value: unknown): value is PersistedStudySession {
@@ -56,11 +65,18 @@ function isValidSnapshot(value: unknown): value is PersistedStudySession {
     (snapshot.classId === undefined || (Number.isInteger(snapshot.classId) && snapshot.classId > 0)) &&
     (snapshot.isGlobal === undefined || typeof snapshot.isGlobal === 'boolean') &&
     (snapshot.isCram === undefined || typeof snapshot.isCram === 'boolean') &&
+    (snapshot.isDrill === undefined || typeof snapshot.isDrill === 'boolean') &&
+    (snapshot.drillBuckets === undefined || (
+      Array.isArray(snapshot.drillBuckets) &&
+      snapshot.drillBuckets.every(isValidDrillBucket)
+    )) &&
+    (!snapshot.isDrill || snapshot.deckId !== undefined) &&
     (snapshot.deckId !== undefined || snapshot.classId !== undefined || snapshot.isGlobal === true)
   );
 }
 
 function scopeMatches(snapshot: PersistedStudySession, scope: StudySessionScope): boolean {
+  if (scope.isDrill !== undefined && Boolean(snapshot.isDrill) !== scope.isDrill) return false;
   if (scope.isGlobal) return snapshot.isGlobal === true;
   if (scope.deckId !== undefined) return snapshot.deckId === scope.deckId;
   if (scope.classId !== undefined) return snapshot.classId === scope.classId;
@@ -72,10 +88,7 @@ export function persistStudySession(session: StudySession): void {
   if (!storage) return;
 
   const queueCardIds = session.queue.map((card) => card.id);
-  if (
-    queueCardIds.length === 0 ||
-    queueCardIds.some((id): id is undefined => id === undefined)
-  ) {
+  if (queueCardIds.length === 0 || queueCardIds.some((id) => id === undefined)) {
     clearPersistedStudySession();
     return;
   }
@@ -92,6 +105,8 @@ export function persistStudySession(session: StudySession): void {
     initialQueueSize: session.initialQueueSize,
     totalCards: session.totalCards,
     isCram: session.isCram,
+    isDrill: session.isDrill,
+    drillBuckets: session.drillBuckets,
   };
 
   try {
@@ -104,7 +119,6 @@ export function persistStudySession(session: StudySession): void {
 export function clearPersistedStudySession(): void {
   const storage = getStorage();
   if (!storage) return;
-
   try {
     storage.removeItem(STORAGE_KEY);
   } catch (error) {
@@ -122,7 +136,6 @@ export async function restorePersistedStudySession(
   try {
     const raw = storage.getItem(STORAGE_KEY);
     if (!raw) return null;
-
     const parsed: unknown = JSON.parse(raw);
     if (!isValidSnapshot(parsed)) {
       clearPersistedStudySession();
@@ -136,12 +149,10 @@ export async function restorePersistedStudySession(
   }
 
   if (!scopeMatches(snapshot, scope)) return null;
-
   if (Date.now() - snapshot.savedAt > MAX_SESSION_AGE_MS) {
     clearPersistedStudySession();
     return null;
   }
-
   if (snapshot.currentIndex > snapshot.queueCardIds.length) {
     clearPersistedStudySession();
     return null;
@@ -160,7 +171,6 @@ export async function restorePersistedStudySession(
       : scope.deckId !== undefined
         ? queue.every((card) => card.deckId === scope.deckId)
         : queue.every((card) => card.classId === scope.classId);
-
     if (!queueMatchesScope) {
       clearPersistedStudySession();
       return null;
@@ -176,9 +186,10 @@ export async function restorePersistedStudySession(
       initialQueueSize: snapshot.initialQueueSize,
       totalCards: snapshot.totalCards,
       isCram: snapshot.isCram,
-      // Undo history intentionally stays in-memory only. Persisting queue snapshots
-      // for every historical rating would grow localStorage quadratically on large
-      // decks; after a reload, the resumed session remains correct but undo starts fresh.
+      isDrill: snapshot.isDrill,
+      drillBuckets: snapshot.isDrill
+        ? snapshot.drillBuckets ?? [...ALL_DRILL_BUCKETS]
+        : undefined,
       history: [],
     };
   } catch (error) {

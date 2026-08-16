@@ -90,7 +90,7 @@ export const TodayQueueCard: React.FC = () => {
           {!starting && hasCards && <ArrowRight size={15} />}
         </button>
         <span className="today-queue-ticket-note">
-          {forceCram ? 'Cram mode · schedules still update' : 'Due cards only · new-card limits apply'}
+          {forceCram ? 'Optional practice · schedules still update' : 'Due + new cards · no daily cap'}
         </span>
       </aside>
     </section>
