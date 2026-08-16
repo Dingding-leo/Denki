@@ -1,5 +1,6 @@
 import type { StateCreator } from 'zustand';
 import { db } from '../../db';
+import type { CardType } from '../../db/schema';
 import { triggerAutoSave } from '../../services/backup';
 import { createCSVImportPlan } from '../../services/csvImport';
 import { STATES } from '../../services/scheduler';
@@ -17,6 +18,24 @@ async function assertCardDestination(classId: number, deckId: number): Promise<v
   }
 }
 
+function normalizeCardContent(
+  front: string,
+  back: string,
+  cardType: CardType,
+): { front: string; back: string; cardType: CardType } {
+  const cleanedFront = front.trim();
+  const cleanedBack = back.trim();
+  if (!cleanedFront) throw new Error('Card front cannot be empty.');
+  if (cardType === 'standard' && !cleanedBack) {
+    throw new Error('A standard card needs an answer.');
+  }
+  return { front: cleanedFront, back: cleanedBack, cardType };
+}
+
+function sessionContainsCard(state: FlashcardState, cardId: number): boolean {
+  return state.session?.queue.some((card) => card.id === cardId) ?? false;
+}
+
 export const createCardSlice: StateCreator<
   FlashcardState,
   [],
@@ -26,21 +45,20 @@ export const createCardSlice: StateCreator<
   cards: [],
 
   loadCards: async (deckId) => {
-    const allCards = deckId !== undefined
+    const cards = deckId !== undefined
       ? await db.cards.where('deckId').equals(deckId).toArray()
       : await db.cards.toArray();
-    set({ cards: allCards });
+    set({ cards });
   },
 
   createCard: async (classId, deckId, front, back, cardType) => {
     await assertCardDestination(classId, deckId);
+    const content = normalizeCardContent(front, back, cardType);
     const now = new Date();
     const id = await db.cards.add({
       classId,
       deckId,
-      front,
-      back,
-      cardType,
+      ...content,
       createdAt: now,
       state: STATES.New,
       stability: 0,
@@ -64,17 +82,13 @@ export const createCardSlice: StateCreator<
   updateCard: async (cardId, front, back, cardType) => {
     const card = await db.cards.get(cardId);
     if (!card) throw new Error('Card not found');
+    const content = normalizeCardContent(front, back, cardType);
 
-    const updated = await db.cards.update(cardId, { front, back, cardType });
+    const updated = await db.cards.update(cardId, content);
     if (updated === 0) throw new Error('Card not found');
 
-    await Promise.all([
-      get().loadCards(card.deckId),
-      get().loadClassStats(card.classId),
-      get().loadDeckStats(card.classId),
-      get().loadStats(get().activeClassId),
-    ]);
-
+    if (sessionContainsCard(get(), cardId)) set({ session: null });
+    await get().loadCards(card.deckId);
     triggerAutoSave();
   },
 
@@ -87,6 +101,7 @@ export const createCardSlice: StateCreator<
       await db.reviews.where('cardId').equals(cardId).delete();
     });
 
+    if (sessionContainsCard(get(), cardId)) set({ session: null });
     await Promise.all([
       get().loadCards(card.deckId),
       get().loadClassStats(card.classId),
@@ -101,19 +116,21 @@ export const createCardSlice: StateCreator<
     if (cardsToCreate.length === 0) return;
 
     const destinationPairs = new Map<string, { classId: number; deckId: number }>();
-    for (const card of cardsToCreate) {
+    const normalizedCards = cardsToCreate.map((card) => {
       destinationPairs.set(`${card.classId}:${card.deckId}`, {
         classId: card.classId,
         deckId: card.deckId,
       });
-    }
+      return { ...card, ...normalizeCardContent(card.front, card.back, card.cardType) };
+    });
+
     await Promise.all(
       [...destinationPairs.values()].map(({ classId, deckId }) =>
         assertCardDestination(classId, deckId)),
     );
 
     const now = new Date();
-    await db.cards.bulkAdd(cardsToCreate.map((card) => ({
+    await db.cards.bulkAdd(normalizedCards.map((card) => ({
       classId: card.classId,
       deckId: card.deckId,
       front: card.front,
@@ -128,7 +145,7 @@ export const createCardSlice: StateCreator<
       due: now,
     })));
 
-    const classIds = [...new Set(cardsToCreate.map((card) => card.classId))];
+    const classIds = [...new Set(normalizedCards.map((card) => card.classId))];
     const activeDeckId = get().activeDeckId;
     await Promise.all([
       activeDeckId ? get().loadCards(activeDeckId) : Promise.resolve(),
@@ -167,7 +184,6 @@ export const createCardSlice: StateCreator<
       let difficulty = 4.5;
       let stability = 0.15;
       let state = STATES.Review;
-
       if (rating === 1) {
         difficulty = 8.5;
         stability = 0.003;
@@ -195,8 +211,6 @@ export const createCardSlice: StateCreator<
         lastRating: rating,
       });
 
-      // Store non-zero post-set stability so this manual adjustment is not
-      // mistaken for a newly introduced card by the daily-limit calculation.
       await db.reviews.add({
         cardId,
         deckId: card.deckId,
@@ -210,6 +224,7 @@ export const createCardSlice: StateCreator<
       });
     });
 
+    if (sessionContainsCard(get(), cardId)) set({ session: null });
     const activeDeckId = get().activeDeckId;
     await Promise.all([
       activeDeckId ? get().loadCards(activeDeckId) : Promise.resolve(),
@@ -244,10 +259,7 @@ export const createCardSlice: StateCreator<
       due: now,
     }));
 
-    // Parse and validate the complete file before this single write. A malformed
-    // CSV or storage failure therefore leaves the destination deck unchanged.
     await db.cards.bulkAdd(entries);
-
     await Promise.all([
       get().loadCards(deckId),
       get().loadClassStats(classId),
