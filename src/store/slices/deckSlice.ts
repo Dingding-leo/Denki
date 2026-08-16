@@ -1,8 +1,14 @@
 import type { StateCreator } from 'zustand';
 import { db } from '../../db';
-import { STATES } from '../../services/scheduler';
 import { triggerAutoSave } from '../../services/backup';
-import type { FlashcardState, DeckSlice } from '../types';
+import { STATES } from '../../services/scheduler';
+import type { DeckSlice, FlashcardState } from '../types';
+
+function cleanDeckName(name: string): string {
+  const cleaned = name.trim();
+  if (!cleaned) throw new Error('Deck name cannot be empty.');
+  return cleaned;
+}
 
 export const createDeckSlice: StateCreator<
   FlashcardState,
@@ -14,46 +20,48 @@ export const createDeckSlice: StateCreator<
   activeDeckId: null,
 
   loadDecks: async (classId) => {
-    let allDecks;
-    if (classId !== undefined) {
-      allDecks = await db.decks.where('classId').equals(classId).toArray();
-    } else {
-      allDecks = await db.decks.toArray();
-    }
-    
-    // Sort: newer first
-    allDecks.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    set({ decks: allDecks });
+    const decks = classId !== undefined
+      ? await db.decks.where('classId').equals(classId).toArray()
+      : await db.decks.toArray();
+    decks.sort((left, right) =>
+      new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+    set({ decks });
 
-    // Compute deck stats for this class
-    if (classId !== undefined) {
-      await get().loadDeckStats(classId);
-    }
+    if (classId !== undefined) await get().loadDeckStats(classId);
   },
 
   createDeck: async (classId, name, description) => {
+    if (!await db.classes.get(classId)) throw new Error('Parent class not found.');
     const id = await db.decks.add({
       classId,
-      name,
-      description,
+      name: cleanDeckName(name),
+      description: description.trim(),
       createdAt: new Date(),
     });
-    
-    await get().loadDecks(classId);
-    
-    // Refresh parent class stats
-    await get().loadClassStats(classId);
-    
+
+    await Promise.all([
+      get().loadDecks(classId),
+      get().loadClassStats(classId),
+    ]);
     triggerAutoSave();
     return id;
   },
 
   updateDeck: async (deckId, name, description) => {
-    const updated = await db.decks.update(deckId, { name, description });
-    if (updated === 0) throw new Error('Deck not found');
-    set({
-      decks: get().decks.map(d => (d.id === deckId ? { ...d, name, description } : d)),
+    const cleanedName = cleanDeckName(name);
+    const cleanedDescription = description.trim();
+    const updated = await db.decks.update(deckId, {
+      name: cleanedName,
+      description: cleanedDescription,
     });
+    if (updated === 0) throw new Error('Deck not found');
+
+    set((state) => ({
+      decks: state.decks.map((deck) =>
+        deck.id === deckId
+          ? { ...deck, name: cleanedName, description: cleanedDescription }
+          : deck),
+    }));
     triggerAutoSave();
   },
 
@@ -67,72 +75,70 @@ export const createDeckSlice: StateCreator<
       await db.reviews.where('deckId').equals(deckId).delete();
     });
 
-    // Reset active deck if deleted
-    let newActiveDeckId = get().activeDeckId;
-    if (newActiveDeckId === deckId) {
-      set({ activeDeckId: null });
-      newActiveDeckId = null;
-    }
+    const deletedActiveDeck = get().activeDeckId === deckId;
+    const sessionUsesDeck = get().session?.queue.some((card) => card.deckId === deckId) ?? false;
+    set({
+      activeDeckId: deletedActiveDeck ? null : get().activeDeckId,
+      cards: deletedActiveDeck ? [] : get().cards,
+      session: sessionUsesDeck ? null : get().session,
+    });
 
-    await get().loadDecks(deck.classId);
-    await get().loadCards(newActiveDeckId || undefined);
-    
-    // Refresh stats
-    await get().loadClassStats(deck.classId);
-    await get().loadStats(get().activeClassId);
-
+    await Promise.all([
+      get().loadDecks(deck.classId),
+      deletedActiveDeck ? Promise.resolve() : get().loadCards(get().activeDeckId ?? undefined),
+      get().loadClassStats(deck.classId),
+      get().loadStats(get().activeClassId),
+    ]);
     triggerAutoSave();
   },
 
   saveDeckNotes: async (deckId, notes) => {
-    await db.decks.update(deckId, { notes });
-    const updatedDecks = get().decks.map(d => d.id === deckId ? { ...d, notes } : d);
-    set({ decks: updatedDecks });
+    const updated = await db.decks.update(deckId, { notes });
+    if (updated === 0) throw new Error('Deck not found');
+    set((state) => ({
+      decks: state.decks.map((deck) => deck.id === deckId ? { ...deck, notes } : deck),
+    }));
     triggerAutoSave();
   },
 
   resetDeckProgress: async (deckId) => {
-    const deckCards = await db.cards.where('deckId').equals(deckId).toArray();
+    const [deck, deckCards] = await Promise.all([
+      db.decks.get(deckId),
+      db.cards.where('deckId').equals(deckId).toArray(),
+    ]);
+    if (!deck) throw new Error('Deck not found');
     if (deckCards.length === 0) return;
-
-    const deck = await db.decks.get(deckId);
-    const parentClassId = deck?.classId;
 
     await db.transaction('rw', [db.cards, db.reviews], async () => {
       const now = new Date();
       for (const card of deckCards) {
-        if (card.id) {
-          await db.cards.update(card.id, {
-            state: STATES.New,
-            stability: 0,
-            difficulty: 0,
-            elapsedDays: 0,
-            scheduledDays: 0,
-            due: now,
-            lastReviewed: undefined,
-            lastRating: undefined, // Reset confidence value too
-          });
-        }
+        if (!card.id) continue;
+        await db.cards.update(card.id, {
+          state: STATES.New,
+          stability: 0,
+          difficulty: 0,
+          elapsedDays: 0,
+          scheduledDays: 0,
+          due: now,
+          lastReviewed: undefined,
+          lastRating: undefined,
+        });
       }
-
       await db.reviews.where('deckId').equals(deckId).delete();
     });
 
-    // Reload active cards list
+    // A resumable queue contains the old scheduling state; discard it when any
+    // of its cards are reset rather than reviving misleading progress later.
+    const sessionUsesDeck = get().session?.queue.some((card) => card.deckId === deckId) ?? false;
+    if (sessionUsesDeck) set({ session: null });
+
     const activeDeckId = get().activeDeckId;
-    if (activeDeckId) {
-      await get().loadCards(activeDeckId);
-    } else {
-      await get().loadCards();
-    }
-
-    // Refresh deck/class/global stats
-    if (parentClassId) {
-      await get().loadDeckStats(parentClassId);
-      await get().loadClassStats(parentClassId);
-    }
-    await get().loadStats(get().activeClassId);
-
+    await Promise.all([
+      activeDeckId ? get().loadCards(activeDeckId) : Promise.resolve(),
+      get().loadDeckStats(deck.classId),
+      get().loadClassStats(deck.classId),
+      get().loadStats(get().activeClassId),
+    ]);
     triggerAutoSave();
   },
 });
