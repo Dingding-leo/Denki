@@ -159,3 +159,5 @@ jobs:
           git add src/components/Flashcard.tsx src/pages/StudySessionPage.tsx
           git commit -m "fix(study): auto-read each new question"
           git push origin HEAD:fix/auto-read-question
+
+# Rerun after the speech regression test was made production-build clean.
