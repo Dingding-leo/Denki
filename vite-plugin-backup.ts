@@ -1,8 +1,8 @@
 import type { Plugin } from 'vite';
-import fs from 'fs';
-import path from 'path';
+import fs from 'node:fs';
+import path from 'node:path';
 
-const BACKUP_FILE = path.resolve(__dirname, 'denki-backup.json');
+const BACKUP_FILE = path.resolve(import.meta.dirname, 'denki-backup.json');
 
 export function denkiBackupPlugin(): Plugin {
   return {
