@@ -1,95 +1,191 @@
-# Denki Launch Posts — Drafts
+# Denki Launch Readiness and Product Messaging
 
----
+This file is an operational launch checklist, not a collection of aspirational claims. Public wording must describe the product that is actually shipped on the release commit.
 
-## 1. Hacker News — "Show HN"
+## Launch target
 
-**Title:** Show HN: Denki — open source spaced repetition with a modern UI (Anki alternative)
+The primary public launch target is the hosted web/PWA build at:
 
-**Body:**
+- Application: <https://dingding-leo.github.io/Denki/>
+- Source: <https://github.com/Dingding-leo/Denki>
 
-I built Denki because I was tired of Anki's UI looking like Windows 95. It's a local-first spaced repetition app powered by FSRS 4.5 — the same algorithm Anki uses, but wrapped in an interface that doesn't hurt to look at.
+Docker and Tauri build paths may be documented, but they should not be promoted as fully supported distribution channels until their release artifacts are built and smoke-tested for the advertised platform.
 
-What it does:
-- FSRS 4.5 scheduler (targeted 90% recall, same science as Anki's best)
-- AI flashcard generation — paste your notes, get flashcards instantly
-- One-click import from Anki (.apkg files)
-- Built-in scratchpad for drawing diagrams on cards
-- Speed match game for breaking up long study sessions
-- Works 100% offline, all data stays in your browser
-- PWA — install on any device
+## Accurate product promise
 
-Tech: React 19, TypeScript, Vite, Zustand, Dexie.js (IndexedDB)
+Denki is:
 
-Live demo: https://dingding-leo.github.io/Denki/
-GitHub: https://github.com/Dingding-leo/Denki
+- a local-first flashcard workspace;
+- an implementation of canonical FSRS 4.5 scheduling with configurable target retention;
+- organised around classes and decks;
+- capable of Standard and cloze cards with sanitised Markdown;
+- able to run scheduled deck, class, and mixed-library review;
+- able to run one-pass, confidence-filtered deck Drills;
+- able to import CSV and bounded Anki fields for supported Basic and cloze-style material;
+- able to generate editable card drafts through an optional learner-configured AI provider;
+- able to export and restore versioned portable JSON backups;
+- installable and offline-capable in browsers that support the required PWA and storage APIs.
 
-I'm a dental student, not a professional developer. This started as a side project — would love feedback from SRS power users. What features would make you switch from Anki?
+## Claims that must not be made
 
----
+Do not claim:
 
-## 2. Reddit — r/Anki
+- complete Anki compatibility or lossless migration of arbitrary note models;
+- support for Anki template logic, CSS, add-ons, scheduling history parity, or every `.apkg` file;
+- cloud sync, accounts, collaborative decks, or automatic cross-device synchronization;
+- that all data always remains local when optional AI generation sends source text to a provider;
+- that FSRS `Review` state means a card is mastered;
+- that Denki uses the same complete behaviour as a current Anki release merely because both use FSRS;
+- production support for every browser, operating system, or desktop bundle;
+- zero risk of browser-storage loss without explaining portable backups;
+- medical, dental, or educational outcome guarantees.
 
-**Title:** I built a modern Anki alternative — looking for honest feedback from power users
+## Current known limitations
 
-**Body:**
+Launch material should disclose material limitations rather than hiding them in issue comments:
 
-I've been an Anki user for years. The scheduling algorithm is brilliant, but the interface... you know.
+1. **No built-in sync.** A learner moves data between installations using portable backups.
+2. **Browser storage remains local.** Persistent-storage requests reduce eviction risk but do not replace backups.
+3. **Anki support is field-based.** Complex templates are not rendered or guaranteed to round-trip.
+4. **AI generation is bring-your-own-provider.** Availability, privacy, cost, and output quality depend on that provider.
+5. **AI output requires review.** Generated drafts can be wrong and are editable before filing.
+6. **No claim of mastery.** Progress views show scheduling states, due work, ratings, and history.
+7. **Desktop distribution is optional.** A source build path is not equivalent to signed, notarised, supported releases.
 
-So I built Denki: an open-source SRS app with:
-- The same FSRS 4.5 scheduler Anki uses
-- A modern glassmorphism UI (dark mode by default)
-- One-click import from your existing Anki decks (.apkg)
-- AI flashcard generation from your lecture notes
-- Built-in scratchpad for drawing diagrams directly on cards
+## Automated release gates
 
-It's completely free, open source (MIT), and runs in your browser with full offline support.
+A launch candidate is not releasable unless its exact commit passes:
 
-Demo: https://dingding-leo.github.io/Denki/
-GitHub: https://github.com/Dingding-leo/Denki
+- clean dependency installation;
+- production dependency audit;
+- strict TypeScript;
+- web and Tauri security-policy validation;
+- canonical FSRS 4.5 golden vectors;
+- zero-warning ESLint;
+- the complete Vitest suite;
+- production build;
+- final `dist` artifact validation;
+- CodeQL JavaScript and TypeScript analysis.
 
-I'm not here to trash Anki — it's an incredible tool that pioneered this space. But I think we deserve a better UI. What features do you absolutely need before you'd consider switching? What does Anki do that a new app MUST get right on day one?
+GitHub Pages must deploy only the exact successful `main` commit and must rerun artifact validation on the rebuilt upload.
 
----
+## Manual release-candidate smoke test
 
-## 3. Reddit — r/selfhosted
+Run this against a clean browser profile or isolated origin using the candidate commit.
 
-**Title:** Self-hosted Anki alternative — Denki (Docker coming soon, fully open source MIT)
+### First-run and library
 
-**Body:**
+- [ ] Open Denki with an empty IndexedDB.
+- [ ] Create a class and a deck.
+- [ ] Add Standard and cloze cards.
+- [ ] Edit and delete a card.
+- [ ] Rename a class and deck.
+- [ ] Confirm empty, loading, error, and destructive-confirmation states are readable.
 
-Found a project that r/selfhosted might appreciate: Denki, an open-source spaced repetition flashcard app with a modern UI.
+### Review integrity
 
-Why this fits here:
-- Fully open source (MIT license)
-- Local-first — all data in IndexedDB, never leaves your device
-- PWA — install on any device, works offline
-- Imports Anki decks (.apkg) — easy migration
-- AI card generation from notes (bring your own API key, OpenRouter compatible)
-- Docker support coming next
+- [ ] Start deck review and verify Question → Answer → rating flow.
+- [ ] Verify Again, Hard, Good, and Easy interval previews are ordered and plausible.
+- [ ] Rate a card, reload, and confirm the session resumes at the correct cursor.
+- [ ] Undo a rating and confirm both the card state and review log roll back.
+- [ ] Confirm scheduled review, all-card practice, and Drill do not resume as one another.
+- [ ] Complete a session and confirm the finished queue does not reopen after reload.
 
-The UI is a massive upgrade from Anki's 20-year-old interface.
+### Import and export
 
-Demo: https://dingding-leo.github.io/Denki/
-GitHub: https://github.com/Dingding-leo/Denki
+- [ ] Import valid quoted and multiline CSV.
+- [ ] Reject malformed CSV without partial writes.
+- [ ] Import the repository's supported Basic and cloze `.apkg` fixtures.
+- [ ] Reject an oversized or structurally unsafe Anki package without partial decks.
+- [ ] Export a deck to CSV and inspect formula-neutralisation behaviour.
 
-Creator is a dental student who built this as a side project. Needs Docker help if anyone wants to contribute.
+### Backup and recovery
 
----
+- [ ] Export a portable v2 backup.
+- [ ] Confirm the file contains study data, target retention, and speech speed.
+- [ ] Confirm the file does not contain the AI-provider key.
+- [ ] Restore the backup into a clean profile.
+- [ ] Import a legacy data-only backup and confirm current preferences remain unchanged.
+- [ ] Test an invalid backup and confirm current data remains intact.
 
-## Timing Notes
+### Offline/PWA
 
-- **Best launch window**: Tuesday-Thursday, 6-9 AM ET (北京时间 18:00-21:00)
-- **HN first** — if it hits front page, Reddit posts will get more traction from cross-referencing
-- **r/Anki post**: be humble, ask for feedback, don't trash Anki
-- **r/selfhosted**: emphasize open source, MIT license, Docker coming
-- **Respond to every comment** for the first 24 hours — engagement drives algorithmic visibility
+- [ ] Load every lazy route once on the candidate release.
+- [ ] Install or activate the PWA in a supported browser.
+- [ ] Go offline and reload the dashboard, class page, study page, and local Anki importer.
+- [ ] Upgrade from the previous production release and confirm no mixed-version chunk failure.
+- [ ] Confirm an incomplete cache installation does not replace the current working release.
 
-## What We Still Need Before Launch
+### Optional AI
 
-1. [ ] Screenshots in README (replace placeholders)
-2. [ ] Animated GIF demo (15-20 sec showing AI generation flow)
-3. [ ] Dynamic star count badge in README (shields.io)
-4. [ ] Discord server link in README
-5. [ ] Dockerfile / docker-compose.yml (or at least "coming soon" note)
-6. [ ] OG image for social sharing (1200x630)
+- [ ] Configure a non-production test key.
+- [ ] Generate from non-sensitive sample text.
+- [ ] Verify timeout, rate-limit, malformed response, and unsupported endpoint messages.
+- [ ] Edit drafts before import and confirm destination validation.
+- [ ] Remove the key and verify it is not present in an exported backup.
+
+### Accessibility and responsive behaviour
+
+- [ ] Complete core navigation using the keyboard only.
+- [ ] Verify visible focus and modal focus containment.
+- [ ] Verify Review Mode shortcuts do not fire while typing in an input or textarea.
+- [ ] Test class/deck and study layouts at narrow width and increased browser zoom.
+- [ ] Verify long card content scrolls rather than clipping.
+- [ ] Check accessible names for icon-only controls and progress indicators.
+
+## Release procedure
+
+1. Confirm `main` rules require pull requests, `Release checks`, and CodeQL.
+2. Align the application, package, and Tauri versions for the release.
+3. Update release notes with user impact, migrations, limitations, and rollback guidance.
+4. Run the complete manual smoke test on the release candidate.
+5. Merge only the validated release change.
+6. Confirm the `main` CI run succeeds for the merge commit.
+7. Confirm Pages deploys that exact SHA.
+8. Open the production URL in a clean browser and repeat the critical path.
+9. Tag the validated commit using semantic versioning.
+10. Publish launch posts only after the deployed SHA and tag agree.
+
+## Suggested launch copy
+
+### Short description
+
+> Denki is an open-source, local-first flashcard workspace with canonical FSRS 4.5 scheduling, offline review, bounded CSV/Anki field import, portable backups, and optional bring-your-own-provider AI drafts.
+
+### Longer introduction
+
+> I built Denki as a focused study workspace for learners who want modern review tools without creating an account or handing their library to a hosted database. Cards and review history live in IndexedDB, scheduled reviews use a tested canonical FSRS 4.5 implementation, and portable JSON backups move study data plus non-secret preferences between installations. Denki supports Markdown, cloze cards, mixed review, deck Drills, CSV, and bounded Basic/cloze Anki field import. Optional AI generation uses a provider and key chosen by the learner, and every generated card remains editable before import.
+
+### Feedback request
+
+Ask for concrete workflow evidence rather than generic feature voting:
+
+- Which import failed, and what note model created it?
+- Which review action was confusing?
+- Did a due count or interval disagree with expectation?
+- What failed offline?
+- What data-recovery step was unclear?
+- Which keyboard or screen-reader interaction was blocked?
+
+## Post-launch operations
+
+During the first public feedback period:
+
+- reproduce defects against the deployed commit SHA;
+- distinguish data-loss risk from cosmetic issues;
+- prioritise scheduler, persistence, backup, import, and offline regressions;
+- request a minimal non-sensitive fixture for import defects;
+- never ask a learner to publish patient data, credentials, or a private study archive;
+- document known issues and workarounds openly;
+- do not broaden product claims faster than validation coverage.
+
+## Launch decision
+
+Launch only when:
+
+- every automated gate is green on the deployed commit;
+- the manual critical path is complete;
+- the public description matches supported behaviour;
+- backup and recovery have been tested on a clean profile;
+- known limitations are acceptable and visible;
+- an owner is available to triage scheduler, data, import, and offline reports.
