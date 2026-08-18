@@ -3,7 +3,8 @@ import { db } from '../../db';
 import type { CardType } from '../../db/schema';
 import { triggerAutoSave } from '../../services/backup';
 import { createCSVImportPlan } from '../../services/csvImport';
-import { STATES } from '../../services/scheduler';
+import { reviewCard, STATES, type Rating } from '../../services/scheduler';
+import { loadSchedulerParams } from '../../services/schedulerParams';
 import type { CardSlice, FlashcardState } from '../types';
 
 let latestCardsRequest = 0;
@@ -194,6 +195,7 @@ export const createCardSlice: StateCreator<
     const card = await db.cards.get(cardId);
     if (!card) throw new Error('Card not found');
 
+    const reviewedAt = new Date();
     await db.transaction('rw', [db.cards, db.reviews], async () => {
       if (rating === 0) {
         await db.reviews.where('cardId').equals(cardId).delete();
@@ -203,54 +205,25 @@ export const createCardSlice: StateCreator<
           difficulty: 0,
           elapsedDays: 0,
           scheduledDays: 0,
-          due: new Date(),
+          due: reviewedAt,
           lastReviewed: undefined,
           lastRating: undefined,
         });
         return;
       }
 
-      let difficulty = 4.5;
-      let stability = 0.15;
-      let state = STATES.Review;
-      if (rating === 1) {
-        difficulty = 8.5;
-        stability = 0.003;
-        state = STATES.Learning;
-      } else if (rating === 2) {
-        difficulty = 6.5;
-        stability = 0.04;
-      } else if (rating === 4) {
-        difficulty = 1.5;
-        stability = 1;
-      }
-
-      const scheduledDays = Number(stability.toFixed(4));
-      const reviewedAt = new Date();
-      const due = new Date(reviewedAt.getTime() + scheduledDays * 24 * 60 * 60 * 1000);
-
-      await db.cards.update(cardId, {
-        state,
-        stability,
-        difficulty,
-        elapsedDays: 0.0001,
-        scheduledDays,
-        due,
-        lastReviewed: reviewedAt,
-        lastRating: rating,
-      });
-
-      await db.reviews.add({
-        cardId,
-        deckId: card.deckId,
-        classId: card.classId,
+      // Manual confidence is still a scheduler mutation. Run it through the
+      // same canonical FSRS-4.5 transition as Review Mode instead of inventing
+      // hand-tuned stability and difficulty values at this alternate entrypoint.
+      const { updatedCard, log } = reviewCard(
+        card,
+        rating as Rating,
         reviewedAt,
-        rating,
-        stability,
-        difficulty,
-        elapsedDays: 0.0001,
-        scheduledDays,
-      });
+        loadSchedulerParams(),
+        () => 0.5,
+      );
+      await db.cards.put(updatedCard);
+      await db.reviews.add({ ...log, cardId });
     });
 
     if (sessionContainsCard(get(), cardId)) set({ session: null });
