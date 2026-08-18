@@ -41,3 +41,5 @@ jobs:
         run: npm run test:run
       - name: Production build
         run: npm run build
+      - name: Release artifact integrity
+        run: npm run test:artifact
