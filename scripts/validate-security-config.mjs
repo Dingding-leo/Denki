@@ -46,6 +46,7 @@ const validatePolicy = (directives, source) => {
   }
 
   requireToken('default-src', directives.get('default-src'), "'self'", source);
+  requireToken('base-uri', directives.get('base-uri'), "'none'", source);
   requireToken('object-src', directives.get('object-src'), "'none'", source);
   requireToken('script-src', directives.get('script-src'), "'self'", source);
   requireToken(
