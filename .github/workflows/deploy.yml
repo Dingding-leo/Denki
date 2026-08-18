@@ -37,6 +37,8 @@ jobs:
       - run: npm ci
       - name: Build validated source
         run: npm run build
+      - name: Revalidate deploy artifact
+        run: npm run test:artifact
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
