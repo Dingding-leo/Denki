@@ -59,6 +59,7 @@ function persistPreferences(retention: number, speechSpeed: number): void {
       error instanceof Error
         ? `Browser storage rejected the preferences: ${error.message}`
         : 'Browser storage rejected the preferences.',
+      { cause: error },
     );
   }
 }
