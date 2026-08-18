@@ -5,12 +5,60 @@ import {
   collectReferencedAnkiMedia,
   commitAnkiImportPlan,
   createAnkiImportPlan,
+  inspectAnkiZipArchive,
   replaceAnkiMediaReferences,
   sanitizeAnkiHtml,
   validateAnkiPackageFile,
   validateAnkiRows,
   type AnkiImportPlan,
 } from '../ankiImport';
+
+interface DeclaredZipEntry {
+  name: string;
+  compressedBytes?: number;
+  uncompressedBytes?: number;
+  compressionMethod?: number;
+  flags?: number;
+}
+
+function makeCentralDirectory(entries: readonly DeclaredZipEntry[]): ArrayBuffer {
+  const encoder = new TextEncoder();
+  const encodedNames = entries.map((entry) => encoder.encode(entry.name));
+  const centralBytes = entries.reduce(
+    (total, _entry, index) => total + 46 + encodedNames[index].length,
+    0,
+  );
+  const buffer = new ArrayBuffer(centralBytes + 22);
+  const view = new DataView(buffer);
+  const bytes = new Uint8Array(buffer);
+  let cursor = 0;
+
+  entries.forEach((entry, index) => {
+    const filename = encodedNames[index];
+    const compressedBytes = entry.compressedBytes ?? 16;
+    const uncompressedBytes = entry.uncompressedBytes ?? compressedBytes;
+
+    view.setUint32(cursor, 0x02014b50, true);
+    view.setUint16(cursor + 4, 20, true);
+    view.setUint16(cursor + 6, 20, true);
+    view.setUint16(cursor + 8, entry.flags ?? 0, true);
+    view.setUint16(cursor + 10, entry.compressionMethod ?? 8, true);
+    view.setUint32(cursor + 20, compressedBytes, true);
+    view.setUint32(cursor + 24, uncompressedBytes, true);
+    view.setUint16(cursor + 28, filename.length, true);
+    view.setUint32(cursor + 42, 0, true);
+    bytes.set(filename, cursor + 46);
+    cursor += 46 + filename.length;
+  });
+
+  view.setUint32(cursor, 0x06054b50, true);
+  view.setUint16(cursor + 8, entries.length, true);
+  view.setUint16(cursor + 10, entries.length, true);
+  view.setUint32(cursor + 12, centralBytes, true);
+  view.setUint32(cursor + 16, 0, true);
+  view.setUint16(cursor + 20, 0, true);
+  return buffer;
+}
 
 async function seedClass(): Promise<number> {
   return db.classes.add({
@@ -68,7 +116,9 @@ describe('Anki import helpers', () => {
     expect(result).toContain('src="data:image/png;base64,diagram"');
     expect(result).toContain('<img src="missing.png">');
     expect(result).toContain('![diagram](data:image/png;base64,diagram)');
-    expect(result).toContain('<audio controls preload="none" src="data:audio/mpeg;base64,voice"');
+    expect(result).toContain(
+      '<audio controls preload="none" src="data:audio/mpeg;base64,voice"',
+    );
   });
 
   it('sanitizes executable and layout-affecting HTML while retaining safe structure', () => {
@@ -98,7 +148,7 @@ describe('Anki import helpers', () => {
     );
   });
 
-  it('rejects empty and oversized archive files before decompression', () => {
+  it('rejects empty and oversized archive files before reading them', () => {
     expect(() => validateAnkiPackageFile({
       name: 'empty.apkg',
       size: 0,
@@ -108,6 +158,56 @@ describe('Anki import helpers', () => {
       name: 'huge.apkg',
       size: ANKI_IMPORT_LIMITS.maxArchiveBytes + 1,
     })).toThrow(/safe import limit/);
+  });
+
+  it('preflights declared ZIP output sizes before decompression', () => {
+    const safe = inspectAnkiZipArchive(makeCentralDirectory([
+      {
+        name: 'collection.anki2',
+        compressedBytes: 1_000,
+        uncompressedBytes: 2_000,
+      },
+      { name: 'media', compressedBytes: 20, uncompressedBytes: 40 },
+      { name: '0', compressedBytes: 100, uncompressedBytes: 200 },
+    ]));
+
+    expect(safe.entryCount).toBe(3);
+    expect(safe.entries['collection.anki2'].uncompressedBytes).toBe(2_000);
+
+    expect(() => inspectAnkiZipArchive(makeCentralDirectory([
+      {
+        name: 'collection.anki2',
+        uncompressedBytes: ANKI_IMPORT_LIMITS.maxDatabaseBytes + 1,
+      },
+    ]))).toThrow(/collection database is too large/);
+
+    expect(() => inspectAnkiZipArchive(makeCentralDirectory([
+      { name: 'collection.anki2' },
+      {
+        name: '0',
+        uncompressedBytes: ANKI_IMPORT_LIMITS.maxSingleMediaBytes + 1,
+      },
+    ]))).toThrow(/media entry 0 is too large/);
+  });
+
+  it('rejects encrypted, unsupported, duplicate, and ZIP64 metadata', () => {
+    expect(() => inspectAnkiZipArchive(makeCentralDirectory([
+      { name: 'collection.anki2', flags: 1 },
+    ]))).toThrow(/Encrypted/);
+
+    expect(() => inspectAnkiZipArchive(makeCentralDirectory([
+      { name: 'collection.anki2', compressionMethod: 99 },
+    ]))).toThrow(/unsupported compression/);
+
+    expect(() => inspectAnkiZipArchive(makeCentralDirectory([
+      { name: 'collection.anki2' },
+      { name: 'collection.anki2' },
+    ]))).toThrow(/duplicate path/);
+
+    const zip64 = makeCentralDirectory([{ name: 'collection.anki2' }]);
+    const zip64View = new DataView(zip64);
+    zip64View.setUint16(zip64.byteLength - 12, 0xffff, true);
+    expect(() => inspectAnkiZipArchive(zip64)).toThrow(/ZIP64/);
   });
 
   it('rejects pathological card counts and field sizes before planning', () => {
@@ -156,11 +256,18 @@ describe('Anki import helpers', () => {
     const cards = await db.cards.orderBy('id').toArray();
 
     expect(result).toEqual({ decksCreated: 2, cardsImported: 2 });
-    expect(decks.map((deck) => deck.name)).toEqual(['Biology › Cell structure', 'Default']);
+    expect(decks.map((deck) => deck.name)).toEqual([
+      'Biology › Cell structure',
+      'Default',
+    ]);
     expect(cards).toHaveLength(2);
     expect(cards[0].deckId).toBe(decks[0].id);
     expect(cards[1].deckId).toBe(decks[1].id);
-    expect(cards.every((card) => card.createdAt instanceof Date && card.due instanceof Date)).toBe(true);
+    expect(
+      cards.every(
+        (card) => card.createdAt instanceof Date && card.due instanceof Date,
+      ),
+    ).toBe(true);
     expect(cards.every((card) => card.state === 0)).toBe(true);
   });
 
@@ -188,14 +295,20 @@ describe('Anki import helpers', () => {
 
     expect(decks).toHaveLength(1);
     expect(decks[0].name).toBe('Anki Import');
-    expect(new Set(cards.map((card) => card.deckId))).toEqual(new Set([decks[0].id]));
+    expect(new Set(cards.map((card) => card.deckId))).toEqual(
+      new Set([decks[0].id]),
+    );
   });
 
   it('rolls back decks when card persistence fails', async () => {
     const classId = await seedClass();
-    const bulkAdd = vi.spyOn(db.cards, 'bulkAdd').mockRejectedValueOnce(new Error('quota exceeded'));
+    const bulkAdd = vi
+      .spyOn(db.cards, 'bulkAdd')
+      .mockRejectedValueOnce(new Error('quota exceeded'));
 
-    await expect(commitAnkiImportPlan(classId, basePlan)).rejects.toThrow('quota exceeded');
+    await expect(commitAnkiImportPlan(classId, basePlan)).rejects.toThrow(
+      'quota exceeded',
+    );
 
     expect(await db.decks.count()).toBe(0);
     expect(await db.cards.count()).toBe(0);
@@ -205,9 +318,9 @@ describe('Anki import helpers', () => {
   it('rejects empty packages before writing anything', async () => {
     const classId = await seedClass();
 
-    await expect(commitAnkiImportPlan(classId, { deckNames: {}, cards: [] })).rejects.toThrow(
-      'No importable flashcards',
-    );
+    await expect(
+      commitAnkiImportPlan(classId, { deckNames: {}, cards: [] }),
+    ).rejects.toThrow('No importable flashcards');
     expect(await db.decks.count()).toBe(0);
   });
 });
