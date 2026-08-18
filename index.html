@@ -2,19 +2,23 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self' customprotocol: asset:; base-uri 'self'; object-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost data: blob:; media-src 'self' asset: http://asset.localhost data: blob:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost https: http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*; worker-src 'self' blob:; manifest-src 'self'; frame-src 'none'; form-action 'self'"
+    />
     <meta name="theme-color" content="#0d1511" />
     <link rel="icon" type="image/png" href="%BASE_URL%denki_logo.png" />
     <link rel="manifest" href="%BASE_URL%manifest.webmanifest" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!-- Open Graph / Social -->
     <meta property="og:title" content="Denki — Local-First Spaced Repetition Studio" />
-    <meta property="og:description" content="Focused flashcard review with FSRS 4.5, offline storage, imports, a scratchpad, and progress insights." />
+    <meta property="og:description" content="Focused flashcard review with canonical FSRS 4.5, offline storage, imports, a scratchpad, and progress insights." />
     <meta property="og:image" content="https://dingding-leo.github.io/Denki/og-image.jpg" />
     <meta property="og:url" content="https://dingding-leo.github.io/Denki/" />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Denki — Local-First Spaced Repetition Studio" />
-    <meta name="twitter:description" content="Focused flashcard review with FSRS scheduling and private, offline-first storage." />
+    <meta name="twitter:description" content="Focused flashcard review with canonical FSRS scheduling and private, offline-first storage." />
     <meta name="twitter:image" content="https://dingding-leo.github.io/Denki/og-image.jpg" />
     <title>Denki — Local-First Spaced Repetition Studio</title>
   </head>

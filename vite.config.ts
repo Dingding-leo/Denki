@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { denkiBackupPlugin } from './vite-plugin-backup'
-import { denkiPrecachePlugin } from './vite-plugin-precache'
+import { denkiBackupPlugin } from './vite-plugin-backup.ts'
+import { denkiPrecachePlugin } from './vite-plugin-precache.ts'
 
 const base = process.env.GITHUB_ACTIONS ? '/Denki/' : '/'
 // A changing service-worker script URL guarantees that every production build

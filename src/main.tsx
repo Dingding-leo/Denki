@@ -11,6 +11,7 @@ import './class-workspace.css'
 import './deck-action-zone.css'
 import App from './App.tsx'
 import { forceSave } from './services/backup'
+import { flushPersistedStudySession } from './services/studySessionPersistence'
 import { initServiceWorker } from './services/sw'
 
 createRoot(document.getElementById('root')!).render(
@@ -25,9 +26,14 @@ createRoot(document.getElementById('root')!).render(
 // surfaced as an update toast in production.
 initServiceWorker();
 
-// Flush any pending debounced filesystem auto-save when the tab is closed or
-// hidden. Without this, the last mutation inside the 2s debounce window is
-// never written to the backup file.
-if (import.meta.env.DEV) {
-  window.addEventListener('pagehide', () => forceSave());
-}
+// Persist the newest resumable-session cursor before the browser freezes or
+// discards the page. Development also flushes its optional filesystem backup.
+const flushTransientState = () => {
+  flushPersistedStudySession();
+  if (import.meta.env.DEV) forceSave();
+};
+
+window.addEventListener('pagehide', flushTransientState);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') flushTransientState();
+});

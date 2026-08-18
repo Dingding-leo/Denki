@@ -27,8 +27,12 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Production dependency audit
+        run: npm run audit:prod
       - name: TypeScript
         run: npx tsc --noEmit
+      - name: Security configuration
+        run: npm run test:security
       - name: Canonical FSRS 4.5 release gate
         run: npm run test:scheduler
       - name: ESLint

@@ -1,0 +1,12 @@
+# Denki currently has one maintainer. Keep ownership explicit so GitHub can
+# request review automatically when repository rules are enabled.
+* @Dingding-leo
+
+# Release-critical paths
+/src/services/scheduler.ts @Dingding-leo
+/src/services/__tests__/scheduler.test.ts @Dingding-leo
+/src/db/ @Dingding-leo
+/src/services/backup.ts @Dingding-leo
+/src/services/ankiImport.ts @Dingding-leo
+/.github/workflows/ @Dingding-leo
+/src-tauri/ @Dingding-leo
