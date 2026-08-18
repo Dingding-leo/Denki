@@ -29,14 +29,16 @@ export interface StudySession {
 export interface ClassStats {
   total: number;
   dueCount: number;
-  masteryPct: number;
+  /** Percentage of cards currently in FSRS Review state; not a mastery claim. */
+  reviewStatePct: number;
   decksCount: number;
 }
 
 export interface DeckStats {
   total: number;
   dueCount: number;
-  masteryPct: number;
+  /** Percentage of cards currently in FSRS Review state; not a mastery claim. */
+  reviewStatePct: number;
 }
 
 export interface GlobalStats {
