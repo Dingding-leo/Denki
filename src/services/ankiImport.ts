@@ -43,7 +43,7 @@ export interface BoundedZipEntry {
   internalStream(type: 'uint8array'): ZipStreamHelper;
 }
 
-interface ZipEntry extends BoundedZipEntry {}
+type ZipEntry = BoundedZipEntry;
 
 interface ZipArchive {
   file(path: string): ZipEntry | null;
