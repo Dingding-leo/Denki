@@ -6,9 +6,15 @@ import { STATES } from './scheduler';
 const FALLBACK_DECK_KEY = '__denki_anki_fallback__';
 const FALLBACK_DECK_NAME = 'Anki Import';
 const MEBIBYTE = 1024 * 1024;
+const ZIP_EOCD_SIGNATURE = 0x06054b50;
+const ZIP_CENTRAL_FILE_SIGNATURE = 0x02014b50;
+const ZIP_EOCD_MIN_BYTES = 22;
+const ZIP_MAX_COMMENT_BYTES = 0xffff;
 
 export const ANKI_IMPORT_LIMITS = {
   maxArchiveBytes: 100 * MEBIBYTE,
+  maxArchiveEntries: 2_050,
+  maxDeclaredUncompressedBytes: 256 * MEBIBYTE,
   maxDatabaseBytes: 64 * MEBIBYTE,
   maxMediaEntries: 2_000,
   maxMediaMapChars: 2 * MEBIBYTE,
@@ -68,6 +74,18 @@ export interface AnkiImportPlan {
 export interface AnkiImportResult {
   decksCreated: number;
   cardsImported: number;
+}
+
+export interface AnkiZipEntrySummary {
+  compressedBytes: number;
+  uncompressedBytes: number;
+  compressionMethod: number;
+}
+
+export interface AnkiZipSummary {
+  entries: Record<string, AnkiZipEntrySummary>;
+  entryCount: number;
+  totalUncompressedBytes: number;
 }
 
 let runtimePromise: Promise<AnkiRuntime> | null = null;
@@ -156,7 +174,10 @@ function sanitizeSvgBytes(buffer: ArrayBuffer, filename: string): Uint8Array {
   return new TextEncoder().encode(sanitized);
 }
 
-function arrayBufferToBase64DataUrl(buffer: ArrayBuffer, filename: string): string | null {
+function arrayBufferToBase64DataUrl(
+  buffer: ArrayBuffer,
+  filename: string,
+): string | null {
   const mimeType = getMimeType(filename);
   if (!mimeType) return null;
 
@@ -167,7 +188,10 @@ function arrayBufferToBase64DataUrl(buffer: ArrayBuffer, filename: string): stri
   return `data:${mimeType};base64,${bytesToBase64(bytes)}`;
 }
 
-function lookupMedia(mediaLookup: MediaLookup, rawReference: string): string | undefined {
+function lookupMedia(
+  mediaLookup: MediaLookup,
+  rawReference: string,
+): string | undefined {
   const trimmed = rawReference.trim();
   const exact = mediaLookup[trimmed];
   if (exact) return exact;
@@ -184,7 +208,10 @@ function lookupMedia(mediaLookup: MediaLookup, rawReference: string): string | u
  * processing proportional to the content length instead of scanning every media
  * filename for every card.
  */
-export function replaceAnkiMediaReferences(html: string, mediaLookup: MediaLookup): string {
+export function replaceAnkiMediaReferences(
+  html: string,
+  mediaLookup: MediaLookup,
+): string {
   if (!html) return html;
   const mediaIndex = getMediaReferenceIndex(mediaLookup);
   if (mediaIndex.isEmpty) return html;
@@ -261,7 +288,9 @@ export function validateAnkiPackageFile(
   file: Pick<File, 'name' | 'size'>,
 ): void {
   if (!/\.apkg$/i.test(file.name)) {
-    throw new Error('Invalid file format. Please upload a valid Anki package (.apkg) file.');
+    throw new Error(
+      'Invalid file format. Please upload a valid Anki package (.apkg) file.',
+    );
   }
   if (!Number.isFinite(file.size) || file.size <= 0) {
     throw new Error('The selected Anki package is empty or unreadable.');
@@ -272,6 +301,192 @@ export function validateAnkiPackageFile(
       `The safe import limit is ${ANKI_IMPORT_LIMITS.maxArchiveBytes / MEBIBYTE} MiB.`,
     );
   }
+}
+
+function findEndOfCentralDirectory(view: DataView): number {
+  const minimumOffset = Math.max(
+    0,
+    view.byteLength - ZIP_EOCD_MIN_BYTES - ZIP_MAX_COMMENT_BYTES,
+  );
+
+  for (
+    let offset = view.byteLength - ZIP_EOCD_MIN_BYTES;
+    offset >= minimumOffset;
+    offset -= 1
+  ) {
+    if (view.getUint32(offset, true) === ZIP_EOCD_SIGNATURE) return offset;
+  }
+
+  throw new Error('The Anki package is not a valid ZIP archive.');
+}
+
+/**
+ * Read the ZIP central directory before JSZip expands any entry. This is the
+ * actual decompression-bomb boundary: declared output sizes, entry count,
+ * encryption, ZIP64, multi-disk archives, and ambiguous duplicate paths are
+ * rejected before collection.anki2, media, or binary assets are decompressed.
+ */
+export function inspectAnkiZipArchive(buffer: ArrayBuffer): AnkiZipSummary {
+  if (buffer.byteLength < ZIP_EOCD_MIN_BYTES) {
+    throw new Error('The Anki package is not a valid ZIP archive.');
+  }
+
+  const view = new DataView(buffer);
+  const bytes = new Uint8Array(buffer);
+  const eocdOffset = findEndOfCentralDirectory(view);
+  const diskNumber = view.getUint16(eocdOffset + 4, true);
+  const centralDirectoryDisk = view.getUint16(eocdOffset + 6, true);
+  const entriesOnDisk = view.getUint16(eocdOffset + 8, true);
+  const totalEntries = view.getUint16(eocdOffset + 10, true);
+  const centralDirectoryBytes = view.getUint32(eocdOffset + 12, true);
+  const centralDirectoryOffset = view.getUint32(eocdOffset + 16, true);
+  const commentBytes = view.getUint16(eocdOffset + 20, true);
+
+  if (
+    diskNumber !== 0 ||
+    centralDirectoryDisk !== 0 ||
+    entriesOnDisk !== totalEntries
+  ) {
+    throw new Error('Multi-disk Anki ZIP archives are not supported.');
+  }
+  if (
+    totalEntries === 0xffff ||
+    centralDirectoryBytes === 0xffffffff ||
+    centralDirectoryOffset === 0xffffffff
+  ) {
+    throw new Error('ZIP64 Anki packages are not supported by the safe importer.');
+  }
+  if (totalEntries === 0) {
+    throw new Error('The Anki ZIP archive contains no files.');
+  }
+  if (totalEntries > ANKI_IMPORT_LIMITS.maxArchiveEntries) {
+    throw new Error(
+      `The Anki archive contains ${totalEntries.toLocaleString()} files; ` +
+      `the safe limit is ${ANKI_IMPORT_LIMITS.maxArchiveEntries.toLocaleString()}.`,
+    );
+  }
+  if (eocdOffset + ZIP_EOCD_MIN_BYTES + commentBytes !== view.byteLength) {
+    throw new Error('The Anki ZIP archive has invalid trailing data.');
+  }
+
+  const centralDirectoryEnd = centralDirectoryOffset + centralDirectoryBytes;
+  if (
+    centralDirectoryOffset > eocdOffset ||
+    centralDirectoryEnd > eocdOffset ||
+    centralDirectoryEnd < centralDirectoryOffset
+  ) {
+    throw new Error('The Anki ZIP central directory is invalid.');
+  }
+
+  const decoder = new TextDecoder();
+  const entries: Record<string, AnkiZipEntrySummary> = {};
+  let cursor = centralDirectoryOffset;
+  let totalUncompressedBytes = 0;
+
+  for (let index = 0; index < totalEntries; index += 1) {
+    if (
+      cursor + 46 > centralDirectoryEnd ||
+      view.getUint32(cursor, true) !== ZIP_CENTRAL_FILE_SIGNATURE
+    ) {
+      throw new Error('The Anki ZIP central directory is truncated or corrupt.');
+    }
+
+    const flags = view.getUint16(cursor + 8, true);
+    const compressionMethod = view.getUint16(cursor + 10, true);
+    const compressedBytes = view.getUint32(cursor + 20, true);
+    const uncompressedBytes = view.getUint32(cursor + 24, true);
+    const filenameBytes = view.getUint16(cursor + 28, true);
+    const extraBytes = view.getUint16(cursor + 30, true);
+    const entryCommentBytes = view.getUint16(cursor + 32, true);
+    const localHeaderOffset = view.getUint32(cursor + 42, true);
+    const recordEnd =
+      cursor + 46 + filenameBytes + extraBytes + entryCommentBytes;
+
+    if (
+      compressedBytes === 0xffffffff ||
+      uncompressedBytes === 0xffffffff ||
+      localHeaderOffset === 0xffffffff
+    ) {
+      throw new Error('ZIP64 entries are not supported by the safe importer.');
+    }
+    if ((flags & 0x0001) !== 0) {
+      throw new Error('Encrypted Anki ZIP entries are not supported.');
+    }
+    if (compressionMethod !== 0 && compressionMethod !== 8) {
+      throw new Error(
+        `The Anki ZIP uses unsupported compression method ${compressionMethod}.`,
+      );
+    }
+    if (recordEnd > centralDirectoryEnd || recordEnd < cursor) {
+      throw new Error('The Anki ZIP central directory contains an invalid record.');
+    }
+
+    const filename = decoder.decode(
+      bytes.subarray(cursor + 46, cursor + 46 + filenameBytes),
+    );
+    if (!filename || filename.includes('\0')) {
+      throw new Error('The Anki ZIP contains an invalid filename.');
+    }
+    if (Object.prototype.hasOwnProperty.call(entries, filename)) {
+      throw new Error(`The Anki ZIP contains a duplicate path: ${filename}`);
+    }
+
+    totalUncompressedBytes += uncompressedBytes;
+    if (
+      !Number.isSafeInteger(totalUncompressedBytes) ||
+      totalUncompressedBytes > ANKI_IMPORT_LIMITS.maxDeclaredUncompressedBytes
+    ) {
+      throw new Error(
+        'The Anki ZIP declares too much decompressed data for safe browser import.',
+      );
+    }
+
+    entries[filename] = {
+      compressedBytes,
+      uncompressedBytes,
+      compressionMethod,
+    };
+    cursor = recordEnd;
+  }
+
+  if (cursor !== centralDirectoryEnd) {
+    throw new Error('The Anki ZIP central directory size does not match its entries.');
+  }
+
+  const databaseEntry = entries['collection.anki21'] ?? entries['collection.anki2'];
+  if (!databaseEntry) {
+    throw new Error(
+      'Anki package does not contain collection.anki2 or collection.anki21.',
+    );
+  }
+  if (databaseEntry.uncompressedBytes > ANKI_IMPORT_LIMITS.maxDatabaseBytes) {
+    throw new Error(
+      `The Anki collection database is too large ` +
+      `(${Math.ceil(databaseEntry.uncompressedBytes / MEBIBYTE)} MiB).`,
+    );
+  }
+
+  const mediaIndexEntry = entries.media;
+  if (
+    mediaIndexEntry &&
+    mediaIndexEntry.uncompressedBytes > ANKI_IMPORT_LIMITS.maxMediaMapChars
+  ) {
+    throw new Error('The Anki media index is too large to process safely.');
+  }
+
+  for (const [filename, entry] of Object.entries(entries)) {
+    if (
+      /^\d+$/.test(filename) &&
+      entry.uncompressedBytes > ANKI_IMPORT_LIMITS.maxSingleMediaBytes
+    ) {
+      throw new Error(
+        `Anki media entry ${filename} is too large ` +
+        `(${Math.ceil(entry.uncompressedBytes / MEBIBYTE)} MiB).`,
+      );
+    }
+  }
+
+  return { entries, entryCount: totalEntries, totalUncompressedBytes };
 }
 
 export function validateAnkiRows(
@@ -337,8 +552,12 @@ export function createAnkiImportPlan(
     const cardType: CardType = /\{\{c\d+::/i.test(frontRaw) ? 'cloze' : 'standard';
     if (cardType === 'standard' && !backRaw.trim()) continue;
 
-    const front = sanitizeAnkiHtml(replaceAnkiMediaReferences(frontRaw, mediaLookup));
-    const back = sanitizeAnkiHtml(replaceAnkiMediaReferences(backRaw, mediaLookup));
+    const front = sanitizeAnkiHtml(
+      replaceAnkiMediaReferences(frontRaw, mediaLookup),
+    );
+    const back = sanitizeAnkiHtml(
+      replaceAnkiMediaReferences(backRaw, mediaLookup),
+    );
 
     cards.push({
       ankiDeckId: String(did ?? FALLBACK_DECK_KEY),
@@ -663,7 +882,9 @@ function readDeckNames(database: SqlDatabase): Record<string, string> {
     const colResult = database.exec('SELECT decks FROM col');
     const rawDecks = colResult[0]?.values[0]?.[0];
     const parsed = JSON.parse(String(rawDecks ?? '{}')) as unknown;
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return deckNames;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return deckNames;
+    }
 
     for (const [id, value] of Object.entries(parsed)) {
       if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
@@ -686,23 +907,36 @@ export async function importAnkiPackage(
 ): Promise<AnkiImportResult> {
   validateAnkiPackageFile(file);
 
+  report('Inspecting Anki archive...');
+  let archiveBuffer: ArrayBuffer;
+  try {
+    archiveBuffer = await file.arrayBuffer();
+  } catch (error) {
+    throw new Error('The Anki package could not be read.', { cause: error });
+  }
+  inspectAnkiZipArchive(archiveBuffer);
+
   report('Loading local import engine...');
   const runtime = await loadAnkiRuntime();
 
-  report('Decompressing Anki archive...');
+  report('Opening validated Anki archive...');
   let zip: ZipArchive;
   try {
-    zip = await runtime.loadZip(file);
+    zip = await runtime.loadZip(archiveBuffer);
   } catch (error) {
     throw new Error('The Anki package could not be decompressed.', { cause: error });
   }
 
-  report('Extracting card collection...');
   const databaseFile = zip.file('collection.anki21') ?? zip.file('collection.anki2');
   if (!databaseFile) {
-    throw new Error('Anki package does not contain collection.anki2 or collection.anki21.');
+    // The central-directory preflight already requires this; retain a defensive
+    // check in case the parser and ZIP library ever disagree on a malformed file.
+    throw new Error(
+      'Anki package does not contain collection.anki2 or collection.anki21.',
+    );
   }
 
+  report('Extracting card collection...');
   const databaseBytes = await databaseFile.async('uint8array');
   if (databaseBytes.byteLength > ANKI_IMPORT_LIMITS.maxDatabaseBytes) {
     throw new Error(
