@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '../../db';
 import {
+  ANKI_IMPORT_LIMITS,
+  collectReferencedAnkiMedia,
   commitAnkiImportPlan,
   createAnkiImportPlan,
   replaceAnkiMediaReferences,
   sanitizeAnkiHtml,
+  validateAnkiPackageFile,
+  validateAnkiRows,
   type AnkiImportPlan,
 } from '../ankiImport';
 
@@ -67,14 +71,56 @@ describe('Anki import helpers', () => {
     expect(result).toContain('<audio controls preload="none" src="data:audio/mpeg;base64,voice"');
   });
 
-  it('sanitizes executable HTML while retaining safe formatting', () => {
+  it('sanitizes executable and layout-affecting HTML while retaining safe structure', () => {
     const result = sanitizeAnkiHtml(
       '<p style="font-weight: bold">Safe</p><img src="x" onerror="alert(1)"><script>alert(2)</script>',
     );
 
-    expect(result).toContain('font-weight: bold');
+    expect(result).toContain('<p>Safe</p>');
+    expect(result).not.toContain('style=');
     expect(result).not.toContain('onerror');
     expect(result).not.toContain('<script');
+  });
+
+  it('identifies direct and URI-encoded media references without selecting unused assets', () => {
+    const rows = [[
+      '10',
+      '<img src="diagram%20(1).png"> [sound:voice[1].mp3]',
+    ]];
+    const referenced = collectReferencedAnkiMedia(rows, {
+      'diagram (1).png': '0',
+      'voice[1].mp3': '1',
+      'unused.png': '2',
+    });
+
+    expect(new Set(referenced)).toEqual(
+      new Set(['diagram (1).png', 'voice[1].mp3']),
+    );
+  });
+
+  it('rejects empty and oversized archive files before decompression', () => {
+    expect(() => validateAnkiPackageFile({
+      name: 'empty.apkg',
+      size: 0,
+    })).toThrow(/empty or unreadable/);
+
+    expect(() => validateAnkiPackageFile({
+      name: 'huge.apkg',
+      size: ANKI_IMPORT_LIMITS.maxArchiveBytes + 1,
+    })).toThrow(/safe import limit/);
+  });
+
+  it('rejects pathological card counts and field sizes before planning', () => {
+    const tooManyRows = Array.from(
+      { length: ANKI_IMPORT_LIMITS.maxCards + 1 },
+      () => ['1', 'Q\x1fA'],
+    );
+    expect(() => validateAnkiRows(tooManyRows)).toThrow(/safe import limit/);
+
+    expect(() => validateAnkiRows([[
+      '1',
+      'x'.repeat(ANKI_IMPORT_LIMITS.maxFieldChars + 1),
+    ]])).toThrow(/unusually large note/);
   });
 
   it('preserves all answer fields and detects cloze cards when building a plan', () => {
@@ -92,6 +138,16 @@ describe('Anki import helpers', () => {
     });
   });
 
+  it('does not import standard cards with an empty answer', () => {
+    const plan = createAnkiImportPlan(
+      { '10': 'Incomplete' },
+      [['10', 'Question only']],
+      {},
+    );
+
+    expect(plan.cards).toEqual([]);
+  });
+
   it('commits decks and cards together, preserving nested names and used Default decks', async () => {
     const classId = await seedClass();
 
@@ -106,6 +162,14 @@ describe('Anki import helpers', () => {
     expect(cards[1].deckId).toBe(decks[1].id);
     expect(cards.every((card) => card.createdAt instanceof Date && card.due instanceof Date)).toBe(true);
     expect(cards.every((card) => card.state === 0)).toBe(true);
+  });
+
+  it('refuses to create imported rows when the destination class disappeared', async () => {
+    await expect(commitAnkiImportPlan(999, basePlan)).rejects.toThrow(
+      /destination class no longer exists/,
+    );
+    expect(await db.decks.count()).toBe(0);
+    expect(await db.cards.count()).toBe(0);
   });
 
   it('routes unknown source deck ids into one explicit fallback deck', async () => {
