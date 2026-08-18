@@ -37,9 +37,14 @@ useFlashcardStore.setState({
   startStudySession: async (deckId, forceCram = false) => {
     if (!forceCram) {
       const current = useFlashcardStore.getState().session;
-      if (current?.deckId === deckId && !current.isDrill) return;
+      if (
+        current?.deckId === deckId &&
+        !current.isDrill &&
+        !current.isCram
+      ) return;
       const restored = await restorePersistedStudySession({
         deckId,
+        isCram: false,
         isDrill: false,
       });
       if (restored) {
@@ -53,9 +58,14 @@ useFlashcardStore.setState({
   startClassStudySession: async (classId, forceCram = false) => {
     if (!forceCram) {
       const current = useFlashcardStore.getState().session;
-      if (current?.classId === classId && !current.isDrill) return;
+      if (
+        current?.classId === classId &&
+        !current.isDrill &&
+        !current.isCram
+      ) return;
       const restored = await restorePersistedStudySession({
         classId,
+        isCram: false,
         isDrill: false,
       });
       if (restored) {
@@ -69,9 +79,10 @@ useFlashcardStore.setState({
   startGlobalStudySession: async (forceCram = false) => {
     if (!forceCram) {
       const current = useFlashcardStore.getState().session;
-      if (current?.isGlobal && !current.isDrill) return;
+      if (current?.isGlobal && !current.isDrill && !current.isCram) return;
       const restored = await restorePersistedStudySession({
         isGlobal: true,
+        isCram: false,
         isDrill: false,
       });
       if (restored) {
@@ -93,6 +104,7 @@ useFlashcardStore.setState({
     if (current?.deckId === deckId && current.isDrill) return;
     const restored = await restorePersistedStudySession({
       deckId,
+      isCram: false,
       isDrill: true,
     });
     if (restored) {
