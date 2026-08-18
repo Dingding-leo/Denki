@@ -86,7 +86,7 @@ describe('destructive library mutations', () => {
     const { deckId, card } = await seedLibrary();
     setActiveSession(card);
     useFlashcardStore.setState({
-      deckStats: { [deckId]: { total: 1, dueCount: 1, masteryPct: 0 } },
+      deckStats: { [deckId]: { total: 1, dueCount: 1, reviewStatePct: 0 } },
     });
 
     await useFlashcardStore.getState().deleteDeck(deckId);
@@ -103,7 +103,7 @@ describe('destructive library mutations', () => {
     const { classId, deckId, card } = await seedLibrary();
     setActiveSession(card);
     useFlashcardStore.setState({
-      deckStats: { [deckId]: { total: 1, dueCount: 1, masteryPct: 0 } },
+      deckStats: { [deckId]: { total: 1, dueCount: 1, reviewStatePct: 0 } },
     });
 
     await useFlashcardStore.getState().deleteClass(classId);
