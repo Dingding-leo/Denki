@@ -12,13 +12,13 @@
 
 ## About
 
-Denki helps learners create, import, organise, and review flashcards without an account or required cloud service. Its FSRS 4.5 scheduler adapts review intervals to recall performance, while study tools such as a scratchpad, progress insights, and a matching game keep different kinds of practice in one place.
+Denki helps learners create, import, organise, and review flashcards without an account or required cloud service. Its canonical FSRS 4.5 scheduler adapts review intervals to recall performance, while study tools such as a scratchpad, progress insights, and a matching game keep different kinds of practice in one place.
 
 The product name is simply **Denki**. It is a general-purpose learning tool for every subject, with no language or cultural affiliation.
 
 ## Features
 
-- **FSRS 4.5 scheduling** with adjustable retention and review settings.
+- **Canonical FSRS 4.5 scheduling** using the published 17-weight model and configurable target retention.
 - **Local-first storage** through IndexedDB, with persistent-storage protection and offline-ready PWA support.
 - **Classes and decks** for organising material across subjects.
 - **Standard and cloze cards** with Markdown and syntax highlighting.
@@ -27,10 +27,24 @@ The product name is simply **Denki**. It is a general-purpose learning tool for 
 - **One mixed review queue** that randomises all due cards across the library, plus focused deck and class sessions.
 - **Focused study sessions** with progress checkpoints and review summaries.
 - **Built-in scratchpad** for diagrams, equations, and working notes.
-- **Anki and CSV imports** for bringing existing material across.
+- **CSV import and local Anki field import** for Basic and cloze-style `.apkg` material. Complex Anki card templates are not currently rendered or guaranteed to round-trip exactly.
 - **Optional AI card generation** using a provider and API key chosen by the learner.
-- **Progress insights** including review history, streaks, and due-card statistics.
-- **Portable backups** through JSON export and restore, with gentle weekly reminders.
+- **Progress insights** including review history, streaks, due-card statistics, and explicitly labelled scheduling states.
+- **Portable study-data backups** through JSON export and restore, with gentle weekly reminders.
+
+## Scheduler correctness
+
+Denki treats scheduler correctness as a release gate. The implementation pins the FSRS 4.5 reference constants and behaviour:
+
+- the published 17 default weights;
+- `DECAY = -0.5` and `FACTOR = 19/81`;
+- the FSRS 4.5 forgetting and target-retention interval equations;
+- pre-review difficulty in recall-stability updates;
+- canonical New, Learning, Review, and Relearning transitions;
+- strict `Hard < Good < Easy` Review intervals within the maximum interval;
+- no custom Hard or Easy multipliers that alter the model.
+
+Golden-vector tests run before the general test suite in CI. Existing libraries retain their stored stability and difficulty values; every future rating transitions those values under the canonical model.
 
 ## Privacy
 
@@ -73,12 +87,13 @@ The app bundle is written to `src-tauri/target/release/bundle/macos/Denki.app`. 
 ## Validation
 
 ```bash
+npm run test:scheduler
 npm run lint
 npm run test:run
 npm run build
 ```
 
-Pushes to `main` run the same checks in GitHub Actions and publish the production build to [GitHub Pages](https://dingding-leo.github.io/Denki/).
+Pull requests run the complete release checks in GitHub Actions. A push to `main` is deployed to [GitHub Pages](https://dingding-leo.github.io/Denki/) only after those checks succeed for that exact commit.
 
 ## Technology
 
@@ -94,10 +109,11 @@ Pushes to `main` run the same checks in GitHub Actions and publish the productio
 
 Issues and focused pull requests are welcome. Before opening a pull request:
 
-1. Create a branch from `main`.
-2. Keep the change scoped and include tests where appropriate.
+1. Create a branch from current `main`.
+2. Keep the change scoped and include regression tests where appropriate.
 3. Run the validation commands above.
 4. Explain the user-facing impact in the pull request.
+5. Any scheduler change must include externally derived reference vectors and preserve the explicit scheduler gate.
 
 ## License
 
