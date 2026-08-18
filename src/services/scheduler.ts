@@ -170,6 +170,15 @@ function fuzzInterval(days: number, rng: () => number): number {
   );
 }
 
+function maximumReviewInterval(params: SchedulerParams): number {
+  const configuredMaximum = finiteOr(
+    params.maxInterval ?? DEFAULT_MAX_INTERVAL,
+    DEFAULT_MAX_INTERVAL,
+  );
+  // Three distinct Review intervals are required to preserve Hard < Good < Easy.
+  return Math.max(3, Math.floor(configuredMaximum));
+}
+
 function scheduledReviewDays(
   stability: number,
   params: SchedulerParams,
@@ -177,12 +186,11 @@ function scheduledReviewDays(
 ): number {
   const raw = calculateIntervalForRetention(stability, params.requestRetention);
   const candidate = params.enableFuzz ? fuzzInterval(raw, rng) : raw;
-  const configuredMaximum = finiteOr(
-    params.maxInterval ?? DEFAULT_MAX_INTERVAL,
-    DEFAULT_MAX_INTERVAL,
+  return clamp(
+    Math.round(candidate),
+    1,
+    maximumReviewInterval(params),
   );
-  const maximum = Math.max(1, Math.floor(configuredMaximum));
-  return clamp(Math.round(candidate), 1, maximum);
 }
 
 function elapsedSinceLastReview(card: Card, now: Date): number {
@@ -221,12 +229,15 @@ function reviewIntervals(
 
   const hardRaw = scheduledReviewDays(hardStability, params, rng);
   const goodRaw = scheduledReviewDays(goodStability, params, rng);
-  const hardDays = Math.min(hardRaw, goodRaw);
-  const goodDays = Math.max(goodRaw, hardDays + 1);
-  const easyDays = Math.max(
-    scheduledReviewDays(easyStability, params, rng),
-    goodDays + 1,
-  );
+  const easyRaw = scheduledReviewDays(easyStability, params, rng);
+  const maximum = maximumReviewInterval(params);
+
+  // Preserve both invariants at the upper boundary: no rating exceeds the
+  // configured maximum, and Hard < Good < Easy remains strict. When candidates
+  // bunch at the cap, pull the lower ratings inward instead of overflowing Easy.
+  const easyDays = Math.min(maximum, Math.max(easyRaw, 3));
+  const goodDays = Math.min(easyDays - 1, Math.max(goodRaw, 2));
+  const hardDays = Math.min(goodDays - 1, Math.max(hardRaw, 1));
 
   return {
     2: { stability: hardStability, days: hardDays },
