@@ -1,8 +1,8 @@
 import { create } from "zustand";
 import {
   clearPersistedStudySession,
-  persistStudySession,
   restorePersistedStudySession,
+  schedulePersistedStudySession,
 } from "../services/studySessionPersistence";
 import { createClassSlice } from "./slices/classSlice";
 import { createDeckSlice } from "./slices/deckSlice";
@@ -24,7 +24,7 @@ let lastSession = useFlashcardStore.getState().session;
 useFlashcardStore.subscribe((state) => {
   if (state.session === lastSession) return;
   lastSession = state.session;
-  if (state.session) persistStudySession(state.session);
+  if (state.session) schedulePersistedStudySession(state.session);
   else clearPersistedStudySession();
 });
 
