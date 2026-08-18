@@ -92,13 +92,13 @@ export const ClassViewPage: React.FC = () => {
     }
   }, [activeClassId]);
 
-  const classesWithMastery = useMemo(
+  const classesWithProgress = useMemo(
     () =>
       store.classes.map((studyClass) => {
         const stats = store.classStats[studyClass.id ?? 0] ?? {
           total: 0,
           dueCount: 0,
-          masteryPct: 0,
+          reviewStatePct: 0,
           decksCount: 0,
         };
         return { ...studyClass, ...stats };
@@ -110,10 +110,10 @@ export const ClassViewPage: React.FC = () => {
     () =>
       activeClassId === null
         ? null
-        : (classesWithMastery.find(
+        : (classesWithProgress.find(
             (studyClass) => studyClass.id === activeClassId,
           ) ?? null),
-    [activeClassId, classesWithMastery],
+    [activeClassId, classesWithProgress],
   );
 
   const activeClassDecks = useMemo(() => {
@@ -125,7 +125,7 @@ export const ClassViewPage: React.FC = () => {
         ...(store.deckStats[deck.id ?? 0] ?? {
           total: 0,
           dueCount: 0,
-          masteryPct: 0,
+          reviewStatePct: 0,
         }),
       }));
   }, [activeClassId, store.decks, store.deckStats]);
@@ -253,7 +253,7 @@ export const ClassViewPage: React.FC = () => {
     );
   }
 
-  const classMastery = clampPercentage(activeClass.masteryPct);
+  const classReviewStatePct = clampPercentage(activeClass.reviewStatePct);
 
   return (
     <>
@@ -365,8 +365,8 @@ export const ClassViewPage: React.FC = () => {
                 <span>Due now</span>
               </div>
               <div className="class-summary-item">
-                <strong>{classMastery}%</strong>
-                <span>Mastered</span>
+                <strong>{classReviewStatePct}%</strong>
+                <span>In Review state</span>
               </div>
             </section>
 
@@ -391,7 +391,7 @@ export const ClassViewPage: React.FC = () => {
                 {activeClassDecks.map((deck, index) => {
                   if (deck.id === undefined) return null;
                   const matchRecord = readMatchRecord(deck.id);
-                  const mastery = clampPercentage(deck.masteryPct);
+                  const reviewStatePct = clampPercentage(deck.reviewStatePct);
                   const deckNumber = String(index + 1).padStart(2, '0');
 
                   return (
@@ -467,20 +467,20 @@ export const ClassViewPage: React.FC = () => {
                           <span>Due now</span>
                         </div>
                         <div className="class-deck-metric">
-                          <strong>{mastery}%</strong>
-                          <span>Mastered</span>
+                          <strong>{reviewStatePct}%</strong>
+                          <span>In Review state</span>
                         </div>
                       </div>
 
                       <div
                         className="class-deck-progress"
                         role="progressbar"
-                        aria-label={`${deck.name} mastery`}
+                        aria-label={`${deck.name}: ${reviewStatePct}% of cards in long-term Review state`}
                         aria-valuemin={0}
                         aria-valuemax={100}
-                        aria-valuenow={mastery}
+                        aria-valuenow={reviewStatePct}
                       >
-                        <span style={{ width: `${mastery}%` }} />
+                        <span style={{ width: `${reviewStatePct}%` }} />
                       </div>
 
                       {matchRecord !== null && (
