@@ -1,13 +1,13 @@
 import { DEFAULT_PARAMS, type SchedulerParams } from './scheduler';
 
 export const RETENTION_KEY = 'denki-fsrs-retention';
+
+/** Retired pre-canonical overrides. Kept only so old installations can be cleaned. */
 export const EASY_BONUS_KEY = 'denki-fsrs-easy-bonus';
 export const HARD_MULTIPLIER_KEY = 'denki-fsrs-hard-multiplier';
 
 export const SCHEDULER_SETTING_RANGES = {
   retention: { min: 0.7, max: 0.95 },
-  easyBonus: { min: 1, max: 2 },
-  hardMultiplier: { min: 1, max: 1.5 },
 } as const;
 
 const clamp = (value: number, min: number, max: number): number =>
@@ -17,7 +17,7 @@ const finiteOr = (value: number, fallback: number): number =>
   Number.isFinite(value) ? value : fallback;
 
 export function normalizeSchedulerParams(
-  values: Pick<SchedulerParams, 'requestRetention' | 'easyBonus' | 'hardIntervalMultiplier'>,
+  values: Pick<SchedulerParams, 'requestRetention'>,
 ): SchedulerParams {
   return {
     requestRetention: clamp(
@@ -25,17 +25,8 @@ export function normalizeSchedulerParams(
       SCHEDULER_SETTING_RANGES.retention.min,
       SCHEDULER_SETTING_RANGES.retention.max,
     ),
-    easyBonus: clamp(
-      finiteOr(values.easyBonus, DEFAULT_PARAMS.easyBonus),
-      SCHEDULER_SETTING_RANGES.easyBonus.min,
-      SCHEDULER_SETTING_RANGES.easyBonus.max,
-    ),
-    hardIntervalMultiplier: clamp(
-      finiteOr(values.hardIntervalMultiplier, DEFAULT_PARAMS.hardIntervalMultiplier),
-      SCHEDULER_SETTING_RANGES.hardMultiplier.min,
-      SCHEDULER_SETTING_RANGES.hardMultiplier.max,
-    ),
     maxInterval: DEFAULT_PARAMS.maxInterval,
+    enableFuzz: false,
   };
 }
 
@@ -50,18 +41,27 @@ function readNumber(key: string, fallback: number): number {
   }
 }
 
+/** Remove settings that made Denki's old scheduler diverge from FSRS-4.5. */
+export function clearLegacySchedulerOverrides(): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.removeItem(EASY_BONUS_KEY);
+    localStorage.removeItem(HARD_MULTIPLIER_KEY);
+  } catch {
+    // Storage can be unavailable in restricted webviews.
+  }
+}
+
 /**
- * Read and normalize the user-tunable FSRS settings. Local storage is treated as
- * untrusted input: manually edited, stale, NaN, or out-of-range values are
- * clamped before they reach either actual scheduling or interval previews.
+ * Load the only user-tunable canonical FSRS-4.5 parameter. The 17 model
+ * weights and Hard/Easy coefficients remain fixed to the reference algorithm.
  */
 export function loadSchedulerParams(): SchedulerParams {
+  clearLegacySchedulerOverrides();
   return normalizeSchedulerParams({
-    requestRetention: readNumber(RETENTION_KEY, DEFAULT_PARAMS.requestRetention),
-    easyBonus: readNumber(EASY_BONUS_KEY, DEFAULT_PARAMS.easyBonus),
-    hardIntervalMultiplier: readNumber(
-      HARD_MULTIPLIER_KEY,
-      DEFAULT_PARAMS.hardIntervalMultiplier,
+    requestRetention: readNumber(
+      RETENTION_KEY,
+      DEFAULT_PARAMS.requestRetention,
     ),
   });
 }
