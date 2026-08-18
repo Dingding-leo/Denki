@@ -39,7 +39,7 @@ Denki treats scheduler correctness as a release gate. The implementation pins th
 - the published 17 default weights;
 - `DECAY = -0.5` and `FACTOR = 19/81`;
 - the FSRS 4.5 forgetting and target-retention interval equations;
-- pre-review difficulty in recall-stability updates;
+- pre-review difficulty in stability updates;
 - canonical New, Learning, Review, and Relearning transitions;
 - strict `Hard < Good < Easy` Review intervals within the maximum interval;
 - no custom Hard or Easy multipliers that alter the model.
@@ -126,16 +126,16 @@ Pull requests run the complete release checks and CodeQL in GitHub Actions. A pu
 - Vitest and Testing Library
 - Tauri 2 (optional macOS desktop build)
 
+## Project documentation
+
+- [Architecture and engineering invariants](ARCHITECTURE.md)
+- [Contribution and review contract](CONTRIBUTING.md)
+- [Security policy and reporting](SECURITY.md)
+- [Launch readiness and accurate product messaging](LAUNCH_PLAN.md)
+
 ## Contributing
 
-Issues and focused pull requests are welcome. Before opening a pull request:
-
-1. Create a branch from current `main`.
-2. Keep the change scoped and include regression tests where appropriate.
-3. Run every validation command above.
-4. Explain the user-facing impact, failure behaviour, and compatibility implications.
-5. Any scheduler change must include externally derived reference vectors and preserve the explicit scheduler gate.
-6. Any untrusted-input path must define validation, resource limits, atomicity, and safe failure behaviour.
+Start with [CONTRIBUTING.md](CONTRIBUTING.md) and [ARCHITECTURE.md](ARCHITECTURE.md). Pull requests must be focused, explain user and compatibility impact, include appropriate regression coverage, and pass every release gate on the exact final head.
 
 ## License
 
