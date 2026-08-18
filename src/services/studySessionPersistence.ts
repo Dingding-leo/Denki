@@ -5,6 +5,7 @@ import type { StudySession } from '../store/types';
 const STORAGE_KEY = 'denki.study-session.v1';
 const SNAPSHOT_VERSION = 1;
 const MAX_SESSION_AGE_MS = 24 * 60 * 60 * 1000;
+export const STUDY_SESSION_PERSIST_DELAY_MS = 250;
 const VALID_DRILL_BUCKETS = new Set<DrillBucket>(ALL_DRILL_BUCKETS);
 
 interface PersistedStudySession {
@@ -31,6 +32,9 @@ export interface StudySessionScope {
   isDrill?: boolean;
 }
 
+let pendingSession: StudySession | null = null;
+let persistenceTimer: ReturnType<typeof setTimeout> | null = null;
+
 function getStorage(): Storage | null {
   if (typeof window === 'undefined') return null;
   try {
@@ -38,6 +42,14 @@ function getStorage(): Storage | null {
   } catch {
     return null;
   }
+}
+
+function cancelScheduledPersistence(): void {
+  if (persistenceTimer !== null) {
+    clearTimeout(persistenceTimer);
+    persistenceTimer = null;
+  }
+  pendingSession = null;
 }
 
 function isFiniteNonNegativeInteger(value: unknown): value is number {
@@ -63,8 +75,10 @@ function isValidSnapshot(value: unknown): value is PersistedStudySession {
     isFiniteNonNegativeInteger(snapshot.completedCount) &&
     isFiniteNonNegativeInteger(snapshot.initialQueueSize) &&
     isFiniteNonNegativeInteger(snapshot.totalCards) &&
-    (snapshot.deckId === undefined || (Number.isInteger(snapshot.deckId) && snapshot.deckId > 0)) &&
-    (snapshot.classId === undefined || (Number.isInteger(snapshot.classId) && snapshot.classId > 0)) &&
+    (snapshot.deckId === undefined ||
+      (Number.isInteger(snapshot.deckId) && snapshot.deckId > 0)) &&
+    (snapshot.classId === undefined ||
+      (Number.isInteger(snapshot.classId) && snapshot.classId > 0)) &&
     (snapshot.isGlobal === undefined || typeof snapshot.isGlobal === 'boolean') &&
     (snapshot.isCram === undefined || typeof snapshot.isCram === 'boolean') &&
     (snapshot.isDrill === undefined || typeof snapshot.isDrill === 'boolean') &&
@@ -73,30 +87,49 @@ function isValidSnapshot(value: unknown): value is PersistedStudySession {
       snapshot.drillBuckets.every(isValidDrillBucket)
     )) &&
     (!snapshot.isDrill || snapshot.deckId !== undefined) &&
-    (snapshot.deckId !== undefined || snapshot.classId !== undefined || snapshot.isGlobal === true)
+    (
+      snapshot.deckId !== undefined ||
+      snapshot.classId !== undefined ||
+      snapshot.isGlobal === true
+    )
   );
 }
 
-function scopeMatches(snapshot: PersistedStudySession, scope: StudySessionScope): boolean {
-  if (scope.isDrill !== undefined && Boolean(snapshot.isDrill) !== scope.isDrill) return false;
-  if (scope.isCram !== undefined && Boolean(snapshot.isCram) !== scope.isCram) return false;
+function scopeMatches(
+  snapshot: PersistedStudySession,
+  scope: StudySessionScope,
+): boolean {
+  if (
+    scope.isDrill !== undefined &&
+    Boolean(snapshot.isDrill) !== scope.isDrill
+  ) return false;
+  if (
+    scope.isCram !== undefined &&
+    Boolean(snapshot.isCram) !== scope.isCram
+  ) return false;
   if (scope.isGlobal) return snapshot.isGlobal === true;
   if (scope.deckId !== undefined) return snapshot.deckId === scope.deckId;
   if (scope.classId !== undefined) return snapshot.classId === scope.classId;
   return false;
 }
 
+/**
+ * Immediately serialize one resumable session snapshot. Store subscriptions use
+ * schedulePersistedStudySession() so queue-size work is coalesced outside the
+ * rating path; direct callers and lifecycle flushes can still persist now.
+ */
 export function persistStudySession(session: StudySession): void {
   const storage = getStorage();
   if (!storage) return;
 
-  const queueCardIds = session.queue.map((card) => card.id);
   const sessionComplete = session.currentIndex >= session.queue.length;
-  if (
-    queueCardIds.length === 0 ||
-    queueCardIds.some((id) => id === undefined) ||
-    sessionComplete
-  ) {
+  if (session.queue.length === 0 || sessionComplete) {
+    clearPersistedStudySession();
+    return;
+  }
+
+  const queueCardIds = session.queue.map((card) => card.id);
+  if (queueCardIds.some((id) => id === undefined)) {
     clearPersistedStudySession();
     return;
   }
@@ -124,7 +157,45 @@ export function persistStudySession(session: StudySession): void {
   }
 }
 
+/**
+ * Coalesce rapid session mutations. Rating remains transactionally durable in
+ * IndexedDB immediately; only the reload-resume cursor is delayed briefly.
+ */
+export function schedulePersistedStudySession(session: StudySession): void {
+  if (!getStorage()) return;
+
+  if (
+    session.queue.length === 0 ||
+    session.currentIndex >= session.queue.length
+  ) {
+    clearPersistedStudySession();
+    return;
+  }
+
+  pendingSession = session;
+  if (persistenceTimer !== null) clearTimeout(persistenceTimer);
+  persistenceTimer = setTimeout(() => {
+    persistenceTimer = null;
+    const sessionToPersist = pendingSession;
+    pendingSession = null;
+    if (sessionToPersist) persistStudySession(sessionToPersist);
+  }, STUDY_SESSION_PERSIST_DELAY_MS);
+}
+
+/** Flush the newest pending cursor before page suspension, reload, or restore. */
+export function flushPersistedStudySession(): void {
+  if (persistenceTimer !== null) {
+    clearTimeout(persistenceTimer);
+    persistenceTimer = null;
+  }
+
+  const sessionToPersist = pendingSession;
+  pendingSession = null;
+  if (sessionToPersist) persistStudySession(sessionToPersist);
+}
+
 export function clearPersistedStudySession(): void {
+  cancelScheduledPersistence();
   const storage = getStorage();
   if (!storage) return;
   try {
@@ -137,6 +208,10 @@ export function clearPersistedStudySession(): void {
 export async function restorePersistedStudySession(
   scope: StudySessionScope,
 ): Promise<StudySession | null> {
+  // Tests, route remounts, and extremely fast reload paths should see the newest
+  // coalesced state rather than an older localStorage cursor.
+  flushPersistedStudySession();
+
   const storage = getStorage();
   if (!storage) return null;
 
