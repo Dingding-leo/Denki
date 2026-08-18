@@ -1,32 +1,32 @@
 ## User impact
 
-Describe the learner-visible problem and the exact behaviour after this change.
+<!-- Describe the learner-visible problem and exact behaviour after this change. -->
 
-## Scope and risk
+## Scope
 
-- [ ] The branch started from current `main`.
-- [ ] The change is focused; unrelated refactors were excluded.
-- [ ] Failure and rollback behaviour were considered.
-- [ ] Local-first privacy expectations remain true.
+<!-- Summarise the focused change. -->
 
-## Data and compatibility
+## Non-goals
 
-- [ ] No IndexedDB schema or backup-format change.
-- [ ] Schema/backup changes include migration, downgrade, and rollback coverage.
-- [ ] Destructive operations remain transactional.
-- [ ] Existing study-session snapshots are preserved or explicitly invalidated.
+<!-- State what this pull request deliberately does not change. -->
 
-## Scheduler gate
+## Architecture and invariants
 
-- [ ] No scheduler behaviour changed.
-- [ ] Scheduler behaviour changed and includes externally derived FSRS reference vectors.
-- [ ] `npm run test:scheduler` passes without weakening existing vectors or invariants.
+<!-- Check every boundary touched and explain how its invariant is preserved. -->
 
-## Security and untrusted input
+- [ ] Scheduler or review semantics
+- [ ] IndexedDB schema, migration, or durable mutation
+- [ ] Study-session creation, persistence, or restoration
+- [ ] Untrusted input, rendering, import, backup, or provider response
+- [ ] Offline cache, PWA, Tauri, CSP, or distribution
+- [ ] Statistics definition or user-facing product claim
+- [ ] None of the above
 
-- [ ] Imported, restored, rendered, or network-derived data is validated at its boundary.
-- [ ] Resource limits and cancellation/failure paths were considered.
-- [ ] CSP, Tauri capabilities, and credential handling remain least-privilege.
+Details:
+
+## Compatibility and failure behaviour
+
+<!-- Existing libraries, legacy files/settings, quotas, network failures, parsing failures, transaction rollback, and partial-operation prevention. -->
 
 ## Validation
 
@@ -38,7 +38,16 @@ Describe the learner-visible problem and the exact behaviour after this change.
 - [ ] `npm run lint`
 - [ ] `npm run test:run`
 - [ ] `npm run build`
+- [ ] `npm run test:artifact`
+- [ ] CodeQL completed successfully
 
 ## Evidence
 
-List relevant tests, screenshots, fixtures, or reproduction steps. Do not state that a check passed unless it ran against the exact PR head.
+<!-- List added/updated tests, reference vectors, fixtures, screenshots, or manual checks. Do not claim checks that were not run against the exact final head. -->
+
+## Documentation
+
+- [ ] README/product copy remains accurate
+- [ ] `ARCHITECTURE.md` remains accurate
+- [ ] `LAUNCH_PLAN.md` remains accurate
+- [ ] No documentation change is required
