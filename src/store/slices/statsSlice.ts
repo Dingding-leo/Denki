@@ -44,7 +44,7 @@ async function computeClassStats(
   classId: number,
   now: Date,
 ): Promise<ClassStats> {
-  const [total, masteredCount, classDecks] = await Promise.all([
+  const [total, reviewStateCount, classDecks] = await Promise.all([
     db.cards.where("classId").equals(classId).count(),
     db.cards.where("[classId+state]").equals([classId, 2]).count(),
     db.decks.where("classId").equals(classId).toArray(),
@@ -59,13 +59,14 @@ async function computeClassStats(
   return {
     total,
     dueCount: dueCounts.reduce((sum, count) => sum + count, 0),
-    masteryPct: total > 0 ? Math.round((masteredCount / total) * 100) : 0,
+    reviewStatePct:
+      total > 0 ? Math.round((reviewStateCount / total) * 100) : 0,
     decksCount: classDecks.length,
   };
 }
 
 async function computeDeckStats(deckId: number, now: Date): Promise<DeckStats> {
-  const [total, dueCount, masteredCount] = await Promise.all([
+  const [total, dueCount, reviewStateCount] = await Promise.all([
     db.cards.where("deckId").equals(deckId).count(),
     deckDueCount(deckId, now),
     db.cards.where("[deckId+state]").equals([deckId, 2]).count(),
@@ -74,7 +75,8 @@ async function computeDeckStats(deckId: number, now: Date): Promise<DeckStats> {
   return {
     total,
     dueCount,
-    masteryPct: total > 0 ? Math.round((masteredCount / total) * 100) : 0,
+    reviewStatePct:
+      total > 0 ? Math.round((reviewStateCount / total) * 100) : 0,
   };
 }
 
