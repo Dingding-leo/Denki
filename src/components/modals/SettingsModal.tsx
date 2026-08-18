@@ -1,70 +1,72 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Download, RotateCcw, Sliders, Upload, Volume2, X } from "lucide-react";
+import React, { useEffect, useRef, useState } from 'react';
+import { Download, RotateCcw, Sliders, Upload, Volume2, X } from 'lucide-react';
 import {
   downloadBackup,
   importDatabase,
   type BackupSnapshot,
-} from "../../services/backup";
-import { celebrate } from "../../services/celebrate";
+} from '../../services/backup';
+import { celebrate } from '../../services/celebrate';
+import { DEFAULT_PARAMS, FSRS_VERSION } from '../../services/scheduler';
 import {
-  EASY_BONUS_KEY,
-  HARD_MULTIPLIER_KEY,
   RETENTION_KEY,
   SCHEDULER_SETTING_RANGES,
+  clearLegacySchedulerOverrides,
   loadSchedulerParams,
   normalizeSchedulerParams,
-} from "../../services/schedulerParams";
+} from '../../services/schedulerParams';
 import {
   SPEECH_SPEED_KEY,
   SPEECH_SPEED_MAX,
   SPEECH_SPEED_MIN,
   loadSpeechRate,
   normalizeSpeechRate,
-} from "../../services/speech";
-import { confirmDialog, toast } from "../../store/uiStore";
+} from '../../services/speech';
+import { confirmDialog, toast } from '../../store/uiStore';
 
 interface SettingsModalProps {
   onClose: () => void;
 }
 
 const sectionStyle: React.CSSProperties = {
-  borderTop: "1px solid rgba(211, 220, 207, 0.12)",
-  paddingTop: "16px",
+  borderTop: '1px solid rgba(211, 220, 207, 0.12)',
+  paddingTop: '16px',
 };
 
 const sectionHeadingStyle: React.CSSProperties = {
-  fontSize: "11px",
-  color: "var(--text-muted)",
-  textTransform: "uppercase",
-  letterSpacing: "0.9px",
-  marginBottom: "14px",
+  fontSize: '11px',
+  color: 'var(--text-muted)',
+  textTransform: 'uppercase',
+  letterSpacing: '0.9px',
+  marginBottom: '14px',
   fontWeight: 800,
 };
 
-const fieldLabelStyle: React.CSSProperties = {
-  display: "block",
-  fontSize: "11px",
-  color: "var(--text-secondary)",
-  marginBottom: "6px",
-  fontWeight: 700,
-  textTransform: "uppercase",
-  letterSpacing: "0.45px",
+const helpStyle: React.CSSProperties = {
+  fontSize: '11px',
+  color: 'var(--text-muted)',
+  marginTop: '5px',
+  lineHeight: 1.5,
 };
 
-const helpStyle: React.CSSProperties = {
-  fontSize: "11px",
-  color: "var(--text-muted)",
-  marginTop: "5px",
-  lineHeight: 1.4,
-};
+function persistPreferences(retention: number, speechSpeed: number): void {
+  try {
+    localStorage.setItem(RETENTION_KEY, String(retention));
+    localStorage.setItem(SPEECH_SPEED_KEY, String(speechSpeed));
+    localStorage.removeItem('denki-new-cards-per-day');
+    clearLegacySchedulerOverrides();
+  } catch (error) {
+    throw new Error(
+      error instanceof Error
+        ? `Browser storage rejected the preferences: ${error.message}`
+        : 'Browser storage rejected the preferences.',
+      { cause: error },
+    );
+  }
+}
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
   const initialScheduler = loadSchedulerParams();
   const [retention, setRetention] = useState(initialScheduler.requestRetention);
-  const [easyBonus, setEasyBonus] = useState(initialScheduler.easyBonus);
-  const [hardMultiplier, setHardMultiplier] = useState(
-    initialScheduler.hardIntervalMultiplier,
-  );
   const [speechSpeed, setSpeechSpeed] = useState(loadSpeechRate);
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -78,13 +80,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
     closeButtonRef.current?.focus();
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === 'Escape') {
         event.preventDefault();
         onClose();
         return;
       }
 
-      if (event.key !== "Tab") return;
+      if (event.key !== 'Tab') return;
       const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
         'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
       );
@@ -100,68 +102,65 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
       }
     };
 
-    window.addEventListener("keydown", handleKeyDown, true);
+    window.addEventListener('keydown', handleKeyDown, true);
     return () => {
-      window.removeEventListener("keydown", handleKeyDown, true);
+      window.removeEventListener('keydown', handleKeyDown, true);
       previousFocus?.focus();
     };
   }, [onClose]);
-
-  const persistPreferences = (
-    nextRetention: number,
-    nextEasyBonus: number,
-    nextHardMultiplier: number,
-    nextSpeechSpeed: number,
-  ) => {
-    localStorage.setItem(RETENTION_KEY, String(nextRetention));
-    localStorage.setItem(EASY_BONUS_KEY, String(nextEasyBonus));
-    localStorage.setItem(HARD_MULTIPLIER_KEY, String(nextHardMultiplier));
-    localStorage.setItem(SPEECH_SPEED_KEY, String(nextSpeechSpeed));
-    localStorage.removeItem("denki-new-cards-per-day");
-  };
 
   const handleSave = (event: React.FormEvent) => {
     event.preventDefault();
     const normalizedScheduler = normalizeSchedulerParams({
       requestRetention: retention,
-      easyBonus,
-      hardIntervalMultiplier: hardMultiplier,
     });
     const normalizedSpeech = normalizeSpeechRate(speechSpeed);
 
-    persistPreferences(
-      normalizedScheduler.requestRetention,
-      normalizedScheduler.easyBonus,
-      normalizedScheduler.hardIntervalMultiplier,
-      normalizedSpeech,
-    );
+    try {
+      persistPreferences(
+        normalizedScheduler.requestRetention,
+        normalizedSpeech,
+      );
+    } catch (error) {
+      toast(
+        error instanceof Error ? error.message : 'Preferences could not be saved.',
+        'error',
+      );
+      return;
+    }
 
     celebrate({
       particleCount: 24,
       spread: 36,
       origin: { y: 0.8 },
-      colors: ["#7f9c86", "#a7b79f"],
+      colors: ['#7f9c86', '#a7b79f'],
     });
-    toast("Preferences saved", "success");
+    toast('Preferences saved', 'success');
     onClose();
   };
 
   const handleReset = async () => {
     const confirmed = await confirmDialog({
-      title: "Reset preferences",
+      title: 'Reset preferences',
       message:
-        "Restore all scheduling and speech preferences to their defaults? Your cards and review history are not affected.",
-      confirmLabel: "Reset preferences",
+        'Restore target retention and speech speed to their defaults? Cards and review history are not affected.',
+      confirmLabel: 'Reset preferences',
       danger: true,
     });
     if (!confirmed) return;
 
-    setRetention(0.9);
-    setEasyBonus(1.3);
-    setHardMultiplier(1.2);
+    const defaultRetention = DEFAULT_PARAMS.requestRetention;
+    setRetention(defaultRetention);
     setSpeechSpeed(1);
-    persistPreferences(0.9, 1.3, 1.2, 1);
-    toast("Preferences restored to defaults", "info");
+    try {
+      persistPreferences(defaultRetention, 1);
+      toast('Preferences restored to defaults', 'info');
+    } catch (error) {
+      toast(
+        error instanceof Error ? error.message : 'Preferences could not be reset.',
+        'error',
+      );
+    }
   };
 
   const handleExport = async () => {
@@ -169,11 +168,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
     setExporting(true);
     try {
       await downloadBackup();
-      toast("Backup download started", "success");
+      toast('Study-data backup download started', 'success');
     } catch (error) {
       toast(
-        `Backup export failed: ${error instanceof Error ? error.message : "unknown error"}`,
-        "error",
+        `Backup export failed: ${error instanceof Error ? error.message : 'unknown error'}`,
+        'error',
       );
     } finally {
       setExporting(false);
@@ -184,14 +183,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const file = event.target.files?.[0];
-    event.target.value = "";
+    event.target.value = '';
     if (!file || importing) return;
 
     const confirmed = await confirmDialog({
-      title: "Import backup",
+      title: 'Import study-data backup',
       message:
-        "This replaces every current class, deck, card, review log, and active study queue with the backup file. The replacement cannot be undone.",
-      confirmLabel: "Replace everything",
+        'This replaces every current class, deck, card, review log, and active study queue with the backup file. The replacement cannot be undone.',
+      confirmLabel: 'Replace study data',
       danger: true,
     });
     if (!confirmed) return;
@@ -200,12 +199,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
     try {
       const parsed: unknown = JSON.parse(await file.text());
       await importDatabase(parsed as BackupSnapshot);
-      toast("Backup restored. Reloading Denki…", "success");
+      toast('Backup restored. Reloading Denki…', 'success');
       window.location.reload();
     } catch (error) {
       toast(
-        `Import failed: ${error instanceof Error ? error.message : "invalid backup file"}`,
-        "error",
+        `Import failed: ${error instanceof Error ? error.message : 'invalid backup file'}`,
+        'error',
       );
     } finally {
       setImporting(false);
@@ -218,15 +217,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
         if (event.target === event.currentTarget) onClose();
       }}
       style={{
-        position: "fixed",
+        position: 'fixed',
         inset: 0,
-        background: "rgba(4, 10, 7, 0.76)",
-        backdropFilter: "blur(8px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
+        background: 'rgba(4, 10, 7, 0.76)',
+        backdropFilter: 'blur(8px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
         zIndex: 2000,
-        padding: "20px",
+        padding: '20px',
       }}
     >
       <form
@@ -237,33 +236,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
         onSubmit={handleSave}
         className="glass-panel"
         style={{
-          width: "100%",
-          maxWidth: "540px",
-          maxHeight: "calc(100vh - 40px)",
-          overflowY: "auto",
-          display: "flex",
-          flexDirection: "column",
-          gap: "18px",
-          textAlign: "left",
+          width: '100%',
+          maxWidth: '540px',
+          maxHeight: 'calc(100vh - 40px)',
+          overflowY: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '18px',
+          textAlign: 'left',
         }}
       >
         <div
           style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            paddingBottom: "12px",
-            borderBottom: "2px solid var(--border)",
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            paddingBottom: '12px',
+            borderBottom: '2px solid var(--border)',
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
             <Sliders size={18} aria-hidden="true" />
             <h3
               id="settings-dialog-title"
               style={{
-                fontSize: "18px",
+                fontSize: '18px',
                 fontWeight: 800,
-                color: "var(--text-primary)",
+                color: 'var(--text-primary)',
               }}
             >
               Preferences & Algorithm
@@ -275,7 +274,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
             onClick={onClose}
             className="btn-premium-secondary"
             aria-label="Close preferences"
-            style={{ width: "32px", height: "32px", padding: 0 }}
+            style={{ width: '32px', height: '32px', padding: 0 }}
           >
             <X size={16} />
           </button>
@@ -283,130 +282,107 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
 
         <section>
           <h4 style={{ ...sectionHeadingStyle, marginTop: 0 }}>
-            Spaced repetition
+            Canonical FSRS {FSRS_VERSION}
           </h4>
           <div
-            style={{ display: "flex", flexDirection: "column", gap: "16px" }}
+            style={{
+              border: '1px solid var(--border)',
+              background: 'rgba(140, 155, 114, 0.08)',
+              padding: '12px 14px',
+              marginBottom: '16px',
+            }}
           >
-            <div>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginBottom: "6px",
-                }}
-              >
-                <label
-                  htmlFor="retention-setting"
-                  style={{
-                    fontSize: "13px",
-                    color: "var(--text-secondary)",
-                    fontWeight: 600,
-                  }}
-                >
-                  Target retention
-                </label>
-                <span
-                  style={{
-                    fontSize: "12px",
-                    color: "var(--accent-color)",
-                    fontWeight: 700,
-                    fontFamily: "monospace",
-                  }}
-                >
-                  {Math.round(retention * 100)}%
-                </span>
-              </div>
-              <input
-                id="retention-setting"
-                type="range"
-                min={SCHEDULER_SETTING_RANGES.retention.min}
-                max={SCHEDULER_SETTING_RANGES.retention.max}
-                step="0.01"
-                value={retention}
-                onChange={(event) =>
-                  setRetention(event.currentTarget.valueAsNumber)
-                }
-                style={{ width: "100%", accentColor: "var(--accent-color)" }}
-              />
-              <p style={helpStyle}>
-                Higher retention schedules more frequent reviews. Changes apply
-                to future ratings.
-              </p>
-            </div>
-
-            <div
+            <strong
               style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                gap: "14px",
+                display: 'block',
+                color: 'var(--text-primary)',
+                fontSize: '12px',
+                marginBottom: '5px',
               }}
             >
-              <label>
-                <span style={fieldLabelStyle}>Easy bonus</span>
-                <input
-                  type="number"
-                  min={SCHEDULER_SETTING_RANGES.easyBonus.min}
-                  max={SCHEDULER_SETTING_RANGES.easyBonus.max}
-                  step="0.1"
-                  value={easyBonus}
-                  onChange={(event) => {
-                    if (Number.isFinite(event.currentTarget.valueAsNumber)) {
-                      setEasyBonus(event.currentTarget.valueAsNumber);
-                    }
-                  }}
-                  className="input-premium"
-                />
-              </label>
-
-              <label>
-                <span style={fieldLabelStyle}>Hard multiplier</span>
-                <input
-                  type="number"
-                  min={SCHEDULER_SETTING_RANGES.hardMultiplier.min}
-                  max={SCHEDULER_SETTING_RANGES.hardMultiplier.max}
-                  step="0.05"
-                  value={hardMultiplier}
-                  onChange={(event) => {
-                    if (Number.isFinite(event.currentTarget.valueAsNumber)) {
-                      setHardMultiplier(event.currentTarget.valueAsNumber);
-                    }
-                  }}
-                  className="input-premium"
-                />
-              </label>
-            </div>
+              Model coefficients are fixed to the published 17-weight reference.
+            </strong>
+            <p style={{ ...helpStyle, margin: 0 }}>
+              Only target retention is configurable. Retired Easy-bonus and
+              Hard-multiplier overrides are removed because they changed the
+              algorithm rather than merely configuring it.
+            </p>
           </div>
+
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              marginBottom: '6px',
+            }}
+          >
+            <label
+              htmlFor="retention-setting"
+              style={{
+                fontSize: '13px',
+                color: 'var(--text-secondary)',
+                fontWeight: 600,
+              }}
+            >
+              Target retention
+            </label>
+            <span
+              style={{
+                fontSize: '12px',
+                color: 'var(--accent-color)',
+                fontWeight: 700,
+                fontFamily: 'monospace',
+              }}
+            >
+              {Math.round(retention * 100)}%
+            </span>
+          </div>
+          <input
+            id="retention-setting"
+            type="range"
+            min={SCHEDULER_SETTING_RANGES.retention.min}
+            max={SCHEDULER_SETTING_RANGES.retention.max}
+            step="0.01"
+            value={retention}
+            onChange={(event) =>
+              setRetention(event.currentTarget.valueAsNumber)
+            }
+            style={{ width: '100%', accentColor: 'var(--accent-color)' }}
+          />
+          <p style={helpStyle}>
+            Higher retention schedules more frequent reviews. Changes apply to
+            future ratings without rewriting existing review history.
+          </p>
         </section>
 
         <section style={sectionStyle}>
           <h4 style={sectionHeadingStyle}>Read aloud</h4>
           <div
             style={{
-              display: "flex",
-              justifyContent: "space-between",
-              marginBottom: "6px",
+              display: 'flex',
+              justifyContent: 'space-between',
+              marginBottom: '6px',
             }}
           >
             <label
               htmlFor="speech-speed-setting"
               style={{
-                fontSize: "13px",
-                color: "var(--text-secondary)",
+                fontSize: '13px',
+                color: 'var(--text-secondary)',
                 fontWeight: 600,
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
               }}
             >
               <Volume2 size={14} aria-hidden="true" /> Speech speed
             </label>
             <span
               style={{
-                fontSize: "12px",
-                color: "var(--accent-color)",
+                fontSize: '12px',
+                color: 'var(--accent-color)',
                 fontWeight: 700,
-                fontFamily: "monospace",
+                fontFamily: 'monospace',
               }}
             >
               {speechSpeed.toFixed(1)}×
@@ -422,29 +398,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
             onChange={(event) =>
               setSpeechSpeed(event.currentTarget.valueAsNumber)
             }
-            style={{ width: "100%", accentColor: "var(--accent-color)" }}
+            style={{ width: '100%', accentColor: 'var(--accent-color)' }}
           />
           <p style={helpStyle}>
-            Used for both automatic question/answer reading and manual speaker
+            Used for automatic question/answer reading and manual speaker
             buttons.
           </p>
         </section>
 
         <section style={sectionStyle}>
-          <h4 style={sectionHeadingStyle}>Data & backup</h4>
-          <p style={{ ...helpStyle, marginTop: 0, marginBottom: "12px" }}>
-            Your library is local to this browser. Export a JSON backup
-            regularly and before clearing browser data.
+          <h4 style={sectionHeadingStyle}>Study data & backup</h4>
+          <p style={{ ...helpStyle, marginTop: 0, marginBottom: '12px' }}>
+            The JSON backup contains classes, decks, cards, and review history.
+            It deliberately excludes secrets such as your AI-provider key.
           </p>
-          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             <button
               type="button"
               onClick={() => void handleExport()}
               disabled={exporting || importing}
               className="btn-premium-secondary"
             >
-              <Download size={13} />{" "}
-              {exporting ? "Preparing…" : "Export backup"}
+              <Download size={13} />{' '}
+              {exporting ? 'Preparing…' : 'Export study data'}
             </button>
             <button
               type="button"
@@ -452,7 +428,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
               disabled={exporting || importing}
               className="btn-premium-secondary"
             >
-              <Upload size={13} /> {importing ? "Validating…" : "Import backup"}
+              <Upload size={13} /> {importing ? 'Validating…' : 'Import study data'}
             </button>
             <input
               ref={fileInputRef}
@@ -460,19 +436,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
               accept="application/json,.json"
               disabled={importing}
               onChange={(event) => void handleImportFile(event)}
-              style={{ display: "none" }}
+              style={{ display: 'none' }}
             />
           </div>
         </section>
 
         <div
           style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: "12px",
-            borderTop: "2px solid var(--border)",
-            paddingTop: "16px",
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '12px',
+            borderTop: '2px solid var(--border)',
+            paddingTop: '16px',
           }}
         >
           <button
@@ -482,7 +458,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
           >
             <RotateCcw size={12} /> Reset defaults
           </button>
-          <div style={{ display: "flex", gap: "10px" }}>
+          <div style={{ display: 'flex', gap: '10px' }}>
             <button
               type="button"
               onClick={onClose}

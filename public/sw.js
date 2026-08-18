@@ -8,29 +8,41 @@ const SHELL = [
   `${BASE_URL}denki_logo.png`,
 ];
 
-async function cacheIndividually(cache, urls) {
-  await Promise.allSettled(urls.map((url) => cache.add(url)));
+async function loadPrecacheAssets() {
+  const response = await fetch(`${BASE_URL}sw-assets.json`, { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error(`Precache manifest request failed (${response.status}).`);
+  }
+
+  const manifest = await response.json();
+  if (!manifest || !Array.isArray(manifest.assets)) {
+    throw new Error('Precache manifest has an invalid shape.');
+  }
+
+  return manifest.assets
+    .filter((asset) => typeof asset === 'string' && asset.length > 0)
+    .map((asset) => `${BASE_URL}${asset}`);
+}
+
+async function installCompleteRelease() {
+  const cache = await caches.open(CACHE_NAME);
+  try {
+    const generatedAssets = await loadPrecacheAssets();
+    const requiredUrls = [...new Set([...SHELL, ...generatedAssets])];
+
+    // A release is installable only when every shell, code, style, and WASM
+    // asset is available. Never activate a partially cached offline build.
+    await Promise.all(requiredUrls.map((url) => cache.add(url)));
+  } catch (error) {
+    await caches.delete(CACHE_NAME);
+    throw error;
+  }
 }
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(async (cache) => {
-      await cacheIndividually(cache, SHELL);
-
-      try {
-        const response = await fetch(`${BASE_URL}sw-assets.json`, { cache: 'no-store' });
-        if (response.ok) {
-          const manifest = await response.json();
-          const assets = Array.isArray(manifest.assets)
-            ? manifest.assets.map((asset) => `${BASE_URL}${asset}`)
-            : [];
-          await cacheIndividually(cache, assets);
-        }
-      } catch (error) {
-        console.warn('[Denki SW] Precache manifest unavailable:', error);
-      }
-    }).then(() => self.skipWaiting()),
-  );
+  // Do not call skipWaiting(). The current release remains active until all of
+  // its clients close, so old pages can continue loading their old hashed chunks.
+  event.waitUntil(installCompleteRelease());
 });
 
 self.addEventListener('activate', (event) => {
@@ -59,7 +71,7 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
 
   const isNavigate = event.request.mode === 'navigate';
-  const isCodeAsset = /\.(?:js|css|mjs)$/.test(url.pathname);
+  const isCodeAsset = /\.(?:js|css|mjs|wasm)$/.test(url.pathname);
 
   if (isNavigate || isCodeAsset) {
     event.respondWith(

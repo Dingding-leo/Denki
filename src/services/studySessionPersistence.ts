@@ -27,6 +27,7 @@ export interface StudySessionScope {
   deckId?: number;
   classId?: number;
   isGlobal?: boolean;
+  isCram?: boolean;
   isDrill?: boolean;
 }
 
@@ -56,6 +57,7 @@ function isValidSnapshot(value: unknown): value is PersistedStudySession {
     typeof snapshot.savedAt === 'number' &&
     Number.isFinite(snapshot.savedAt) &&
     Array.isArray(snapshot.queueCardIds) &&
+    snapshot.queueCardIds.length > 0 &&
     snapshot.queueCardIds.every((id) => Number.isInteger(id) && id > 0) &&
     isFiniteNonNegativeInteger(snapshot.currentIndex) &&
     isFiniteNonNegativeInteger(snapshot.completedCount) &&
@@ -77,6 +79,7 @@ function isValidSnapshot(value: unknown): value is PersistedStudySession {
 
 function scopeMatches(snapshot: PersistedStudySession, scope: StudySessionScope): boolean {
   if (scope.isDrill !== undefined && Boolean(snapshot.isDrill) !== scope.isDrill) return false;
+  if (scope.isCram !== undefined && Boolean(snapshot.isCram) !== scope.isCram) return false;
   if (scope.isGlobal) return snapshot.isGlobal === true;
   if (scope.deckId !== undefined) return snapshot.deckId === scope.deckId;
   if (scope.classId !== undefined) return snapshot.classId === scope.classId;
@@ -88,7 +91,12 @@ export function persistStudySession(session: StudySession): void {
   if (!storage) return;
 
   const queueCardIds = session.queue.map((card) => card.id);
-  if (queueCardIds.length === 0 || queueCardIds.some((id) => id === undefined)) {
+  const sessionComplete = session.currentIndex >= session.queue.length;
+  if (
+    queueCardIds.length === 0 ||
+    queueCardIds.some((id) => id === undefined) ||
+    sessionComplete
+  ) {
     clearPersistedStudySession();
     return;
   }
@@ -153,7 +161,7 @@ export async function restorePersistedStudySession(
     clearPersistedStudySession();
     return null;
   }
-  if (snapshot.currentIndex > snapshot.queueCardIds.length) {
+  if (snapshot.currentIndex >= snapshot.queueCardIds.length) {
     clearPersistedStudySession();
     return null;
   }

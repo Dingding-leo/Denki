@@ -6,17 +6,34 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
+    name: Release checks
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: true
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npx tsc --noEmit
-      - run: npm run lint
-      - run: npm run test:run
-      - run: npm run build
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Canonical FSRS 4.5 release gate
+        run: npm run test:scheduler
+      - name: ESLint
+        run: npm run lint
+      - name: Complete test suite
+        run: npm run test:run
+      - name: Production build
+        run: npm run build
