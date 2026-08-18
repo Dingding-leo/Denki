@@ -31,11 +31,19 @@ type MediaLookup = Record<string, string>;
 type MediaArchiveMap = Record<string, string>;
 type ProgressReporter = (message: string) => void;
 
-interface ZipEntry {
-  async(type: 'text'): Promise<string>;
-  async(type: 'arraybuffer'): Promise<ArrayBuffer>;
-  async(type: 'uint8array'): Promise<Uint8Array>;
+export interface ZipStreamHelper {
+  on(event: 'data', callback: (data: Uint8Array) => void): ZipStreamHelper;
+  on(event: 'error', callback: (error: Error) => void): ZipStreamHelper;
+  on(event: 'end', callback: () => void): ZipStreamHelper;
+  resume(): ZipStreamHelper;
+  pause(): ZipStreamHelper;
 }
+
+export interface BoundedZipEntry {
+  internalStream(type: 'uint8array'): ZipStreamHelper;
+}
+
+interface ZipEntry extends BoundedZipEntry {}
 
 interface ZipArchive {
   file(path: string): ZipEntry | null;
@@ -150,8 +158,8 @@ function bytesToBase64(bytes: Uint8Array): string {
   return window.btoa(chunks.join(''));
 }
 
-function sanitizeSvgBytes(buffer: ArrayBuffer, filename: string): Uint8Array {
-  const source = new TextDecoder().decode(buffer);
+function sanitizeSvgBytes(bytes: Uint8Array, filename: string): Uint8Array {
+  const source = new TextDecoder().decode(bytes);
   const sanitized = DOMPurify.sanitize(source, {
     USE_PROFILES: { svg: true, svgFilters: true },
     FORBID_TAGS: ['script', 'foreignObject', 'iframe', 'object', 'embed'],
@@ -174,18 +182,90 @@ function sanitizeSvgBytes(buffer: ArrayBuffer, filename: string): Uint8Array {
   return new TextEncoder().encode(sanitized);
 }
 
-function arrayBufferToBase64DataUrl(
-  buffer: ArrayBuffer,
+function bytesToBase64DataUrl(
+  input: Uint8Array,
   filename: string,
 ): string | null {
   const mimeType = getMimeType(filename);
   if (!mimeType) return null;
 
   const bytes = mimeType === 'image/svg+xml'
-    ? sanitizeSvgBytes(buffer, filename)
-    : new Uint8Array(buffer);
+    ? sanitizeSvgBytes(input, filename)
+    : input;
 
   return `data:${mimeType};base64,${bytesToBase64(bytes)}`;
+}
+
+/**
+ * Consume a JSZip entry incrementally and pause the decompressor as soon as its
+ * actual output exceeds the allowed size. Metadata preflight catches ordinary
+ * bombs; this guard also contains archives whose central-directory sizes lie.
+ */
+export function readZipEntryBytes(
+  entry: BoundedZipEntry,
+  maxBytes: number,
+  label: string,
+): Promise<Uint8Array> {
+  if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) {
+    return Promise.reject(new Error(`Invalid byte limit for ${label}.`));
+  }
+
+  return new Promise((resolve, reject) => {
+    const chunks: Uint8Array[] = [];
+    let totalBytes = 0;
+    let settled = false;
+    let stream: ZipStreamHelper | null = null;
+
+    const fail = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      try {
+        stream?.pause();
+      } catch {
+        // The promise is already failing; a broken pause must not mask it.
+      }
+      reject(error);
+    };
+
+    try {
+      stream = entry
+        .internalStream('uint8array')
+        .on('data', (chunk) => {
+          if (settled) return;
+          const nextTotal = totalBytes + chunk.byteLength;
+          if (!Number.isSafeInteger(nextTotal) || nextTotal > maxBytes) {
+            fail(
+              new Error(
+                `${label} exceeds the safe decompressed size limit ` +
+                `(${Math.ceil(maxBytes / MEBIBYTE)} MiB).`,
+              ),
+            );
+            return;
+          }
+
+          totalBytes = nextTotal;
+          // Copy because stream implementations may reuse their backing buffer.
+          chunks.push(chunk.slice());
+        })
+        .on('error', (error) => {
+          fail(new Error(`${label} could not be decompressed.`, { cause: error }));
+        })
+        .on('end', () => {
+          if (settled) return;
+          settled = true;
+          const output = new Uint8Array(totalBytes);
+          let offset = 0;
+          for (const chunk of chunks) {
+            output.set(chunk, offset);
+            offset += chunk.byteLength;
+          }
+          resolve(output);
+        });
+      stream.resume();
+    } catch (error) {
+      fail(new Error(`${label} could not be decompressed.`, { cause: error }));
+    }
+  });
 }
 
 function lookupMedia(
@@ -314,17 +394,21 @@ function findEndOfCentralDirectory(view: DataView): number {
     offset >= minimumOffset;
     offset -= 1
   ) {
-    if (view.getUint32(offset, true) === ZIP_EOCD_SIGNATURE) return offset;
+    if (view.getUint32(offset, true) !== ZIP_EOCD_SIGNATURE) continue;
+    const commentBytes = view.getUint16(offset + 20, true);
+    if (offset + ZIP_EOCD_MIN_BYTES + commentBytes === view.byteLength) {
+      return offset;
+    }
   }
 
   throw new Error('The Anki package is not a valid ZIP archive.');
 }
 
 /**
- * Read the ZIP central directory before JSZip expands any entry. This is the
- * actual decompression-bomb boundary: declared output sizes, entry count,
- * encryption, ZIP64, multi-disk archives, and ambiguous duplicate paths are
- * rejected before collection.anki2, media, or binary assets are decompressed.
+ * Read the ZIP central directory before JSZip expands any entry. This rejects
+ * excessive declared output, entry count, encryption, ZIP64, multi-disk files,
+ * unsupported compression, and ambiguous duplicate paths before decompression.
+ * readZipEntryBytes() then independently caps actual streamed output.
  */
 export function inspectAnkiZipArchive(buffer: ArrayBuffer): AnkiZipSummary {
   if (buffer.byteLength < ZIP_EOCD_MIN_BYTES) {
@@ -343,18 +427,19 @@ export function inspectAnkiZipArchive(buffer: ArrayBuffer): AnkiZipSummary {
   const commentBytes = view.getUint16(eocdOffset + 20, true);
 
   if (
-    diskNumber !== 0 ||
-    centralDirectoryDisk !== 0 ||
-    entriesOnDisk !== totalEntries
-  ) {
-    throw new Error('Multi-disk Anki ZIP archives are not supported.');
-  }
-  if (
+    entriesOnDisk === 0xffff ||
     totalEntries === 0xffff ||
     centralDirectoryBytes === 0xffffffff ||
     centralDirectoryOffset === 0xffffffff
   ) {
     throw new Error('ZIP64 Anki packages are not supported by the safe importer.');
+  }
+  if (
+    diskNumber !== 0 ||
+    centralDirectoryDisk !== 0 ||
+    entriesOnDisk !== totalEntries
+  ) {
+    throw new Error('Multi-disk Anki ZIP archives are not supported.');
   }
   if (totalEntries === 0) {
     throw new Error('The Anki ZIP archive contains no files.');
@@ -755,16 +840,12 @@ async function readMediaArchiveMap(zip: ZipArchive): Promise<MediaArchiveMap> {
   const mediaFile = zip.file('media');
   if (!mediaFile) return {};
 
-  let raw: string;
-  try {
-    raw = await mediaFile.async('text');
-  } catch (error) {
-    throw new Error('The Anki media index could not be read.', { cause: error });
-  }
-
-  if (raw.length > ANKI_IMPORT_LIMITS.maxMediaMapChars) {
-    throw new Error('The Anki media index is too large to process safely.');
-  }
+  const rawBytes = await readZipEntryBytes(
+    mediaFile,
+    ANKI_IMPORT_LIMITS.maxMediaMapChars,
+    'The Anki media index',
+  );
+  const raw = new TextDecoder().decode(rawBytes);
 
   let parsed: unknown;
   try {
@@ -832,23 +913,20 @@ async function readReferencedMediaLookup(
     report(
       `Encoding referenced media ${index + 1}/${referencedNames.length}: ${originalName}`,
     );
-    const buffer = await assetFile.async('arraybuffer');
+    const bytes = await readZipEntryBytes(
+      assetFile,
+      ANKI_IMPORT_LIMITS.maxSingleMediaBytes,
+      `Anki media "${originalName}"`,
+    );
 
-    if (buffer.byteLength > ANKI_IMPORT_LIMITS.maxSingleMediaBytes) {
-      throw new Error(
-        `Anki media "${originalName}" is too large ` +
-        `(${Math.ceil(buffer.byteLength / MEBIBYTE)} MiB).`,
-      );
-    }
-
-    totalBytes += buffer.byteLength;
+    totalBytes += bytes.byteLength;
     if (totalBytes > ANKI_IMPORT_LIMITS.maxReferencedMediaBytes) {
       throw new Error(
         'The referenced Anki media exceeds the safe in-browser import limit.',
       );
     }
 
-    const dataUrl = arrayBufferToBase64DataUrl(buffer, originalName);
+    const dataUrl = bytesToBase64DataUrl(bytes, originalName);
     if (dataUrl) {
       mediaLookup[originalName] = dataUrl;
     } else {
@@ -937,13 +1015,11 @@ export async function importAnkiPackage(
   }
 
   report('Extracting card collection...');
-  const databaseBytes = await databaseFile.async('uint8array');
-  if (databaseBytes.byteLength > ANKI_IMPORT_LIMITS.maxDatabaseBytes) {
-    throw new Error(
-      `The Anki collection database is too large ` +
-      `(${Math.ceil(databaseBytes.byteLength / MEBIBYTE)} MiB).`,
-    );
-  }
+  const databaseBytes = await readZipEntryBytes(
+    databaseFile,
+    ANKI_IMPORT_LIMITS.maxDatabaseBytes,
+    'The Anki collection database',
+  );
 
   report('Starting local SQLite engine...');
   const SQL = await runtime.initSql();
