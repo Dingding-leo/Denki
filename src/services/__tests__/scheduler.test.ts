@@ -170,13 +170,18 @@ describe('canonical FSRS-4.5 release gate', () => {
       requestRetention: 0.95,
       maxInterval: 36500,
     }).updatedCard.scheduledDays;
-    const capped = review(card, 4, now, {
+    const cappedParams = {
       requestRetention: 0.7,
       maxInterval: 30,
-    }).updatedCard.scheduledDays;
+    };
+    const capped = [
+      review(card, 2, now, cappedParams).updatedCard.scheduledDays,
+      review(card, 3, now, cappedParams).updatedCard.scheduledDays,
+      review(card, 4, now, cappedParams).updatedCard.scheduledDays,
+    ];
 
     expect(lowRetention).toBeGreaterThan(highRetention);
-    expect(capped).toBe(30);
+    expect(capped).toEqual([28, 29, 30]);
   });
 
   it('disables interval fuzz by default and applies bounded fuzz only when requested', () => {
