@@ -3,86 +3,119 @@ import type { Rating } from './reviewRatings';
 
 export type { Rating } from './reviewRatings';
 
-// FSRS state mapping
+/** Canonical long-term scheduler implemented by Denki. */
+export const FSRS_VERSION = '4.5' as const;
+
+// FSRS state mapping.
 export const STATES = {
   New: 0,
   Learning: 1,
   Review: 2,
   Relearning: 3,
-};
+} as const;
 
 /**
- * FSRS-4.5 default weight vector (17 parameters).
- * w0..w3  – initial stability for grades Again/Hard/Good/Easy
- * w4,w5   – initial difficulty (base + slope)
- * w6,w7   – difficulty update + mean-reversion strength
- * w8..w10 – stability increase on successful recall
- * w11..w14– post-lapse (forgetting) stability
- * w15     – Hard penalty, w16 – Easy bonus
+ * Canonical FSRS-4.5 default weight vector (17 parameters).
+ * Source: open-spaced-repetition/fsrs4anki, “The Algorithm”, FSRS-4.5.
  */
-const W = [
+export const FSRS_45_DEFAULT_WEIGHTS = [
   0.4872, 1.4003, 3.7145, 13.8206, 5.1618, 1.2298, 0.8975, 0.031, 1.6474,
   0.1367, 1.0461, 2.1072, 0.0793, 0.3246, 1.587, 0.2272, 2.8755,
 ] as const;
 
-// Canonical FSRS grades, exposed directly as Denki's four review choices.
+/** FSRS-4.5 forgetting-curve constants. */
+export const FSRS_45_DECAY = -0.5;
+export const FSRS_45_FACTOR = 19 / 81;
+
 const AGAIN = 1;
 const HARD = 2;
 const GOOD = 3;
 const EASY = 4;
 
 const MIN_STABILITY = 0.01;
-const DEFAULT_MAX_INTERVAL = 36500; // ~100 years
-const LEARN_STEP_DAYS = 1 / 144; // ≈ 10 minutes — Learning/Relearning cards resurface quickly
-const FUZZ_RATIO = 0.05; // ±5% jitter on Review intervals to de-clump due dates
-const FUZZ_MIN_DAYS = 2.5; // don't fuzz very short intervals
+const DEFAULT_MAX_INTERVAL = 36500;
+
+// The short learning steps are the reference ts-fsrs 3.3.0 policy wrapped
+// around the canonical FSRS-4.5 long-term memory model.
+const MINUTE_DAYS = 1 / (24 * 60);
+const NEW_AGAIN_STEP_DAYS = MINUTE_DAYS;
+const NEW_HARD_STEP_DAYS = 5 * MINUTE_DAYS;
+const NEW_GOOD_STEP_DAYS = 10 * MINUTE_DAYS;
+const LEARNING_AGAIN_STEP_DAYS = 5 * MINUTE_DAYS;
+const LEARNING_HARD_STEP_DAYS = 10 * MINUTE_DAYS;
+const FUZZ_MIN_DAYS = 2.5;
 
 export interface SchedulerParams {
-  requestRetention: number; // Target retrievability (probability of recall), drives interval length
-  easyBonus: number; // User multiplier applied to Easy-grade stability growth
-  hardIntervalMultiplier: number; // User multiplier applied to Hard-grade stability growth
-  maxInterval?: number; // Optional cap on scheduled days (defaults to ~100 years)
+  requestRetention: number;
+  maxInterval?: number;
+  /** Optional reference-style interval fuzz. Disabled by default. */
+  enableFuzz?: boolean;
 }
 
 export const DEFAULT_PARAMS: SchedulerParams = {
   requestRetention: 0.9,
-  easyBonus: 1.3,
-  hardIntervalMultiplier: 1.2,
   maxInterval: DEFAULT_MAX_INTERVAL,
+  enableFuzz: false,
 };
 
-/** Direct one-to-one mapping: Again, Hard, Good, Easy. */
-function ratingToGrade(rating: Rating): number {
-  return rating;
-}
+const clamp = (value: number, minimum: number, maximum: number): number =>
+  Math.min(maximum, Math.max(minimum, value));
 
-const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
+const finiteOr = (value: number, fallback: number): number =>
+  Number.isFinite(value) ? value : fallback;
 
-/**
- * FSRS-4.5 power forgetting curve: R(t) = (1 + t / (9·S))^-1.
- * By definition R = 0.9 when the elapsed time equals the stability.
- */
-export function calculateRetrievability(stability: number, elapsedDays: number): number {
-  if (stability <= 0) return 0;
-  return 1 / (1 + elapsedDays / (9 * stability));
-}
-
-/** Interval (days) that decays retrievability from 1 down to the requested retention. */
-function intervalForRetention(stability: number, requestRetention: number): number {
-  const r = clamp(requestRetention, 0.5, 0.99);
-  return 9 * stability * (1 / r - 1);
+function initialStability(grade: Rating): number {
+  return Math.max(FSRS_45_DEFAULT_WEIGHTS[grade - 1], 0.1);
 }
 
 /** Initial difficulty for a brand-new card, clamped to [1, 10]. */
-function initialDifficulty(grade: number): number {
-  return clamp(W[4] - W[5] * (grade - 3), 1, 10);
+function initialDifficulty(grade: Rating): number {
+  return clamp(
+    FSRS_45_DEFAULT_WEIGHTS[4] - (grade - 3) * FSRS_45_DEFAULT_WEIGHTS[5],
+    1,
+    10,
+  );
 }
 
-/** Difficulty update with mean reversion toward the Good baseline. */
-function nextDifficulty(difficulty: number, grade: number): number {
-  const delta = difficulty - W[6] * (grade - 3);
-  const reverted = W[7] * initialDifficulty(GOOD) + (1 - W[7]) * delta;
-  return clamp(reverted, 1, 10);
+/** Difficulty update with mean reversion toward D0(Good). */
+function nextDifficulty(difficulty: number, grade: Rating): number {
+  const next = difficulty - FSRS_45_DEFAULT_WEIGHTS[6] * (grade - 3);
+  const reverted =
+    FSRS_45_DEFAULT_WEIGHTS[7] * initialDifficulty(GOOD) +
+    (1 - FSRS_45_DEFAULT_WEIGHTS[7]) * next;
+  return clamp(Number(reverted.toFixed(2)), 1, 10);
+}
+
+/**
+ * Canonical FSRS-4.5 forgetting curve:
+ * R(t,S) = (1 + (19/81) * t/S)^(-0.5).
+ */
+export function calculateRetrievability(
+  stability: number,
+  elapsedDays: number,
+): number {
+  if (!Number.isFinite(stability) || stability <= 0) return 0;
+  const elapsed = Math.max(0, finiteOr(elapsedDays, 0));
+  return Math.pow(
+    1 + FSRS_45_FACTOR * elapsed / stability,
+    FSRS_45_DECAY,
+  );
+}
+
+/**
+ * Solve the FSRS-4.5 forgetting curve for the interval at target retention.
+ * This is intentionally exported so reference-vector tests can gate releases.
+ */
+export function calculateIntervalForRetention(
+  stability: number,
+  requestRetention: number,
+): number {
+  const safeStability = Math.max(MIN_STABILITY, finiteOr(stability, MIN_STABILITY));
+  const retention = clamp(finiteOr(requestRetention, 0.9), 0.5, 0.99);
+  return (
+    safeStability / FSRS_45_FACTOR *
+    (Math.pow(retention, 1 / FSRS_45_DECAY) - 1)
+  );
 }
 
 /** Stability after a successful recall (Hard/Good/Easy). */
@@ -90,53 +123,121 @@ function stabilityAfterRecall(
   stability: number,
   difficulty: number,
   retrievability: number,
-  grade: number,
-  params: SchedulerParams,
+  grade: Rating,
 ): number {
-  let gradeScale = 1;
-  if (grade === HARD) gradeScale = W[15] * params.hardIntervalMultiplier;
-  else if (grade === EASY) gradeScale = W[16] * params.easyBonus;
+  const hardPenalty = grade === HARD ? FSRS_45_DEFAULT_WEIGHTS[15] : 1;
+  const easyBonus = grade === EASY ? FSRS_45_DEFAULT_WEIGHTS[16] : 1;
 
-  const increment =
-    Math.exp(W[8]) *
-    (11 - difficulty) *
-    Math.pow(stability, -W[9]) *
-    (Math.exp(W[10] * (1 - retrievability)) - 1) *
-    gradeScale;
-
-  return stability * (1 + increment);
+  return stability * (
+    1 +
+    Math.exp(FSRS_45_DEFAULT_WEIGHTS[8]) *
+      (11 - difficulty) *
+      Math.pow(stability, -FSRS_45_DEFAULT_WEIGHTS[9]) *
+      (Math.exp(FSRS_45_DEFAULT_WEIGHTS[10] * (1 - retrievability)) - 1) *
+      hardPenalty *
+      easyBonus
+  );
 }
 
-/** Post-lapse stability after forgetting (Again). Never exceeds the prior stability. */
+/** Canonical FSRS-4.5 post-lapse stability. */
 function stabilityAfterLapse(
   stability: number,
   difficulty: number,
   retrievability: number,
 ): number {
-  const lapsed =
-    W[11] *
-    Math.pow(difficulty, -W[12]) *
-    (Math.pow(stability + 1, W[13]) - 1) *
-    Math.exp(W[14] * (1 - retrievability));
-  return clamp(Math.min(lapsed, stability), MIN_STABILITY, stability);
+  const value =
+    FSRS_45_DEFAULT_WEIGHTS[11] *
+    Math.pow(difficulty, -FSRS_45_DEFAULT_WEIGHTS[12]) *
+    (Math.pow(stability + 1, FSRS_45_DEFAULT_WEIGHTS[13]) - 1) *
+    Math.exp(FSRS_45_DEFAULT_WEIGHTS[14] * (1 - retrievability));
+  return Math.max(MIN_STABILITY, Number(value.toFixed(2)));
 }
 
-/** Apply ±FUZZ_RATIO jitter (via injectable RNG) to a Review interval. */
+function normalizedRandom(rng: () => number): number {
+  const value = rng();
+  if (!Number.isFinite(value)) return 0.5;
+  return clamp(value, 0, 0.999999999);
+}
+
+/** Apply the reference FSRS interval-fuzz bounds when explicitly enabled. */
 function fuzzInterval(days: number, rng: () => number): number {
   if (days < FUZZ_MIN_DAYS) return days;
-  const factor = 1 + (rng() * 2 - 1) * FUZZ_RATIO;
-  return days * factor;
+  const rounded = Math.round(days);
+  const minimum = Math.max(2, Math.round(rounded * 0.95 - 1));
+  const maximum = Math.round(rounded * 1.05 + 1);
+  return Math.floor(
+    normalizedRandom(rng) * (maximum - minimum + 1) + minimum,
+  );
+}
+
+function scheduledReviewDays(
+  stability: number,
+  params: SchedulerParams,
+  rng: () => number,
+): number {
+  const raw = calculateIntervalForRetention(stability, params.requestRetention);
+  const candidate = params.enableFuzz ? fuzzInterval(raw, rng) : raw;
+  const configuredMaximum = finiteOr(
+    params.maxInterval ?? DEFAULT_MAX_INTERVAL,
+    DEFAULT_MAX_INTERVAL,
+  );
+  const maximum = Math.max(1, Math.floor(configuredMaximum));
+  return clamp(Math.round(candidate), 1, maximum);
+}
+
+function elapsedSinceLastReview(card: Card, now: Date): number {
+  if (!card.lastReviewed) return 0;
+  const previous = new Date(card.lastReviewed).getTime();
+  const current = now.getTime();
+  if (!Number.isFinite(previous) || !Number.isFinite(current)) return 0;
+  return Math.max(0, (current - previous) / (24 * 60 * 60 * 1000));
+}
+
+function reviewIntervals(
+  stability: number,
+  difficulty: number,
+  retrievability: number,
+  params: SchedulerParams,
+  rng: () => number,
+): Record<2 | 3 | 4, { stability: number; days: number }> {
+  const hardStability = stabilityAfterRecall(
+    stability,
+    difficulty,
+    retrievability,
+    HARD,
+  );
+  const goodStability = stabilityAfterRecall(
+    stability,
+    difficulty,
+    retrievability,
+    GOOD,
+  );
+  const easyStability = stabilityAfterRecall(
+    stability,
+    difficulty,
+    retrievability,
+    EASY,
+  );
+
+  const hardRaw = scheduledReviewDays(hardStability, params, rng);
+  const goodRaw = scheduledReviewDays(goodStability, params, rng);
+  const hardDays = Math.min(hardRaw, goodRaw);
+  const goodDays = Math.max(goodRaw, hardDays + 1);
+  const easyDays = Math.max(
+    scheduledReviewDays(easyStability, params, rng),
+    goodDays + 1,
+  );
+
+  return {
+    2: { stability: hardStability, days: hardDays },
+    3: { stability: goodStability, days: goodDays },
+    4: { stability: easyStability, days: easyDays },
+  };
 }
 
 /**
- * Executes a review for a card, updating its FSRS variables and producing a
- * historical log entry.
- *
- * @param card   Current card object
- * @param rating Canonical FSRS rating: Again, Hard, Good, or Easy
- * @param now    Date/time of review
- * @param params Scheduler parameters (retention + user multipliers)
- * @param rng    Injectable RNG for interval fuzz (defaults to Math.random; tests pass a fixed value)
+ * Apply one rating using canonical FSRS-4.5 memory-state equations plus the
+ * reference short learning-step state machine.
  */
 export function reviewCard(
   card: Card,
@@ -145,112 +246,129 @@ export function reviewCard(
   params: SchedulerParams = DEFAULT_PARAMS,
   rng: () => number = Math.random,
 ): { updatedCard: Card; log: ReviewLog } {
-  const oldStability = card.stability;
-  const oldDifficulty = card.difficulty;
-  const grade = ratingToGrade(rating);
-  const isNew = card.state === STATES.New;
-  const maxInterval = params.maxInterval ?? DEFAULT_MAX_INTERVAL;
-
-  // Elapsed time since the last review (fractional days).
-  let elapsedDays: number;
-  if (card.lastReviewed) {
-    const diffMs = now.getTime() - new Date(card.lastReviewed).getTime();
-    elapsedDays = Math.max(0, diffMs / (24 * 60 * 60 * 1000));
-  } else {
-    elapsedDays = card.elapsedDays || 0;
+  if (rating < AGAIN || rating > EASY) {
+    throw new Error('FSRS rating must be Again, Hard, Good, or Easy.');
   }
 
-  const retrievability = isNew ? 1 : calculateRetrievability(oldStability, elapsedDays);
+  const elapsedDays = elapsedSinceLastReview(card, now);
+  const oldStability = Math.max(
+    MIN_STABILITY,
+    finiteOr(card.stability, MIN_STABILITY),
+  );
+  const oldDifficulty = clamp(
+    finiteOr(card.difficulty, initialDifficulty(GOOD)),
+    1,
+    10,
+  );
 
   let nextState: number;
-  let nextDifficultyValue: number;
   let nextStability: number;
+  let nextDifficultyValue: number;
+  let scheduledDays: number;
 
-  if (grade === AGAIN) {
-    // Lapse: New/Learning stay in Learning, Review/Relearning move to Relearning.
-    nextState =
-      card.state === STATES.New || card.state === STATES.Learning
-        ? STATES.Learning
-        : STATES.Relearning;
-    nextDifficultyValue = isNew ? initialDifficulty(AGAIN) : nextDifficulty(oldDifficulty, AGAIN);
-    nextStability = isNew
-      ? W[0]
-      : stabilityAfterLapse(oldStability, oldDifficulty, retrievability);
-  } else {
-    // Successful recall → Review state.
-    nextState = STATES.Review;
-    nextDifficultyValue = isNew ? initialDifficulty(grade) : nextDifficulty(oldDifficulty, grade);
-    if (isNew) {
-      nextStability = W[grade - 1];
-    } else if (card.state === STATES.Learning || card.state === STATES.Relearning) {
-      // Graduating from (re)learning: recover to at least the grade's base stability.
-      nextStability = Math.max(oldStability, W[grade - 1]);
+  if (card.state === STATES.New) {
+    nextStability = initialStability(rating);
+    nextDifficultyValue = initialDifficulty(rating);
+
+    if (rating === AGAIN) {
+      nextState = STATES.Learning;
+      scheduledDays = NEW_AGAIN_STEP_DAYS;
+    } else if (rating === HARD) {
+      nextState = STATES.Learning;
+      scheduledDays = NEW_HARD_STEP_DAYS;
+    } else if (rating === GOOD) {
+      nextState = STATES.Learning;
+      scheduledDays = NEW_GOOD_STEP_DAYS;
     } else {
-      nextStability = stabilityAfterRecall(oldStability, nextDifficultyValue, retrievability, grade, params);
+      nextState = STATES.Review;
+      scheduledDays = scheduledReviewDays(nextStability, params, rng);
+    }
+  } else if (
+    card.state === STATES.Learning ||
+    card.state === STATES.Relearning
+  ) {
+    // FSRS-4.5 keeps the memory state fixed inside short learning steps. Good
+    // graduates to Review; Easy graduates at least one day later than Good.
+    nextStability = oldStability;
+    nextDifficultyValue = oldDifficulty;
+
+    if (rating === AGAIN) {
+      nextState = card.state;
+      scheduledDays = LEARNING_AGAIN_STEP_DAYS;
+    } else if (rating === HARD) {
+      nextState = card.state;
+      scheduledDays = LEARNING_HARD_STEP_DAYS;
+    } else {
+      nextState = STATES.Review;
+      const goodDays = scheduledReviewDays(nextStability, params, rng);
+      scheduledDays = rating === EASY ? goodDays + 1 : goodDays;
+    }
+  } else {
+    const retrievability = calculateRetrievability(oldStability, elapsedDays);
+    nextDifficultyValue = nextDifficulty(oldDifficulty, rating);
+
+    if (rating === AGAIN) {
+      nextState = STATES.Relearning;
+      nextStability = stabilityAfterLapse(
+        oldStability,
+        oldDifficulty,
+        retrievability,
+      );
+      scheduledDays = LEARNING_AGAIN_STEP_DAYS;
+    } else {
+      nextState = STATES.Review;
+      const intervals = reviewIntervals(
+        oldStability,
+        oldDifficulty,
+        retrievability,
+        params,
+        rng,
+      );
+      nextStability = intervals[rating].stability;
+      scheduledDays = intervals[rating].days;
     }
   }
 
-  nextStability = Math.max(MIN_STABILITY, nextStability);
-
-  // Scheduled interval.
-  let scheduledDays: number;
-  if (nextState === STATES.Learning || nextState === STATES.Relearning) {
-    scheduledDays = LEARN_STEP_DAYS; // resurface soon; the session queue also re-shows failed cards
-  } else {
-    const raw = intervalForRetention(nextStability, params.requestRetention);
-    const fuzzed = fuzzInterval(raw, rng);
-    scheduledDays = clamp(Math.round(fuzzed), 1, maxInterval);
-  }
-
   const due = new Date(now.getTime() + scheduledDays * 24 * 60 * 60 * 1000);
-
   const updatedCard: Card = {
     ...card,
     state: nextState,
-    stability: Number(nextStability.toFixed(4)),
-    difficulty: Number(nextDifficultyValue.toFixed(2)),
+    stability: nextStability,
+    difficulty: nextDifficultyValue,
     elapsedDays: Number(elapsedDays.toFixed(4)),
-    scheduledDays: Number(scheduledDays.toFixed(4)),
+    scheduledDays: Number(scheduledDays.toFixed(6)),
     due,
     lastReviewed: now,
+    lastRating: rating,
   };
 
   const log: ReviewLog = {
-    cardId: card.id || 0,
+    cardId: card.id ?? 0,
     deckId: card.deckId,
     classId: card.classId,
     reviewedAt: now,
     rating,
-    stability: oldStability,
-    difficulty: oldDifficulty,
+    stability: card.stability,
+    difficulty: card.difficulty,
     elapsedDays: Number(elapsedDays.toFixed(4)),
-    scheduledDays: Number(scheduledDays.toFixed(4)),
+    scheduledDays: Number(scheduledDays.toFixed(6)),
   };
 
   return { updatedCard, log };
 }
 
-/**
- * Converts a fractional day interval into a human-readable string.
- * Examples: "< 5m", "15m", "1h", "1d", "3mo", "1.5y"
- */
+/** Convert a fractional-day interval into a concise human-readable string. */
 export function formatInterval(days: number): string {
-  if (days < 0.0035) return '< 5m';
-  if (days < 0.041) {
-    const mins = Math.round(days * 24 * 60);
-    return `${mins}m`;
-  }
-  if (days < 1.0) {
-    const hours = Math.round(days * 24);
-    return `${hours}h`;
-  }
-  if (days < 30) {
-    return `${Math.round(days)}d`;
-  }
-  if (days < 365) {
-    const months = (days / 30).toFixed(1).replace('.0', '');
+  const safeDays = Math.max(0, finiteOr(days, 0));
+  const minutes = safeDays * 24 * 60;
+  if (minutes < 1) return '< 1m';
+  if (minutes < 60) return `${Math.round(minutes)}m`;
+  if (safeDays < 1) return `${Math.round(safeDays * 24)}h`;
+  if (safeDays < 30) return `${Math.round(safeDays)}d`;
+  if (safeDays < 365) {
+    const months = (safeDays / 30).toFixed(1).replace('.0', '');
     return `${months}mo`;
   }
-  const years = (days / 365).toFixed(1).replace('.0', '');
+  const years = (safeDays / 365).toFixed(1).replace('.0', '');
   return `${years}y`;
 }
