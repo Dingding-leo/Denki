@@ -26,7 +26,7 @@ const parsePolicy = (policy, source) => {
   return directives;
 };
 
-const validatePolicy = (directives, source, { tauri = false } = {}) => {
+const validatePolicy = (directives, source) => {
   const required = [
     'default-src',
     'base-uri',
@@ -58,7 +58,13 @@ const validatePolicy = (directives, source, { tauri = false } = {}) => {
   requireToken('form-action', directives.get('form-action'), "'self'", source);
 
   const scriptTokens = directives.get('script-src');
-  for (const forbidden of ['*', 'http:', 'https:', "'unsafe-inline'", "'unsafe-eval'"]) {
+  for (const forbidden of [
+    '*',
+    'http:',
+    'https:',
+    "'unsafe-inline'",
+    "'unsafe-eval'",
+  ]) {
     if (scriptTokens.includes(forbidden)) {
       fail(`${source} script-src must not include ${forbidden}.`);
     }
@@ -67,17 +73,31 @@ const validatePolicy = (directives, source, { tauri = false } = {}) => {
   if (directives.get('connect-src').includes('*')) {
     fail(`${source} connect-src must not contain an unrestricted wildcard.`);
   }
+};
 
-  if (tauri) {
-    requireToken('default-src', directives.get('default-src'), 'asset:', source);
-    requireToken('connect-src', directives.get('connect-src'), 'ipc:', source);
-    requireToken(
-      'connect-src',
-      directives.get('connect-src'),
-      'http://ipc.localhost',
-      source,
-    );
-  }
+const validateTauriSchemeCompatibility = (directives, source) => {
+  requireToken('default-src', directives.get('default-src'), 'asset:', source);
+  requireToken('img-src', directives.get('img-src'), 'asset:', source);
+  requireToken(
+    'img-src',
+    directives.get('img-src'),
+    'http://asset.localhost',
+    source,
+  );
+  requireToken('media-src', directives.get('media-src'), 'asset:', source);
+  requireToken(
+    'media-src',
+    directives.get('media-src'),
+    'http://asset.localhost',
+    source,
+  );
+  requireToken('connect-src', directives.get('connect-src'), 'ipc:', source);
+  requireToken(
+    'connect-src',
+    directives.get('connect-src'),
+    'http://ipc.localhost',
+    source,
+  );
 };
 
 const indexHtml = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
@@ -85,7 +105,12 @@ const metaMatch = indexHtml.match(
   /http-equiv="Content-Security-Policy"[\s\S]*?content="([^"]+)"/i,
 );
 if (!metaMatch) fail('index.html does not declare a CSP meta policy.');
-validatePolicy(parsePolicy(metaMatch[1], 'Web CSP'), 'Web CSP');
+const webPolicy = parsePolicy(metaMatch[1], 'Web CSP');
+validatePolicy(webPolicy, 'Web CSP');
+// Tauri injects an additional CSP into the same document. Both policies are
+// enforced, so the shared HTML policy must not accidentally block Tauri IPC or
+// the asset protocol even though those schemes are inert in a normal browser.
+validateTauriSchemeCompatibility(webPolicy, 'Web CSP');
 
 const tauriConfig = JSON.parse(
   readFileSync(new URL('../src-tauri/tauri.conf.json', import.meta.url), 'utf8'),
@@ -95,11 +120,14 @@ if (!tauriCsp || typeof tauriCsp !== 'object' || Array.isArray(tauriCsp)) {
   fail('Tauri CSP must be a directive object, not null or a permissive string.');
 }
 const tauriPolicyString = Object.entries(tauriCsp)
-  .map(([directive, value]) => `${directive} ${Array.isArray(value) ? value.join(' ') : value}`)
+  .map(
+    ([directive, value]) =>
+      `${directive} ${Array.isArray(value) ? value.join(' ') : value}`,
+  )
   .join('; ');
-validatePolicy(parsePolicy(tauriPolicyString, 'Tauri CSP'), 'Tauri CSP', {
-  tauri: true,
-});
+const tauriPolicy = parsePolicy(tauriPolicyString, 'Tauri CSP');
+validatePolicy(tauriPolicy, 'Tauri CSP');
+validateTauriSchemeCompatibility(tauriPolicy, 'Tauri CSP');
 
 const capabilities = JSON.parse(
   readFileSync(
@@ -117,7 +145,9 @@ const dangerousPermissions = capabilities.permissions.filter((permission) =>
   /(?:shell|process|fs):(?:allow|default)/.test(permission),
 );
 if (dangerousPermissions.length > 0) {
-  fail(`Tauri capabilities expose privileged APIs: ${dangerousPermissions.join(', ')}.`);
+  fail(
+    `Tauri capabilities expose privileged APIs: ${dangerousPermissions.join(', ')}.`,
+  );
 }
 
 console.log('Security configuration validated.');
