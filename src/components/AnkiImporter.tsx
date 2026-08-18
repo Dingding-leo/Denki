@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle, HelpCircle, RefreshCw, Upload } from 'lucide-react';
-import { importAnkiPackage } from '../services/ankiImport';
+import {
+  ANKI_IMPORT_LIMITS,
+  importAnkiPackage,
+} from '../services/ankiImport';
 import { triggerAutoSave } from '../services/backup';
 import { celebrate } from '../services/celebrate';
 import { useFlashcardStore } from '../store/useFlashcardStore';
@@ -14,6 +17,8 @@ interface ImportStatus {
   type: 'idle' | 'success' | 'error';
   message: string;
 }
+
+const MAX_ARCHIVE_MIB = ANKI_IMPORT_LIMITS.maxArchiveBytes / (1024 * 1024);
 
 export const AnkiImporter: React.FC<AnkiImporterProps> = ({ classId, onComplete }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -168,8 +173,19 @@ export const AnkiImporter: React.FC<AnkiImporterProps> = ({ classId, onComplete 
           gap: '6px',
           border: '1px solid rgba(220, 226, 211, 0.14)',
         }}>
-          <HelpCircle size={12} aria-hidden="true" /> Images · audio · cloze · nested decks
+          <HelpCircle size={12} aria-hidden="true" />
+          Basic/cloze fields · referenced media · nested decks · max {MAX_ARCHIVE_MIB} MiB
         </div>
+
+        <p style={{
+          maxWidth: '560px',
+          fontSize: '11px',
+          color: 'var(--text-muted)',
+          lineHeight: 1.45,
+        }}>
+          Complex Anki templates, generated reverse cards, and template CSS are
+          not rendered exactly. Imports are validated and committed atomically.
+        </p>
       </div>
 
       {status.type !== 'idle' && (
