@@ -30,7 +30,7 @@ The product name is simply **Denki**. It is a general-purpose learning tool for 
 - **CSV import and bounded local Anki field import** for Basic and cloze-style `.apkg` material. Complex Anki card templates are not currently rendered or guaranteed to round-trip exactly.
 - **Optional AI card generation** using a provider and API key chosen by the learner.
 - **Progress insights** including review history, streaks, due-card statistics, and explicitly labelled scheduling states.
-- **Portable study-data backups** through JSON export and restore, with gentle weekly reminders.
+- **Portable JSON backups** for study data, target retention, and speech speed. Provider credentials are deliberately excluded.
 
 ## Scheduler correctness
 
@@ -54,14 +54,17 @@ Denki treats imported packages, restored backups, rendered card content, saved b
 - Anki archives are inspected before decompression. ZIP64, encrypted, multi-disk, duplicate-path, unsupported-compression, oversized, and excessive-output packages are rejected.
 - Only media referenced by imported card fields is expanded; unused package assets are not decoded.
 - Anki deck and card writes are committed in one IndexedDB transaction, so a failed import leaves no partial decks.
+- Backup envelope versions, database versions, dates, IDs, relationships, and portable preferences are validated before current data is cleared. Preference changes are rolled back if the database transaction fails.
 - Web and Tauri builds use explicit content security policies; Tauri capabilities remain limited to core application access.
-- CI validates the security policies, audits production dependencies, and runs the scheduler gate, typecheck, lint, tests, and build.
+- CI audits production dependencies, validates security and release artifacts, runs the canonical scheduler gate, typecheck, lint, tests, and build. CodeQL adds interprocedural JavaScript and TypeScript data-flow analysis.
 
 See [SECURITY.md](SECURITY.md) for private-first vulnerability reporting guidance.
 
 ## Privacy
 
 Cards, decks, preferences, and review history are stored in the browser by default. Denki does not require an account, analytics tracker, or hosted database. Optional AI generation sends only the submitted source text to the configured provider. Avoid placing patient information, credentials, or other sensitive third-party data in AI generation prompts.
+
+Backups contain classes, decks, cards, review history, target retention, speech speed, and scheduler/database metadata. They do **not** contain the optional AI provider key.
 
 ## Run locally
 
@@ -108,9 +111,10 @@ npm run test:scheduler
 npm run lint
 npm run test:run
 npm run build
+npm run test:artifact
 ```
 
-Pull requests run the complete release checks in GitHub Actions. A push to `main` is deployed to [GitHub Pages](https://dingding-leo.github.io/Denki/) only after those checks succeed for that exact commit.
+Pull requests run the complete release checks and CodeQL in GitHub Actions. A push to `main` is deployed to [GitHub Pages](https://dingding-leo.github.io/Denki/) only after those checks succeed for that exact commit, and the rebuilt deployment artifact passes the same structural validator.
 
 ## Technology
 
