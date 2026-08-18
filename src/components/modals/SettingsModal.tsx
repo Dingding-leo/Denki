@@ -168,7 +168,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
     setExporting(true);
     try {
       await downloadBackup();
-      toast('Study-data backup download started', 'success');
+      toast('Portable backup download started', 'success');
     } catch (error) {
       toast(
         `Backup export failed: ${error instanceof Error ? error.message : 'unknown error'}`,
@@ -187,10 +187,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
     if (!file || importing) return;
 
     const confirmed = await confirmDialog({
-      title: 'Import study-data backup',
+      title: 'Import portable backup',
       message:
-        'This replaces every current class, deck, card, review log, and active study queue with the backup file. The replacement cannot be undone.',
-      confirmLabel: 'Replace study data',
+        'This replaces every current class, deck, card, review log, and active study queue. When included, target retention and speech speed are restored too; your AI-provider key remains unchanged. This cannot be undone.',
+      confirmLabel: 'Replace data & preferences',
       danger: true,
     });
     if (!confirmed) return;
@@ -407,10 +407,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
         </section>
 
         <section style={sectionStyle}>
-          <h4 style={sectionHeadingStyle}>Study data & backup</h4>
+          <h4 style={sectionHeadingStyle}>Portable backup</h4>
           <p style={{ ...helpStyle, marginTop: 0, marginBottom: '12px' }}>
-            The JSON backup contains classes, decks, cards, and review history.
-            It deliberately excludes secrets such as your AI-provider key.
+            The JSON backup contains classes, decks, cards, review history,
+            target retention, and speech speed. Older data-only Denki backups
+            remain supported. Secrets such as your AI-provider key are excluded.
           </p>
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
             <button
@@ -420,7 +421,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
               className="btn-premium-secondary"
             >
               <Download size={13} />{' '}
-              {exporting ? 'Preparing…' : 'Export study data'}
+              {exporting ? 'Preparing…' : 'Export backup'}
             </button>
             <button
               type="button"
@@ -428,7 +429,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
               disabled={exporting || importing}
               className="btn-premium-secondary"
             >
-              <Upload size={13} /> {importing ? 'Validating…' : 'Import study data'}
+              <Upload size={13} /> {importing ? 'Validating…' : 'Import backup'}
             </button>
             <input
               ref={fileInputRef}
