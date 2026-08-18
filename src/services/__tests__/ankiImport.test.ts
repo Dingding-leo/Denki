@@ -206,6 +206,7 @@ describe('Anki import helpers', () => {
 
     const zip64 = makeCentralDirectory([{ name: 'collection.anki2' }]);
     const zip64View = new DataView(zip64);
+    zip64View.setUint16(zip64.byteLength - 14, 0xffff, true);
     zip64View.setUint16(zip64.byteLength - 12, 0xffff, true);
     expect(() => inspectAnkiZipArchive(zip64)).toThrow(/ZIP64/);
   });
