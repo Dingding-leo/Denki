@@ -1,12 +1,17 @@
 import type { Plugin } from 'vite';
 
+interface ReleaseIdentity {
+  version: string;
+  buildId: string;
+}
+
 /**
- * Emit a `sw-assets.json` manifest listing every hashed code asset emitted by
- * the build. The service worker fetches this on install and precaches JavaScript,
- * CSS, and WebAssembly so lazy features (including the local Anki importer) work
+ * Emit release metadata and a `sw-assets.json` manifest listing every hashed
+ * code asset emitted by the build. The service worker fetches the manifest on
+ * install and precaches JavaScript, CSS, and WebAssembly so lazy features work
  * on the first offline launch instead of only after their first network use.
  */
-export function denkiPrecachePlugin(): Plugin {
+export function denkiPrecachePlugin(identity: ReleaseIdentity): Plugin {
   return {
     name: 'denki-precache',
     apply: 'build',
@@ -24,6 +29,11 @@ export function denkiPrecachePlugin(): Plugin {
         type: 'asset',
         fileName: 'sw-assets.json',
         source: JSON.stringify({ assets }, null, 2),
+      });
+      this.emitFile({
+        type: 'asset',
+        fileName: 'version.json',
+        source: JSON.stringify(identity, null, 2),
       });
     },
   };
