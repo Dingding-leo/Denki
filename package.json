@@ -12,8 +12,10 @@
     "test:run": "vitest run",
     "test:scheduler": "vitest run src/services/__tests__/scheduler.test.ts",
     "test:security": "node scripts/validate-security-config.mjs",
+    "test:version": "node scripts/validate-version.mjs",
     "test:artifact": "node scripts/validate-build-output.mjs",
     "audit:prod": "npm audit --omit=dev --audit-level=high",
+    "version:set": "node scripts/set-version.mjs",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build"
