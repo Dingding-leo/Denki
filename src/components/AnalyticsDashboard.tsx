@@ -58,9 +58,9 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ scope = 
     },
     {
       index: '03',
-      label: 'Recall on record',
+      label: 'Good-or-better rate',
       value: `${avgRecallRate}%`,
-      unit: 'ratings of 3 or higher',
+      unit: 'Good or Easy ratings / last 12 months',
     },
     {
       index: '04',
@@ -100,7 +100,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ scope = 
             <p className="zine-section-kicker">02 / Attendance archive</p>
             <h2 className="zine-sheet-title" id="study-archive-heading">365 days of study marks</h2>
           </div>
-          <p className="zine-sheet-note">Longest uninterrupted run<br />{maxStreak} days</p>
+          <p className="zine-sheet-note">Longest run in this window<br />{maxStreak} days</p>
         </header>
 
         <div className="zine-heatmap-wrap">
@@ -168,7 +168,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ scope = 
           <header className="zine-sheet-header">
             <div>
               <p className="zine-section-kicker">04 / Card states</p>
-              <h2 className="zine-sheet-title" id="card-state-heading">What is sticking</h2>
+              <h2 className="zine-sheet-title" id="card-state-heading">Scheduling states</h2>
             </div>
             <p className="zine-sheet-note">{totalCards} cards<br />total</p>
           </header>
@@ -182,7 +182,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ scope = 
           <div className="zine-stat-list">
             <div className="zine-stat-row">
               <span className="zine-stat-dot" style={{ color: 'var(--zine-highlight)' }} />
-              <span>Review state / established</span>
+              <span>Review state / long-term schedule</span>
               <strong>{cardStates.reviewCount} · {cardStates.reviewPct}%</strong>
             </div>
             <div className="zine-stat-row">
