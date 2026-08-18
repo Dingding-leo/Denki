@@ -108,6 +108,22 @@ describe('canonical FSRS-4.5 release gate', () => {
     expect(graduated.scheduledDays).toBe(1);
   });
 
+  it('keeps Learning graduation intervals distinct and within the cap', () => {
+    const card = mockCard({
+      state: STATES.Learning,
+      stability: 1000,
+      difficulty: 5,
+      lastReviewed: new Date('2026-01-01T00:00:00Z'),
+    });
+    const now = new Date('2026-01-01T00:10:00Z');
+    const params = { requestRetention: 0.7, maxInterval: 30 };
+
+    const good = review(card, 3, now, params).updatedCard.scheduledDays;
+    const easy = review(card, 4, now, params).updatedCard.scheduledDays;
+
+    expect([good, easy]).toEqual([29, 30]);
+  });
+
   it('matches canonical review-state golden vectors using pre-review difficulty', () => {
     const card = mockCard({
       state: STATES.Review,
@@ -170,18 +186,13 @@ describe('canonical FSRS-4.5 release gate', () => {
       requestRetention: 0.95,
       maxInterval: 36500,
     }).updatedCard.scheduledDays;
-    const cappedParams = {
-      requestRetention: 0.7,
-      maxInterval: 30,
-    };
-    const capped = [
-      review(card, 2, now, cappedParams).updatedCard.scheduledDays,
-      review(card, 3, now, cappedParams).updatedCard.scheduledDays,
-      review(card, 4, now, cappedParams).updatedCard.scheduledDays,
-    ];
+    const cappedParams = { requestRetention: 0.7, maxInterval: 30 };
+    const cappedHard = review(card, 2, now, cappedParams).updatedCard.scheduledDays;
+    const cappedGood = review(card, 3, now, cappedParams).updatedCard.scheduledDays;
+    const cappedEasy = review(card, 4, now, cappedParams).updatedCard.scheduledDays;
 
     expect(lowRetention).toBeGreaterThan(highRetention);
-    expect(capped).toEqual([28, 29, 30]);
+    expect([cappedHard, cappedGood, cappedEasy]).toEqual([28, 29, 30]);
   });
 
   it('disables interval fuzz by default and applies bounded fuzz only when requested', () => {
