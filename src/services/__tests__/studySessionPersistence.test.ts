@@ -1,8 +1,15 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '../../db';
 import type { Card } from '../../db/schema';
 import { useFlashcardStore } from '../../store/useFlashcardStore';
-import { restorePersistedStudySession } from '../studySessionPersistence';
+import {
+  clearPersistedStudySession,
+  restorePersistedStudySession,
+  schedulePersistedStudySession,
+  STUDY_SESSION_PERSIST_DELAY_MS,
+} from '../studySessionPersistence';
+
+const STORAGE_KEY = 'denki.study-session.v1';
 
 const seedCard = (deckId: number, classId: number, front: string): Card => ({
   classId,
@@ -43,7 +50,12 @@ async function startWithCards(n = 3) {
 
 describe('study session persistence', () => {
   beforeEach(async () => {
-    useFlashcardStore.setState({ session: null, activeDeckId: null, activeClassId: null });
+    useFlashcardStore.setState({
+      session: null,
+      activeDeckId: null,
+      activeClassId: null,
+    });
+    clearPersistedStudySession();
     window.localStorage.clear();
     await Promise.all([
       db.cards.clear(),
@@ -51,6 +63,11 @@ describe('study session persistence', () => {
       db.decks.clear(),
       db.classes.clear(),
     ]);
+  });
+
+  afterEach(() => {
+    clearPersistedStudySession();
+    vi.useRealTimers();
   });
 
   it('restores progress after a reload-style store reset and rehydrates cards from IndexedDB', async () => {
@@ -69,6 +86,49 @@ describe('study session persistence', () => {
     expect(restored!.queue[0].createdAt).toBeInstanceOf(Date);
     expect(restored!.queue[0].due).toBeInstanceOf(Date);
     expect(restored!.history).toEqual([]);
+  });
+
+  it('coalesces repeated cursor updates and persists only the newest session', async () => {
+    const { deckId } = await startWithCards();
+    const active = useFlashcardStore.getState().session!;
+    clearPersistedStudySession();
+
+    vi.useFakeTimers();
+    schedulePersistedStudySession(active);
+    schedulePersistedStudySession({
+      ...active,
+      currentIndex: 1,
+      completedCount: 1,
+    });
+
+    expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();
+    vi.advanceTimersByTime(STUDY_SESSION_PERSIST_DELAY_MS - 1);
+    expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();
+
+    vi.advanceTimersByTime(1);
+    const snapshot = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? '{}') as {
+      deckId?: number;
+      currentIndex?: number;
+      completedCount?: number;
+    };
+    expect(snapshot).toMatchObject({
+      deckId,
+      currentIndex: 1,
+      completedCount: 1,
+    });
+  });
+
+  it('cancels a pending cursor write when the session is cleared', async () => {
+    await startWithCards();
+    const active = useFlashcardStore.getState().session!;
+    clearPersistedStudySession();
+
+    vi.useFakeTimers();
+    schedulePersistedStudySession(active);
+    clearPersistedStudySession();
+    vi.runAllTimers();
+
+    expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();
   });
 
   it('does not restart the same deck when the study page mounts after navigation', async () => {
@@ -121,10 +181,15 @@ describe('study session persistence', () => {
     useFlashcardStore.getState().endStudySession();
     await useFlashcardStore.getState().startDrillSession(deckId, ['new', 1, 2]);
 
-    expect(await restorePersistedStudySession({ deckId, isDrill: false })).toBeNull();
-    const restored = await restorePersistedStudySession({ deckId, isDrill: true });
+    expect(await restorePersistedStudySession({
+      deckId,
+      isDrill: false,
+    })).toBeNull();
+    const restored = await restorePersistedStudySession({
+      deckId,
+      isDrill: true,
+    });
     expect(restored?.isDrill).toBe(true);
     expect(restored?.drillBuckets).toEqual(['new', 1, 2]);
   });
-
 });
