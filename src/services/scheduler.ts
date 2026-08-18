@@ -193,6 +193,21 @@ function scheduledReviewDays(
   );
 }
 
+function learningGraduationIntervals(
+  stability: number,
+  params: SchedulerParams,
+  rng: () => number,
+): { goodDays: number; easyDays: number } {
+  const candidate = scheduledReviewDays(stability, params, rng);
+  const maximum = maximumReviewInterval(params);
+
+  // Good and Easy share the existing Learning-state memory parameters. Keep
+  // them distinct without allowing Easy to overflow the configured maximum.
+  const easyDays = Math.min(maximum, Math.max(candidate + 1, 2));
+  const goodDays = Math.min(easyDays - 1, Math.max(candidate, 1));
+  return { goodDays, easyDays };
+}
+
 function elapsedSinceLastReview(card: Card, now: Date): number {
   if (!card.lastReviewed) return 0;
   const previous = new Date(card.lastReviewed).getTime();
@@ -311,8 +326,12 @@ export function reviewCard(
       scheduledDays = LEARNING_HARD_STEP_DAYS;
     } else {
       nextState = STATES.Review;
-      const goodDays = scheduledReviewDays(nextStability, params, rng);
-      scheduledDays = rating === EASY ? goodDays + 1 : goodDays;
+      const { goodDays, easyDays } = learningGraduationIntervals(
+        nextStability,
+        params,
+        rng,
+      );
+      scheduledDays = rating === EASY ? easyDays : goodDays;
     }
   } else {
     const retrievability = calculateRetrievability(oldStability, elapsedDays);
