@@ -20,12 +20,12 @@ export const Sidebar: React.FC = () => {
   const { classId: routeClassId } = useParams();
   const activeClassId = routeClassId ? Number.parseInt(routeClassId, 10) : null;
 
-  const classesWithMastery = useMemo(() => {
+  const classesWithProgress = useMemo(() => {
     return classes.map((studyClass) => {
       const stats = classStats[studyClass.id ?? 0] ?? {
         total: 0,
         dueCount: 0,
-        masteryPct: 0,
+        reviewStatePct: 0,
         decksCount: 0,
       };
 
@@ -33,7 +33,7 @@ export const Sidebar: React.FC = () => {
         ...studyClass,
         total: stats.total,
         dueCount: stats.dueCount,
-        masteryPct: stats.masteryPct,
+        reviewStatePct: stats.reviewStatePct,
         decksCount: stats.decksCount,
       };
     });
@@ -99,7 +99,7 @@ export const Sidebar: React.FC = () => {
 
         <section className="zine-library" aria-labelledby="library-index-heading">
           <div className="zine-library-heading">
-            <span id="library-index-heading">Library index / {String(classesWithMastery.length).padStart(2, '0')}</span>
+            <span id="library-index-heading">Library index / {String(classesWithProgress.length).padStart(2, '0')}</span>
             <button
               type="button"
               onClick={() => setShowClassModal(true)}
@@ -112,7 +112,7 @@ export const Sidebar: React.FC = () => {
           </div>
 
           <div className="zine-class-list">
-            {classesWithMastery.map((studyClass, index) => {
+            {classesWithProgress.map((studyClass, index) => {
               if (studyClass.id === undefined) return null;
               const isSelected = activeClassId === studyClass.id;
               const classNumber = String(index + 1).padStart(2, '0');
@@ -124,8 +124,11 @@ export const Sidebar: React.FC = () => {
                   className={`zine-class-link ${isSelected ? 'is-active' : ''}`}
                   title={sidebarCollapsed ? `${studyClass.name} · ${studyClass.total} cards` : undefined}
                 >
-                  <span className="zine-class-index" aria-label={`${studyClass.masteryPct}% mastered`}>
-                    {sidebarCollapsed ? classNumber : `${studyClass.masteryPct}%`}
+                  <span
+                    className="zine-class-index"
+                    aria-label={`${studyClass.reviewStatePct}% of cards in long-term Review state`}
+                  >
+                    {sidebarCollapsed ? classNumber : `${studyClass.reviewStatePct}%`}
                   </span>
                   <span className="zine-class-copy">
                     <span className="zine-class-name">{classNumber}. {studyClass.name}</span>
