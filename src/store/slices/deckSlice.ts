@@ -1,7 +1,7 @@
 import type { StateCreator } from 'zustand';
 import { db } from '../../db';
 import { triggerAutoSave } from '../../services/backup';
-import { STATES } from '../../services/scheduler';
+import { createNewCardSchedulingState } from '../../services/scheduler';
 import type { DeckSlice, FlashcardState } from '../types';
 
 let latestDecksRequest = 0;
@@ -129,12 +129,7 @@ export const createDeckSlice: StateCreator<
       for (const card of deckCards) {
         if (!card.id) continue;
         await db.cards.update(card.id, {
-          state: STATES.New,
-          stability: 0,
-          difficulty: 0,
-          elapsedDays: 0,
-          scheduledDays: 0,
-          due: now,
+          ...createNewCardSchedulingState(now),
           lastReviewed: undefined,
           lastRating: undefined,
         });
