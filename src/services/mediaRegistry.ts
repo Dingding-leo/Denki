@@ -18,12 +18,21 @@ interface CachedObjectUrl {
   references: number;
 }
 
+export interface ResolvedMediaAsset extends Omit<MediaAsset, 'data'> {
+  data: Blob;
+}
+
 export interface MediaObjectUrlLease {
   url: string;
   release(): void;
 }
 
 const objectUrlCache = new Map<string, CachedObjectUrl>();
+const objectUrlLoads = new Map<
+  string,
+  Promise<CachedObjectUrl | null>
+>();
+let objectUrlGeneration = 0;
 
 export function containsMediaReference(value: string): boolean {
   return value.includes(MEDIA_REFERENCE_PREFIX);
@@ -37,7 +46,10 @@ export function createMediaReference(hash: string): string {
 }
 
 export function parseMediaReference(value: unknown): string | null {
-  if (typeof value !== 'string' || !value.startsWith(MEDIA_REFERENCE_PREFIX)) {
+  if (
+    typeof value !== 'string' ||
+    !value.startsWith(MEDIA_REFERENCE_PREFIX)
+  ) {
     return null;
   }
   const hash = value.slice(MEDIA_REFERENCE_PREFIX.length);
@@ -47,51 +59,101 @@ export function parseMediaReference(value: unknown): string | null {
   return hash;
 }
 
-function isBlobLike(value: unknown): value is Blob {
-  if (!value || typeof value !== 'object') return false;
-  const candidate = value as Partial<Blob>;
+function isArrayBufferValue(value: unknown): value is ArrayBuffer {
   return (
-    typeof candidate.size === 'number' &&
-    typeof candidate.type === 'string' &&
-    typeof candidate.arrayBuffer === 'function'
+    !!value &&
+    typeof value === 'object' &&
+    Object.prototype.toString.call(value) === '[object ArrayBuffer]' &&
+    typeof (value as ArrayBuffer).byteLength === 'number'
   );
 }
 
-async function verifyStoredAsset(asset: MediaAsset): Promise<MediaAsset> {
+function copyToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const output = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(output).set(bytes);
+  return output;
+}
+
+function isConstraintError(error: unknown): boolean {
+  return (
+    !!error &&
+    typeof error === 'object' &&
+    'name' in error &&
+    error.name === 'ConstraintError'
+  );
+}
+
+async function verifyStoredAsset(
+  asset: MediaAsset,
+): Promise<ResolvedMediaAsset> {
   if (!HASH_PATTERN.test(asset.hash)) {
     throw new Error('Stored media has an invalid SHA-256 key.');
   }
 
   const mimeType = normalizeMediaMimeType(asset.mimeType);
   if (mimeType !== asset.mimeType) {
-    throw new Error(`Stored media ${asset.hash} has a non-canonical MIME type.`);
+    throw new Error(
+      `Stored media ${asset.hash} has a non-canonical MIME type.`,
+    );
   }
   assertMediaByteLength(asset.byteLength, `Stored media ${asset.hash}`);
 
-  // IndexedDB may deserialize Blob objects from a different JavaScript realm.
-  // `instanceof Blob` is therefore not a portable integrity boundary.
-  if (!isBlobLike(asset.data)) {
-    throw new Error(`Stored media ${asset.hash} does not contain Blob data.`);
+  if (!isArrayBufferValue(asset.data)) {
+    throw new Error(
+      `Stored media ${asset.hash} does not contain ArrayBuffer data.`,
+    );
   }
-  if (asset.data.size !== asset.byteLength) {
-    throw new Error(`Stored media ${asset.hash} has inconsistent byte length.`);
-  }
-  if (asset.data.type !== mimeType) {
-    throw new Error(`Stored media ${asset.hash} has inconsistent Blob metadata.`);
+  if (asset.data.byteLength !== asset.byteLength) {
+    throw new Error(
+      `Stored media ${asset.hash} has inconsistent byte length.`,
+    );
   }
 
-  const bytes = new Uint8Array(await asset.data.arrayBuffer());
+  const createdAt = new Date(asset.createdAt);
+  if (!Number.isFinite(createdAt.getTime())) {
+    throw new Error(
+      `Stored media ${asset.hash} has an invalid creation timestamp.`,
+    );
+  }
+
+  const bytes = new Uint8Array(asset.data);
   const calculatedHash = await hashMediaBytes(mimeType, bytes);
   if (calculatedHash !== asset.hash) {
-    throw new Error(`Stored media ${asset.hash} failed its integrity check.`);
+    throw new Error(
+      `Stored media ${asset.hash} failed its integrity check.`,
+    );
   }
 
-  return asset;
+  return {
+    hash: asset.hash,
+    mimeType,
+    byteLength: asset.byteLength,
+    data: new Blob([bytes], { type: mimeType }),
+    createdAt,
+  };
+}
+
+async function verifyExistingIdentity(
+  asset: MediaAsset,
+  expectedMimeType: string,
+  expectedByteLength: number,
+): Promise<void> {
+  const verified = await verifyStoredAsset(asset);
+  if (
+    verified.mimeType !== expectedMimeType ||
+    verified.byteLength !== expectedByteLength
+  ) {
+    throw new Error(
+      `Media identity collision detected for ${asset.hash}.`,
+    );
+  }
 }
 
 /**
  * Store passive media under its verified content identity. SVG bytes are
  * sanitized before hashing, so the key always identifies the exact stored data.
+ * A single IndexedDB add is atomic; concurrent equal inserts converge on the
+ * unique hash and verify the winning row after a constraint conflict.
  */
 export async function registerMediaBytes(
   mimeType: unknown,
@@ -99,30 +161,50 @@ export async function registerMediaBytes(
   createdAt: Date = new Date(),
 ): Promise<string> {
   const normalized = normalizeMediaBytes(mimeType, input);
-  const hash = await hashMediaBytes(normalized.mimeType, normalized.bytes);
+  const hash = await hashMediaBytes(
+    normalized.mimeType,
+    normalized.bytes,
+  );
   const reference = createMediaReference(hash);
 
-  await db.transaction('rw', db.media, async () => {
-    const existing = await db.media.get(hash);
-    if (existing) {
-      await verifyStoredAsset(existing);
-      if (
-        existing.mimeType !== normalized.mimeType ||
-        existing.byteLength !== normalized.bytes.byteLength
-      ) {
-        throw new Error(`Media identity collision detected for ${hash}.`);
-      }
-      return;
-    }
+  const existing = await db.media.get(hash);
+  if (existing) {
+    await verifyExistingIdentity(
+      existing,
+      normalized.mimeType,
+      normalized.bytes.byteLength,
+    );
+    return reference;
+  }
 
-    await db.media.add({
-      hash,
-      mimeType: normalized.mimeType,
-      byteLength: normalized.bytes.byteLength,
-      data: new Blob([normalized.bytes], { type: normalized.mimeType }),
-      createdAt,
-    });
-  });
+  const asset: MediaAsset = {
+    hash,
+    mimeType: normalized.mimeType,
+    byteLength: normalized.bytes.byteLength,
+    data: copyToArrayBuffer(normalized.bytes),
+    createdAt: new Date(createdAt),
+  };
+  if (!Number.isFinite(asset.createdAt.getTime())) {
+    throw new Error('Media creation timestamp is invalid.');
+  }
+
+  try {
+    await db.media.add(asset);
+  } catch (error) {
+    if (!isConstraintError(error)) throw error;
+    const winner = await db.media.get(hash);
+    if (!winner) {
+      throw new Error(
+        `Media ${hash} could not be stored after a concurrent insert.`,
+        { cause: error },
+      );
+    }
+    await verifyExistingIdentity(
+      winner,
+      normalized.mimeType,
+      normalized.bytes.byteLength,
+    );
+  }
 
   return reference;
 }
@@ -141,7 +223,7 @@ export async function registerMediaBlob(
 /** Resolve and cryptographically verify one registry object. */
 export async function resolveMediaAsset(
   reference: unknown,
-): Promise<MediaAsset | null> {
+): Promise<ResolvedMediaAsset | null> {
   const hash = parseMediaReference(reference);
   if (hash === null) return null;
   const asset = await db.media.get(hash);
@@ -149,7 +231,10 @@ export async function resolveMediaAsset(
   return verifyStoredAsset(asset);
 }
 
-function requireObjectUrlApi(): Pick<typeof URL, 'createObjectURL' | 'revokeObjectURL'> {
+function requireObjectUrlApi(): Pick<
+  typeof URL,
+  'createObjectURL' | 'revokeObjectURL'
+> {
   if (
     typeof URL.createObjectURL !== 'function' ||
     typeof URL.revokeObjectURL !== 'function'
@@ -159,9 +244,33 @@ function requireObjectUrlApi(): Pick<typeof URL, 'createObjectURL' | 'revokeObje
   return URL;
 }
 
+async function loadObjectUrl(
+  hash: string,
+  generation: number,
+): Promise<CachedObjectUrl | null> {
+  const asset = await resolveMediaAsset(createMediaReference(hash));
+  if (!asset || generation !== objectUrlGeneration) return null;
+
+  const existing = objectUrlCache.get(hash);
+  if (existing) return existing;
+  if (objectUrlCache.size >= MAX_ACTIVE_MEDIA_OBJECT_URLS) {
+    throw new Error(
+      `Denki already has ${MAX_ACTIVE_MEDIA_OBJECT_URLS} active media object URLs.`,
+    );
+  }
+
+  const entry: CachedObjectUrl = {
+    url: requireObjectUrlApi().createObjectURL(asset.data),
+    references: 0,
+  };
+  objectUrlCache.set(hash, entry);
+  return entry;
+}
+
 /**
  * Acquire a reference-counted object URL. Missing assets return null; corrupt
- * assets fail closed. Every successful lease must be released by its consumer.
+ * assets fail closed. Concurrent requests for the same hash share one load and
+ * one object URL. Every successful lease must be released by its consumer.
  */
 export async function acquireMediaObjectUrl(
   reference: unknown,
@@ -175,21 +284,23 @@ export async function acquireMediaObjectUrl(
     return createLease(hash, cached);
   }
 
-  if (objectUrlCache.size >= MAX_ACTIVE_MEDIA_OBJECT_URLS) {
-    throw new Error(
-      `Denki already has ${MAX_ACTIVE_MEDIA_OBJECT_URLS} active media object URLs.`,
-    );
+  let loading = objectUrlLoads.get(hash);
+  if (!loading) {
+    loading = loadObjectUrl(hash, objectUrlGeneration);
+    objectUrlLoads.set(hash, loading);
   }
 
-  const asset = await resolveMediaAsset(reference);
-  if (!asset) return null;
+  let entry: CachedObjectUrl | null;
+  try {
+    entry = await loading;
+  } finally {
+    if (objectUrlLoads.get(hash) === loading) {
+      objectUrlLoads.delete(hash);
+    }
+  }
+  if (!entry) return null;
 
-  const objectUrlApi = requireObjectUrlApi();
-  const entry: CachedObjectUrl = {
-    url: objectUrlApi.createObjectURL(asset.data),
-    references: 1,
-  };
-  objectUrlCache.set(hash, entry);
+  entry.references += 1;
   return createLease(hash, entry);
 }
 
@@ -215,9 +326,15 @@ function createLease(
   };
 }
 
-/** Revoke all leases before a full library replacement or application teardown. */
+/**
+ * Revoke every active URL and invalidate in-flight loads before a full library
+ * replacement or application teardown.
+ */
 export function revokeAllMediaObjectUrls(): void {
+  objectUrlGeneration += 1;
+  objectUrlLoads.clear();
   if (objectUrlCache.size === 0) return;
+
   const objectUrlApi = requireObjectUrlApi();
   for (const entry of objectUrlCache.values()) {
     objectUrlApi.revokeObjectURL(entry.url);
