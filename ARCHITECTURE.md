@@ -237,7 +237,7 @@ This is not a complete Anki template renderer. Complex note models, template log
 
 ### Backup files
 
-Portable backup v3 separates:
+Portable backup v4 separates:
 
 - backup envelope version;
 - producing Denki application version;
@@ -245,11 +245,25 @@ Portable backup v3 separates:
 - current scheduler metadata;
 - per-card and per-review scheduler provenance;
 - portable non-secret preferences;
-- study data.
+- study data;
+- a content-addressed media table for supported embedded images, audio, and video.
 
-All metadata, dates, IDs, relationships, preferences, and scheduler-version strings are validated before current database rows are cleared.
+Repeated base64 media in card fronts, card backs, and deck notes is replaced in the portable representation by `denki-backup-media://sha256/<hash>` references. The hash covers the normalized MIME type, a zero separator byte, and decoded media bytes, so equal bytes with different declared types do not collide semantically.
 
-Format-v3 rows must include explicit provenance. Format-v1/v2 rows remain compatible through conservative normalization: pristine New cards become current `4.5`, while model-derived states and review logs become `legacy-unversioned`. Invalid explicit provenance is rejected rather than replaced silently.
+Before current database rows are cleared, format-v4 import validates:
+
+- envelope, application, database, and scheduler metadata;
+- dates, IDs, relationships, preferences, and row-level scheduler provenance;
+- exact media-row shape and lowercase SHA-256 identifiers;
+- a passive supported MIME allow-list;
+- canonical base64 and declared byte length;
+- the recomputed SHA-256 digest;
+- duplicate, missing, unreferenced, and malformed media references;
+- a 5,000-object limit, 16 MiB per-object limit, and 160 MiB decoded-total limit.
+
+Only after that complete validation are portable references hydrated back to their original data URLs and the existing library replaced transactionally. Runtime IndexedDB records are not automatically rewritten by this format: backup v4 changes the portable representation, not the current card-rendering storage model.
+
+Format-v3 rows must include explicit scheduler provenance. Format-v1/v2 rows remain compatible through conservative normalization: pristine New cards become current `4.5`, while model-derived states and review logs become `legacy-unversioned`. Format-v1-v3 files without portable media tokens remain importable. Invalid explicit provenance or unsupported media tokens are rejected rather than replaced silently.
 
 Preference changes roll back if the database replacement transaction fails. The AI-provider key is explicitly excluded.
 
@@ -302,6 +316,7 @@ Security is layered:
 - CodeQL `security-extended` analysis;
 - release-version and artifact validation;
 - schema migration and provenance tests;
+- content-addressed backup-media integrity and resource-budget tests;
 - transactional persistence and rollback tests.
 
 See `SECURITY.md` for reporting guidance.
@@ -317,7 +332,7 @@ A change is releasable only after all relevant checks pass on its exact head:
 5. security-configuration validation;
 6. canonical FSRS release gate;
 7. zero-warning ESLint;
-8. complete Vitest suite, including database, provenance, backup, and rollback coverage;
+8. complete Vitest suite, including database, provenance, backup, media-integrity, and rollback coverage;
 9. production build;
 10. release-artifact and immutable-identity validation;
 11. CodeQL analysis.
@@ -333,6 +348,7 @@ Before implementation, identify which invariant the change touches:
 - scheduler semantics or provenance;
 - session restoration;
 - untrusted input;
+- backup representation or media integrity;
 - offline caching;
 - security policy;
 - analytics meaning;
