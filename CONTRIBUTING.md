@@ -50,6 +50,7 @@ Run from a clean checkout:
 ```bash
 npm ci
 npm run audit:prod
+npm run test:version
 npx tsc --noEmit
 npm run test:security
 npm run test:scheduler
@@ -63,7 +64,7 @@ npm run test:artifact
 
 GitHub Actions additionally runs CodeQL for JavaScript and TypeScript data flow.
 
-A passing build is not sufficient. Scheduler, security, tests, and final artifact integrity are independent release gates.
+A passing build is not sufficient. Version identity, scheduler correctness, security, tests, and final artifact integrity are independent release gates.
 
 ## Pull-request description
 
@@ -80,6 +81,25 @@ Every non-trivial pull request should answer:
 - Does public documentation or product wording need to change?
 
 Use the repository pull-request template rather than replacing it with a generic summary.
+
+## Release version changes
+
+`version.json` is the canonical application version. It must match:
+
+- `src-tauri/tauri.conf.json`;
+- the `[package]` version in `src-tauri/Cargo.toml`;
+- the `denki` package entry in `src-tauri/Cargo.lock`.
+
+The private npm workspace remains `0.0.0` and must not be published.
+
+Use the release helper rather than editing version-bearing files independently:
+
+```bash
+npm run version:set -- 0.2.0
+npm run test:version
+```
+
+A release pull request must include every file changed by the helper. Do not hand-edit `dist/version.json`; it is generated during the production build from the canonical version and immutable build ID.
 
 ## Scheduler changes
 
@@ -172,6 +192,7 @@ A service-worker change must preserve:
 
 - atomic release installation;
 - exact precache coverage of emitted JS, CSS, and WASM;
+- cached immutable release metadata;
 - compatibility between active pages and their hashed chunks;
 - cleanup of obsolete caches without breaking current clients;
 - the `npm run test:artifact` gate.
