@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import {
+  CURRENT_SCHEDULER_VERSION,
+  LEGACY_SCHEDULER_VERSION,
+  inferLegacyCardSchedulerVersion,
+  inferLegacyReviewSchedulerVersion,
+} from '../../domain/schedulerProvenance';
+import { db, deriveLatestRatings } from '../index';
 import type { ReviewLog } from '../schema';
-import { deriveLatestRatings } from '../index';
 
 function review(
   cardId: number,
@@ -17,10 +23,15 @@ function review(
     difficulty: 5,
     elapsedDays: 1,
     scheduledDays: 1,
+    schedulerVersion: CURRENT_SCHEDULER_VERSION,
   };
 }
 
 describe('database migrations', () => {
+  it('uses schema version 5 for scheduler provenance', () => {
+    expect(db.verno).toBe(5);
+  });
+
   it('derives the latest rating per card independent of review row order', () => {
     const ratings = deriveLatestRatings([
       review(1, 4, '2026-01-04T00:00:00Z'),
@@ -43,5 +54,42 @@ describe('database migrations', () => {
       invalid,
       review(1, 3, '2026-01-02T00:00:00Z'),
     ])).toEqual(new Map([[1, 3]]));
+  });
+
+  it('marks pristine New cards current without rewriting reviewed legacy states', () => {
+    expect(inferLegacyCardSchedulerVersion({
+      state: 0,
+      stability: 0,
+      difficulty: 0,
+      scheduledDays: 0,
+    })).toBe(CURRENT_SCHEDULER_VERSION);
+
+    expect(inferLegacyCardSchedulerVersion({
+      state: 2,
+      stability: 12,
+      difficulty: 5,
+      scheduledDays: 12,
+      lastReviewed: new Date('2026-01-01T00:00:00Z'),
+    })).toBe(LEGACY_SCHEDULER_VERSION);
+
+    expect(inferLegacyCardSchedulerVersion({
+      state: 0,
+      stability: 2,
+      difficulty: 5,
+      scheduledDays: 3,
+    })).toBe(LEGACY_SCHEDULER_VERSION);
+  });
+
+  it('preserves explicit provenance and marks unversioned reviews legacy', () => {
+    expect(inferLegacyCardSchedulerVersion({
+      schedulerVersion: 'future-model-6.0',
+      state: 2,
+    })).toBe('future-model-6.0');
+    expect(inferLegacyReviewSchedulerVersion('future-model-6.0')).toBe(
+      'future-model-6.0',
+    );
+    expect(inferLegacyReviewSchedulerVersion(undefined)).toBe(
+      LEGACY_SCHEDULER_VERSION,
+    );
   });
 });
