@@ -54,7 +54,14 @@ describe('renderContent', () => {
     expect(html.match(/data-denki-media-src=/g)).toHaveLength(2);
     expect(html).toContain('data-denki-media-state="pending"');
     expect(html).toContain('aria-busy="true"');
-    expect(html).not.toContain(`src="${reference}"`);
+
+    const template = document.createElement('template');
+    template.innerHTML = html;
+    const mediaElements = [...template.content.querySelectorAll('img, audio')];
+    expect(mediaElements).toHaveLength(2);
+    expect(
+      mediaElements.every((element) => !element.hasAttribute('src')),
+    ).toBe(true);
   });
 
   it('restores registry references used as ordinary text without activating them', () => {
