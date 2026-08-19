@@ -25,6 +25,8 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      DENKI_BUILD_ID: ${{ github.event.workflow_run.head_sha }}
     steps:
       - name: Check out the validated commit
         uses: actions/checkout@v7
@@ -35,6 +37,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Revalidate release version
+        run: npm run test:version
       - name: Build validated source
         run: npm run build
       - name: Revalidate deploy artifact
