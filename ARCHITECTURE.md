@@ -97,13 +97,30 @@ Core tables:
 
 The schema stores denormalised `classId` and `deckId` values on cards and review logs to support indexed scoped queries. Because IndexedDB does not enforce foreign keys, Denki must validate and preserve these relationships itself.
 
+Database schema v5 also stores `schedulerVersion` on every card and review log:
+
+- on a card, it identifies the scheduler lineage that produced the current memory state;
+- on a review log, it identifies the scheduler used for that transition.
+
+The TypeScript fields remain optional only so pre-v5 records and legacy backup rows can be represented while they are normalized. Once opened through database v5, persisted rows are expected to carry valid provenance.
+
 Database rules:
 
 - schema changes require a new Dexie version and migration tests;
 - migrations must be deterministic and safe to rerun only as Dexie permits;
 - imports and restores validate complete referential integrity before replacing data;
 - class, deck, card, and review deletion must not leave orphaned records;
-- Date fields must be revived as real `Date` values before IndexedDB writes.
+- Date fields must be revived as real `Date` values before IndexedDB writes;
+- scheduler provenance must be preserved or conservatively inferred before a row is persisted;
+- migrations must not relabel uncertain historical scheduling as canonical.
+
+Database-v5 migration deliberately does **not** recalculate interval, stability, difficulty, state, due date, or rating. It classifies:
+
+- pristine, unreviewed New cards as current `4.5`, because they contain no model-derived memory state;
+- all other unversioned cards and review logs as `legacy-unversioned`;
+- already valid explicit provenance without modification.
+
+Database `creating` hooks apply the same policy as defense-in-depth for direct import paths. Production creation and reset flows should still use the explicit scheduler helper rather than depending on the hook.
 
 ## Release identity boundary
 
@@ -137,6 +154,8 @@ Release-identity invariants:
 
 `src/services/scheduler.ts` implements canonical FSRS 4.5 long-term memory equations plus the documented short learning-step state machine.
 
+`src/domain/schedulerProvenance.ts` defines scheduler-lineage semantics shared by the scheduler, database migration, database hooks, and backup importer. The current lineage is `4.5`; historical rows whose producing algorithm cannot be proven are `legacy-unversioned`.
+
 Release-critical constants and behaviour are pinned by `src/services/__tests__/scheduler.test.ts`:
 
 - the published 17-weight vector;
@@ -149,6 +168,8 @@ Release-critical constants and behaviour are pinned by `src/services/__tests__/s
 - strict `Hard < Good < Easy` Review intervals;
 - maximum-interval boundary behaviour.
 
+Additional provenance tests require every current transition to stamp both the resulting card and review log with `4.5`.
+
 Scheduler invariants:
 
 1. The published model weights are not user-adjustable.
@@ -157,6 +178,9 @@ Scheduler invariants:
 4. Manual confidence changes use the same scheduler and review-log transaction as Review Mode.
 5. Any scheduler change requires externally derived golden vectors and must keep `npm run test:scheduler` as an explicit release gate.
 6. Existing stored stability and difficulty values remain authoritative unless a separately designed, tested, and communicated migration is introduced.
+7. Every model-derived card state and review log must carry the scheduler version that produced it.
+8. A future scheduler upgrade must introduce a new lineage value rather than overwriting historical provenance.
+9. Resetting a card removes model-derived memory and starts a fresh current-lineage New state.
 
 ## Study sessions
 
@@ -183,8 +207,8 @@ Completed sessions are not restored. Undo history intentionally does not survive
 
 Review durability order:
 
-1. calculate the next FSRS state;
-2. write the updated card and review log in one transaction;
+1. calculate the next FSRS state and current scheduler provenance;
+2. write the updated card and versioned review log in one transaction;
 3. advance the in-memory queue;
 4. coalesce non-critical analytics refreshes;
 5. persist the resumable cursor.
@@ -201,33 +225,37 @@ Denki treats all imported or externally generated content as untrusted.
 
 ### CSV
 
-`src/services/csvImport.ts` parses quoted multiline CSV, escaped quotes, BOMs, and malformed final rows. Parsing and destination validation finish before the atomic card write.
+`src/services/csvImport.ts` parses quoted multiline CSV, escaped quotes, BOMs, and malformed final rows. Parsing and destination validation finish before the atomic card write. Imported cards begin as current-lineage pristine New cards.
 
 ### Anki packages
 
 `src/services/ankiImport.ts` performs bounded, local field import for supported Basic and cloze-style material. The ZIP archive is inspected before decompression and is rejected for unsafe or unsupported structures, including excessive output, duplicate paths, ZIP64, encryption, and unsupported compression.
 
-Only referenced media is decoded. Deck and card creation share one transaction.
+Only referenced media is decoded. Deck and card creation share one transaction. Imported cards contain no scheduler-derived history and enter the current lineage; the database create hook provides a second enforcement layer.
 
 This is not a complete Anki template renderer. Complex note models, template logic, CSS, and exact multi-template parity are outside the current compatibility promise.
 
 ### Backup files
 
-Portable backup v2 separates:
+Portable backup v3 separates:
 
 - backup envelope version;
+- producing Denki application version;
 - IndexedDB schema version;
-- scheduler-version metadata;
+- current scheduler metadata;
+- per-card and per-review scheduler provenance;
 - portable non-secret preferences;
 - study data.
 
-All metadata, dates, IDs, relationships, and preferences are validated before current database rows are cleared. Legacy data-only backups remain supported. Preference changes roll back if the database replacement transaction fails.
+All metadata, dates, IDs, relationships, preferences, and scheduler-version strings are validated before current database rows are cleared.
 
-The AI-provider key is explicitly excluded.
+Format-v3 rows must include explicit provenance. Format-v1/v2 rows remain compatible through conservative normalization: pristine New cards become current `4.5`, while model-derived states and review logs become `legacy-unversioned`. Invalid explicit provenance is rejected rather than replaced silently.
+
+Preference changes roll back if the database replacement transaction fails. The AI-provider key is explicitly excluded.
 
 ### AI providers
 
-`src/services/ai.ts` validates endpoint URLs, refuses plaintext remote HTTP, caps input and output size, enforces a timeout, and accepts only supported response shapes. Provider output creates editable drafts; it does not bypass user review or store mutation validation.
+`src/services/ai.ts` validates endpoint URLs, refuses plaintext remote HTTP, caps input and output size, enforces a timeout, and accepts only supported response shapes. Provider output creates editable drafts; it does not bypass user review or store mutation validation. Filed AI drafts begin as current-lineage New cards through the shared bulk-create path.
 
 ## Offline and distribution
 
@@ -273,6 +301,7 @@ Security is layered:
 - production dependency audit;
 - CodeQL `security-extended` analysis;
 - release-version and artifact validation;
+- schema migration and provenance tests;
 - transactional persistence and rollback tests.
 
 See `SECURITY.md` for reporting guidance.
@@ -288,7 +317,7 @@ A change is releasable only after all relevant checks pass on its exact head:
 5. security-configuration validation;
 6. canonical FSRS release gate;
 7. zero-warning ESLint;
-8. complete Vitest suite;
+8. complete Vitest suite, including database, provenance, backup, and rollback coverage;
 9. production build;
 10. release-artifact and immutable-identity validation;
 11. CodeQL analysis.
@@ -300,8 +329,8 @@ Repository administrators must additionally enforce the `Release checks` and Cod
 Before implementation, identify which invariant the change touches:
 
 - release version or build identity;
-- persisted data;
-- scheduler semantics;
+- persisted data or schema migration;
+- scheduler semantics or provenance;
 - session restoration;
 - untrusted input;
 - offline caching;
@@ -318,4 +347,4 @@ Then provide:
 - integration coverage when multiple boundaries interact;
 - documentation updates when the public product promise changes.
 
-Do not solve domain problems inside JSX, duplicate sanitisation rules, bypass store validation with direct database writes, or weaken a release gate to make a change pass.
+Do not solve domain problems inside JSX, duplicate sanitisation rules, bypass store validation with direct database writes, relabel uncertain history as canonical, or weaken a release gate to make a change pass.
