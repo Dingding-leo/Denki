@@ -28,6 +28,11 @@ interface MediaBinding {
   reference: string;
 }
 
+interface TrackedHydration {
+  bindings: MediaBinding[];
+  leases: MediaObjectUrlLease[];
+}
+
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -244,21 +249,44 @@ export function installMediaReferenceHydrator(
 ): () => void {
   const observationTarget =
     root instanceof Document ? root.documentElement : root;
-  const trackedLeases = new Map<Element, MediaObjectUrlLease[]>();
+  const trackedHydrations = new Map<Element, TrackedHydration>();
   const pendingTokens = new WeakMap<Element, symbol>();
   let disposed = false;
 
-  const releaseElement = (element: Element) => {
-    pendingTokens.delete(element);
-    const leases = trackedLeases.get(element);
-    if (!leases) return;
-    trackedLeases.delete(element);
-    for (const lease of leases) lease.release();
+  const restoreBindings = (
+    element: Element,
+    bindings: readonly MediaBinding[],
+  ) => {
+    if (!element.isConnected) return;
+    for (const { attribute, reference } of bindings) {
+      element.removeAttribute(attribute);
+      element.setAttribute(`data-denki-media-${attribute}`, reference);
+    }
+    element.setAttribute('data-denki-media-state', 'pending');
+    element.setAttribute('aria-busy', 'true');
   };
 
-  const releaseTree = (node: Node) => {
+  const releaseElement = (
+    element: Element,
+    prepareForReinstall = false,
+  ) => {
+    pendingTokens.delete(element);
+    const hydration = trackedHydrations.get(element);
+    if (!hydration) return;
+    trackedHydrations.delete(element);
+
+    if (prepareForReinstall) {
+      restoreBindings(element, hydration.bindings);
+    }
+    for (const lease of hydration.leases) lease.release();
+  };
+
+  const releaseTree = (
+    node: Node,
+    prepareForReinstall = false,
+  ) => {
     for (const element of elementAndDescendants(node)) {
-      releaseElement(element);
+      releaseElement(element, prepareForReinstall);
     }
   };
 
@@ -274,7 +302,7 @@ export function installMediaReferenceHydrator(
   const hydrateElement = async (element: Element) => {
     if (
       disposed ||
-      trackedLeases.has(element) ||
+      trackedHydrations.has(element) ||
       pendingTokens.has(element)
     ) {
       return;
@@ -352,7 +380,10 @@ export function installMediaReferenceHydrator(
 
     element.setAttribute('data-denki-media-state', 'ready');
     element.removeAttribute('aria-busy');
-    trackedLeases.set(element, acquired);
+    trackedHydrations.set(element, {
+      bindings: bindings.map((binding) => ({ ...binding })),
+      leases: acquired,
+    });
   };
 
   const scan = (node: Node) => {
@@ -365,7 +396,12 @@ export function installMediaReferenceHydrator(
 
   const observer = new MutationObserver((mutations) => {
     for (const mutation of mutations) {
-      for (const removed of mutation.removedNodes) releaseTree(removed);
+      for (const removed of mutation.removedNodes) {
+        // MutationObserver callbacks run after a synchronous DOM move has
+        // completed. A node that is still connected was reparented, not removed;
+        // its verified lease remains valid and must not be revoked.
+        if (!removed.isConnected) releaseTree(removed);
+      }
       for (const added of mutation.addedNodes) scan(added);
     }
   });
@@ -379,9 +415,11 @@ export function installMediaReferenceHydrator(
   return () => {
     disposed = true;
     observer.disconnect();
-    for (const leases of trackedLeases.values()) {
-      for (const lease of leases) lease.release();
+    for (const element of [...trackedHydrations.keys()]) {
+      // Restore inert bindings before revoking so StrictMode, HMR, or another
+      // hydrator installation can safely reacquire the media for connected DOM.
+      releaseElement(element, true);
     }
-    trackedLeases.clear();
+    trackedHydrations.clear();
   };
 }
