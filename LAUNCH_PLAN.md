@@ -17,6 +17,7 @@ Denki is:
 
 - a local-first flashcard workspace;
 - an implementation of canonical FSRS 4.5 scheduling with configurable target retention;
+- able to record the scheduler lineage that produced each card state and review transition;
 - organised around classes and decks;
 - capable of Standard and cloze cards with sanitised Markdown;
 - able to run scheduled deck, class, and mixed-library review;
@@ -35,6 +36,7 @@ Do not claim:
 - cloud sync, accounts, collaborative decks, or automatic cross-device synchronization;
 - that all data always remains local when optional AI generation sends source text to a provider;
 - that FSRS `Review` state means a card is mastered;
+- that unversioned historical scheduling can be proven canonical after the fact;
 - that Denki uses the same complete behaviour as a current Anki release merely because both use FSRS;
 - production support for every browser, operating system, or desktop bundle;
 - zero risk of browser-storage loss without explaining portable backups;
@@ -50,7 +52,8 @@ Launch material should disclose material limitations rather than hiding them in 
 4. **AI generation is bring-your-own-provider.** Availability, privacy, cost, and output quality depend on that provider.
 5. **AI output requires review.** Generated drafts can be wrong and are editable before filing.
 6. **No claim of mastery.** Progress views show scheduling states, due work, ratings, and history.
-7. **Desktop distribution is optional.** A source build path is not equivalent to signed, notarised, supported releases.
+7. **Historical provenance is conservative.** Existing model-derived rows without original lineage are labelled `legacy-unversioned` until a future canonical transition updates the card.
+8. **Desktop distribution is optional.** A source build path is not equivalent to signed, notarised, supported releases.
 
 ## Automated release gates
 
@@ -62,6 +65,7 @@ A launch candidate is not releasable unless its exact commit passes:
 - strict TypeScript;
 - web and Tauri security-policy validation;
 - canonical FSRS 4.5 golden vectors;
+- scheduler-provenance migration, transition, and backup compatibility tests;
 - zero-warning ESLint;
 - the complete Vitest suite;
 - production build;
@@ -88,9 +92,18 @@ Run this against a clean browser profile or isolated origin using the candidate 
 - [ ] Start deck review and verify Question → Answer → rating flow.
 - [ ] Verify Again, Hard, Good, and Easy interval previews are ordered and plausible.
 - [ ] Rate a card, reload, and confirm the session resumes at the correct cursor.
+- [ ] Inspect IndexedDB and confirm the updated card and new review log both record scheduler version `4.5`.
 - [ ] Undo a rating and confirm both the card state and review log roll back.
 - [ ] Confirm scheduled review, all-card practice, and Drill do not resume as one another.
 - [ ] Complete a session and confirm the finished queue does not reopen after reload.
+
+### Migration integrity
+
+- [ ] Open a pre-v5 library containing pristine New cards and reviewed cards.
+- [ ] Confirm no due date, interval, state, stability, difficulty, rating, or history value changes.
+- [ ] Confirm pristine New cards become lineage `4.5`.
+- [ ] Confirm existing model-derived cards and review logs become `legacy-unversioned`.
+- [ ] Rate one legacy card and confirm only its new card state and new log move to lineage `4.5`.
 
 ### Import and export
 
@@ -98,16 +111,19 @@ Run this against a clean browser profile or isolated origin using the candidate 
 - [ ] Reject malformed CSV without partial writes.
 - [ ] Import the repository's supported Basic and cloze `.apkg` fixtures.
 - [ ] Reject an oversized or structurally unsafe Anki package without partial decks.
+- [ ] Confirm newly imported cards carry current scheduler provenance.
 - [ ] Export a deck to CSV and inspect formula-neutralisation behaviour.
 
 ### Backup and recovery
 
-- [ ] Export a portable v2 backup.
-- [ ] Confirm the file contains study data, target retention, and speech speed.
+- [ ] Export a portable v3 backup.
+- [ ] Confirm the file contains application/database versions, current scheduler metadata, and per-card/per-review scheduler provenance.
+- [ ] Confirm the file also contains study data, target retention, and speech speed.
 - [ ] Confirm the file does not contain the AI-provider key.
-- [ ] Restore the backup into a clean profile.
-- [ ] Import a legacy data-only backup and confirm current preferences remain unchanged.
-- [ ] Test an invalid backup and confirm current data remains intact.
+- [ ] Restore the v3 backup into a clean profile and compare scheduler lineage values.
+- [ ] Import a v1/v2 data-only backup and confirm pristine New cards become `4.5` while model-derived rows become `legacy-unversioned`.
+- [ ] Confirm current preferences remain unchanged when the legacy backup contains none.
+- [ ] Remove a v3 row's provenance or add an invalid version string; confirm import is rejected and current data remains intact.
 
 ### Offline/PWA
 
@@ -124,6 +140,7 @@ Run this against a clean browser profile or isolated origin using the candidate 
 - [ ] Generate from non-sensitive sample text.
 - [ ] Verify timeout, rate-limit, malformed response, and unsupported endpoint messages.
 - [ ] Edit drafts before import and confirm destination validation.
+- [ ] Confirm filed AI drafts start as current-lineage New cards.
 - [ ] Remove the key and verify it is not present in an exported backup.
 
 ### Accessibility and responsive behaviour
@@ -140,7 +157,7 @@ Run this against a clean browser profile or isolated origin using the candidate 
 1. Confirm `main` rules require pull requests, `Release checks`, and CodeQL.
 2. Set the intended application version with `npm run version:set -- <version>`.
 3. Run `npm run test:version` and review every generated version-file change.
-4. Update release notes with user impact, migrations, limitations, and rollback guidance.
+4. Update release notes with user impact, database/backup migrations, limitations, and rollback guidance.
 5. Run the complete manual smoke test on the release candidate.
 6. Merge only the validated release change.
 7. Confirm the `main` CI run succeeds for the merge commit.
@@ -155,11 +172,11 @@ The private npm workspace intentionally remains at `0.0.0`; it is not the Denki 
 
 ### Short description
 
-> Denki is an open-source, local-first flashcard workspace with canonical FSRS 4.5 scheduling, offline review, bounded CSV/Anki field import, portable backups, and optional bring-your-own-provider AI drafts.
+> Denki is an open-source, local-first flashcard workspace with canonical FSRS 4.5 scheduling, versioned review history, offline study, bounded CSV/Anki field import, portable backups, and optional bring-your-own-provider AI drafts.
 
 ### Longer introduction
 
-> I built Denki as a focused study workspace for learners who want modern review tools without creating an account or handing their library to a hosted database. Cards and review history live in IndexedDB, scheduled reviews use a tested canonical FSRS 4.5 implementation, and portable JSON backups move study data plus non-secret preferences between installations. Denki supports Markdown, cloze cards, mixed review, deck Drills, CSV, and bounded Basic/cloze Anki field import. Optional AI generation uses a provider and key chosen by the learner, and every generated card remains editable before import.
+> I built Denki as a focused study workspace for learners who want modern review tools without creating an account or handing their library to a hosted database. Cards and review history live in IndexedDB, scheduled reviews use a tested canonical FSRS 4.5 implementation, and each new transition records its scheduler lineage. Portable JSON backups move study data, provenance, and non-secret preferences between installations. Denki supports Markdown, cloze cards, mixed review, deck Drills, CSV, and bounded Basic/cloze Anki field import. Optional AI generation uses a provider and key chosen by the learner, and every generated card remains editable before import.
 
 ### Feedback request
 
@@ -168,6 +185,7 @@ Ask for concrete workflow evidence rather than generic feature voting:
 - Which import failed, and what note model created it?
 - Which review action was confusing?
 - Did a due count or interval disagree with expectation?
+- Which card or review lineage appeared incorrect?
 - What failed offline?
 - What data-recovery step was unclear?
 - Which keyboard or screen-reader interaction was blocked?
@@ -177,6 +195,7 @@ Ask for concrete workflow evidence rather than generic feature voting:
 During the first public feedback period:
 
 - reproduce defects against the deployed commit SHA and visible version;
+- preserve the affected backup and scheduler-provenance values when investigating schedule reports;
 - distinguish data-loss risk from cosmetic issues;
 - prioritise scheduler, persistence, backup, import, and offline regressions;
 - request a minimal non-sensitive fixture for import defects;
@@ -191,7 +210,7 @@ Launch only when:
 - every automated gate is green on the deployed commit;
 - the manual critical path is complete;
 - the public description matches supported behaviour;
-- backup and recovery have been tested on a clean profile;
+- database-v5 migration and backup-v3 recovery have been tested on a clean profile;
 - semantic version, build identity, deployed SHA, and release tag agree;
 - known limitations are acceptable and visible;
 - an owner is available to triage scheduler, data, import, and offline reports.

@@ -1,5 +1,10 @@
 import { db } from '../db';
 import type { Card, Class, Deck, ReviewLog } from '../db/schema';
+import {
+  inferLegacyCardSchedulerVersion,
+  inferLegacyReviewSchedulerVersion,
+  isValidSchedulerVersion,
+} from '../domain/schedulerProvenance';
 import { markBackupExported } from './dataSafety';
 import { FSRS_VERSION } from './scheduler';
 import {
@@ -20,8 +25,9 @@ const BACKUP_ENDPOINT = '/api/backup';
 const DEBOUNCE_MS = 2000;
 const BACKUP_ENABLED = import.meta.env.DEV === true;
 const RETIRED_NEW_CARD_LIMIT_KEY = 'denki-new-cards-per-day';
+const SEMVER_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 
-export const BACKUP_FORMAT_VERSION = 2;
+export const BACKUP_FORMAT_VERSION = 3;
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -33,9 +39,11 @@ export interface BackupPreferences {
 export interface BackupSnapshot {
   /** Current portable-backup envelope version. */
   formatVersion?: number;
+  /** Denki application version that produced the backup. */
+  appVersion?: string;
   /** IndexedDB schema version used when this snapshot was exported. */
   databaseVersion?: number;
-  /** Scheduler metadata; stored card state remains authoritative. */
+  /** Current scheduler metadata; each row also carries its own lineage. */
   schedulerVersion?: string;
   /** Legacy field used by format-v1 backups for the database version. */
   version?: number;
@@ -85,6 +93,58 @@ function reviveDates(rows: unknown[], fields: string[]): unknown[] {
       }
     }
     return revived;
+  });
+}
+
+function normalizeCardProvenance(
+  rows: unknown[],
+  formatVersion: number,
+): unknown[] {
+  return rows.map((row, index) => {
+    if (!isRecord(row)) return row;
+    const explicitVersion = row.schedulerVersion;
+    if (explicitVersion !== undefined && !isValidSchedulerVersion(explicitVersion)) {
+      throw new Error(
+        `Backup contains an invalid card scheduler version at row ${index + 1}; refusing to import.`,
+      );
+    }
+    if (formatVersion >= 3 && explicitVersion === undefined) {
+      throw new Error(
+        `Backup card ${index + 1} is missing scheduler provenance; refusing to import.`,
+      );
+    }
+
+    return {
+      ...row,
+      schedulerVersion:
+        explicitVersion ?? inferLegacyCardSchedulerVersion(row),
+    };
+  });
+}
+
+function normalizeReviewProvenance(
+  rows: unknown[],
+  formatVersion: number,
+): unknown[] {
+  return rows.map((row, index) => {
+    if (!isRecord(row)) return row;
+    const explicitVersion = row.schedulerVersion;
+    if (explicitVersion !== undefined && !isValidSchedulerVersion(explicitVersion)) {
+      throw new Error(
+        `Backup contains an invalid review scheduler version at row ${index + 1}; refusing to import.`,
+      );
+    }
+    if (formatVersion >= 3 && explicitVersion === undefined) {
+      throw new Error(
+        `Backup review ${index + 1} is missing scheduler provenance; refusing to import.`,
+      );
+    }
+
+    return {
+      ...row,
+      schedulerVersion:
+        explicitVersion ?? inferLegacyReviewSchedulerVersion(undefined),
+    };
   });
 }
 
@@ -149,7 +209,8 @@ function isValidCard(value: unknown): value is Card {
     (value.lastRating === undefined ||
       (Number.isInteger(value.lastRating) &&
         Number(value.lastRating) >= 1 &&
-        Number(value.lastRating) <= 5))
+        Number(value.lastRating) <= 5)) &&
+    isValidSchedulerVersion(value.schedulerVersion)
   );
 }
 
@@ -171,7 +232,8 @@ function isValidReview(value: unknown): value is ReviewLog {
     isFiniteNumber(value.elapsedDays) &&
     value.elapsedDays >= 0 &&
     isFiniteNumber(value.scheduledDays) &&
-    value.scheduledDays >= 0
+    value.scheduledDays >= 0 &&
+    isValidSchedulerVersion(value.schedulerVersion)
   );
 }
 
@@ -224,7 +286,7 @@ function normalizePreferences(value: unknown): BackupPreferences | undefined {
   };
 }
 
-function validateBackupMetadata(snapshot: Record<string, unknown>): void {
+function validateBackupMetadata(snapshot: Record<string, unknown>): number {
   const formatVersion = snapshot.formatVersion ?? 1;
   if (!isPositiveInteger(formatVersion)) {
     throw new Error('Backup format version is invalid; refusing to import.');
@@ -268,11 +330,30 @@ function validateBackupMetadata(snapshot: Record<string, unknown>): void {
 
   if (
     snapshot.schedulerVersion !== undefined &&
-    (typeof snapshot.schedulerVersion !== 'string' ||
-      !snapshot.schedulerVersion.trim())
+    !isValidSchedulerVersion(snapshot.schedulerVersion)
   ) {
     throw new Error('Backup scheduler version is invalid; refusing to import.');
   }
+  if (formatVersion >= 3 && snapshot.schedulerVersion === undefined) {
+    throw new Error(
+      'Backup is missing its scheduler version; refusing to import.',
+    );
+  }
+
+  if (
+    snapshot.appVersion !== undefined &&
+    (typeof snapshot.appVersion !== 'string' ||
+      !SEMVER_PATTERN.test(snapshot.appVersion))
+  ) {
+    throw new Error('Backup application version is invalid; refusing to import.');
+  }
+  if (formatVersion >= 3 && snapshot.appVersion === undefined) {
+    throw new Error(
+      'Backup is missing its application version; refusing to import.',
+    );
+  }
+
+  return formatVersion;
 }
 
 function normalizeBackup(snapshot: unknown): NormalizedBackup {
@@ -280,7 +361,7 @@ function normalizeBackup(snapshot: unknown): NormalizedBackup {
     throw new Error('Backup is missing its data section; refusing to import.');
   }
 
-  validateBackupMetadata(snapshot);
+  const formatVersion = validateBackupMetadata(snapshot);
   const preferences = normalizePreferences(snapshot.preferences);
 
   const data = snapshot.data;
@@ -295,12 +376,18 @@ function normalizeBackup(snapshot: unknown): NormalizedBackup {
 
   const classes = reviveDates(data.classes as unknown[], ['createdAt']);
   const decks = reviveDates(data.decks as unknown[], ['createdAt']);
-  const cards = reviveDates(data.cards as unknown[], [
-    'createdAt',
-    'due',
-    'lastReviewed',
-  ]);
-  const reviews = reviveDates(data.reviews as unknown[], ['reviewedAt']);
+  const cards = normalizeCardProvenance(
+    reviveDates(data.cards as unknown[], [
+      'createdAt',
+      'due',
+      'lastReviewed',
+    ]),
+    formatVersion,
+  );
+  const reviews = normalizeReviewProvenance(
+    reviveDates(data.reviews as unknown[], ['reviewedAt']),
+    formatVersion,
+  );
 
   assertRows(classes, 'class', isValidClass);
   assertRows(decks, 'deck', isValidDeck);
@@ -404,16 +491,27 @@ function applyPreferences(
 
 /** Export the complete local database and non-secret portable preferences. */
 export async function exportDatabase(): Promise<BackupSnapshot> {
-  const [classes, decks, cards, reviews] = await Promise.all([
+  const [classes, storedDecks, storedCards, storedReviews] = await Promise.all([
     db.classes.toArray(),
     db.decks.toArray(),
     db.cards.toArray(),
     db.reviews.toArray(),
   ]);
   const schedulerParams = loadSchedulerParams();
+  const cards = storedCards.map((card) => ({
+    ...card,
+    schedulerVersion: inferLegacyCardSchedulerVersion(card),
+  }));
+  const reviews = storedReviews.map((review) => ({
+    ...review,
+    schedulerVersion: inferLegacyReviewSchedulerVersion(
+      review.schedulerVersion,
+    ),
+  }));
 
   return {
     formatVersion: BACKUP_FORMAT_VERSION,
+    appVersion: __DENKI_VERSION__,
     databaseVersion: db.verno,
     schedulerVersion: FSRS_VERSION,
     exportedAt: new Date().toISOString(),
@@ -421,15 +519,15 @@ export async function exportDatabase(): Promise<BackupSnapshot> {
       requestRetention: schedulerParams.requestRetention,
       speechSpeed: loadSpeechRate(),
     },
-    data: { classes, decks, cards, reviews },
+    data: { classes, decks: storedDecks, cards, reviews },
   };
 }
 
 /**
  * Replace the complete database from a validated backup. Metadata, preferences,
- * dates, duplicate IDs, and foreign-key relationships are validated before any
- * existing row is cleared. Preference writes are rolled back if the database
- * transaction fails.
+ * dates, scheduler provenance, duplicate IDs, and foreign-key relationships are
+ * validated before any existing row is cleared. Preference writes are rolled
+ * back if the database transaction fails.
  */
 export async function importDatabase(snapshot: unknown): Promise<void> {
   const { classes, decks, cards, reviews, preferences } =

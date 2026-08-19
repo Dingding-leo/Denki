@@ -1,7 +1,11 @@
-import Dexie, { type Table } from 'dexie';
+import Dexie, { type Table, type Transaction } from 'dexie';
+import {
+  inferLegacyCardSchedulerVersion,
+  inferLegacyReviewSchedulerVersion,
+} from '../domain/schedulerProvenance';
 import type { Card, Class, Deck, ReviewLog } from './schema';
 
-const STORES = {
+export const DENKI_STORES = {
   classes: '++id, name, createdAt',
   decks: '++id, classId, name, createdAt',
   cards: '++id, classId, deckId, state, due, lastReviewed, cardType, lastRating, [classId+due], [deckId+due], [classId+state], [deckId+state]',
@@ -31,6 +35,26 @@ export function deriveLatestRatings(
   );
 }
 
+/**
+ * Database-v5 provenance upgrade, exported so migration tests execute the same
+ * callback used by the production Dexie schema rather than duplicating it.
+ */
+export async function migrateSchedulerProvenance(
+  transaction: Transaction,
+): Promise<void> {
+  const cards = transaction.table<Card, number>('cards');
+  const reviews = transaction.table<ReviewLog, number>('reviews');
+
+  await cards.toCollection().modify((card) => {
+    card.schedulerVersion = inferLegacyCardSchedulerVersion(card);
+  });
+  await reviews.toCollection().modify((review) => {
+    review.schedulerVersion = inferLegacyReviewSchedulerVersion(
+      review.schedulerVersion,
+    );
+  });
+}
+
 class DenkiDatabase extends Dexie {
   classes!: Table<Class, number>;
   decks!: Table<Deck, number>;
@@ -41,13 +65,13 @@ class DenkiDatabase extends Dexie {
     super('DenkiDatabase');
 
     // Version 3 adds compound indices for optimized stats calculations and FSRS queue queries.
-    this.version(3).stores(STORES);
+    this.version(3).stores(DENKI_STORES);
 
     // Version 4 migrates the legacy last-rating backfill out of every app load.
     // Large libraries now pay this cost once, during the database upgrade, rather
     // than scanning cards and reviews whenever classes are refreshed.
     this.version(4)
-      .stores(STORES)
+      .stores(DENKI_STORES)
       .upgrade(async (transaction) => {
         const cards = transaction.table<Card, number>('cards');
         const reviews = transaction.table<ReviewLog, number>('reviews');
@@ -67,6 +91,25 @@ class DenkiDatabase extends Dexie {
           if (rating !== undefined) await cards.update(cardId, { lastRating: rating });
         }
       });
+
+    // Version 5 establishes per-row scheduler provenance. Existing reviewed
+    // memory states cannot be proven canonical retroactively, so they remain
+    // explicitly legacy until their next current-scheduler transition. Pristine
+    // New cards contain no model-derived state and can safely join FSRS 4.5.
+    this.version(5)
+      .stores(DENKI_STORES)
+      .upgrade(migrateSchedulerProvenance);
+
+    // Database-level hooks protect direct import and test-fixture writes in
+    // addition to the explicit scheduler helpers used by production features.
+    this.cards.hook('creating', (_primaryKey, card) => {
+      card.schedulerVersion = inferLegacyCardSchedulerVersion(card);
+    });
+    this.reviews.hook('creating', (_primaryKey, review) => {
+      review.schedulerVersion = inferLegacyReviewSchedulerVersion(
+        review.schedulerVersion,
+      );
+    });
   }
 }
 

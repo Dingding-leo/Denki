@@ -1,10 +1,11 @@
+import { CURRENT_SCHEDULER_VERSION } from '../domain/schedulerProvenance';
 import type { Card, ReviewLog } from '../db/schema';
 import type { Rating } from './reviewRatings';
 
 export type { Rating } from './reviewRatings';
 
 /** Canonical long-term scheduler implemented by Denki. */
-export const FSRS_VERSION = '4.5' as const;
+export const FSRS_VERSION = CURRENT_SCHEDULER_VERSION;
 
 // FSRS state mapping.
 export const STATES = {
@@ -57,6 +58,32 @@ export const DEFAULT_PARAMS: SchedulerParams = {
   maxInterval: DEFAULT_MAX_INTERVAL,
   enableFuzz: false,
 };
+
+export type NewCardSchedulingState = Pick<
+  Card,
+  | 'state'
+  | 'stability'
+  | 'difficulty'
+  | 'elapsedDays'
+  | 'scheduledDays'
+  | 'due'
+  | 'schedulerVersion'
+>;
+
+/** Build the only valid unscheduled state for a newly created or reset card. */
+export function createNewCardSchedulingState(
+  now: Date = new Date(),
+): NewCardSchedulingState {
+  return {
+    state: STATES.New,
+    stability: 0,
+    difficulty: 0,
+    elapsedDays: 0,
+    scheduledDays: 0,
+    due: now,
+    schedulerVersion: FSRS_VERSION,
+  };
+}
 
 const clamp = (value: number, minimum: number, maximum: number): number =>
   Math.min(maximum, Math.max(minimum, value));
@@ -370,6 +397,7 @@ export function reviewCard(
     due,
     lastReviewed: now,
     lastRating: rating,
+    schedulerVersion: FSRS_VERSION,
   };
 
   const log: ReviewLog = {
@@ -382,6 +410,7 @@ export function reviewCard(
     difficulty: card.difficulty,
     elapsedDays: Number(elapsedDays.toFixed(4)),
     scheduledDays: Number(scheduledDays.toFixed(6)),
+    schedulerVersion: FSRS_VERSION,
   };
 
   return { updatedCard, log };

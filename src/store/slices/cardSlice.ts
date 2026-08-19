@@ -3,7 +3,11 @@ import { db } from '../../db';
 import type { CardType } from '../../db/schema';
 import { triggerAutoSave } from '../../services/backup';
 import { createCSVImportPlan } from '../../services/csvImport';
-import { reviewCard, STATES, type Rating } from '../../services/scheduler';
+import {
+  createNewCardSchedulingState,
+  reviewCard,
+  type Rating,
+} from '../../services/scheduler';
 import { loadSchedulerParams } from '../../services/schedulerParams';
 import type { CardSlice, FlashcardState } from '../types';
 
@@ -88,12 +92,7 @@ export const createCardSlice: StateCreator<
       deckId,
       ...content,
       createdAt: now,
-      state: STATES.New,
-      stability: 0,
-      difficulty: 0,
-      elapsedDays: 0,
-      scheduledDays: 0,
-      due: now,
+      ...createNewCardSchedulingState(now),
     });
 
     await Promise.all([
@@ -165,12 +164,7 @@ export const createCardSlice: StateCreator<
       back: card.back,
       cardType: card.cardType,
       createdAt: now,
-      state: STATES.New,
-      stability: 0,
-      difficulty: 0,
-      elapsedDays: 0,
-      scheduledDays: 0,
-      due: now,
+      ...createNewCardSchedulingState(now),
     })));
 
     const classIds = [...new Set(normalizedCards.map((card) => card.classId))];
@@ -200,12 +194,7 @@ export const createCardSlice: StateCreator<
       if (rating === 0) {
         await db.reviews.where('cardId').equals(cardId).delete();
         await db.cards.update(cardId, {
-          state: STATES.New,
-          stability: 0,
-          difficulty: 0,
-          elapsedDays: 0,
-          scheduledDays: 0,
-          due: reviewedAt,
+          ...createNewCardSchedulingState(reviewedAt),
           lastReviewed: undefined,
           lastRating: undefined,
         });
@@ -252,12 +241,7 @@ export const createCardSlice: StateCreator<
       back: card.back,
       cardType: card.cardType,
       createdAt: now,
-      state: STATES.New,
-      stability: 0,
-      difficulty: 0,
-      elapsedDays: 0,
-      scheduledDays: 0,
-      due: now,
+      ...createNewCardSchedulingState(now),
     }));
 
     await db.cards.bulkAdd(entries);

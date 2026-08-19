@@ -19,6 +19,7 @@ The product name is simply **Denki**. It is a general-purpose learning tool for 
 ## Features
 
 - **Canonical FSRS 4.5 scheduling** using the published 17-weight model and configurable target retention.
+- **Per-record scheduler provenance** on card memory state and review logs, so future migrations can distinguish current FSRS 4.5 transitions from unversioned legacy history.
 - **Local-first storage** through IndexedDB, with persistent-storage protection and offline-ready PWA support.
 - **Classes and decks** for organising material across subjects.
 - **Standard and cloze cards** with Markdown and syntax highlighting.
@@ -30,7 +31,7 @@ The product name is simply **Denki**. It is a general-purpose learning tool for 
 - **CSV import and bounded local Anki field import** for Basic and cloze-style `.apkg` material. Complex Anki card templates are not currently rendered or guaranteed to round-trip exactly.
 - **Optional AI card generation** using a provider and API key chosen by the learner.
 - **Progress insights** including review history, streaks, due-card statistics, and explicitly labelled scheduling states.
-- **Portable JSON backups** for study data, target retention, and speech speed. Provider credentials are deliberately excluded.
+- **Portable JSON backup v3** for study data, target retention, speech speed, application metadata, and per-record scheduler lineage. Provider credentials are deliberately excluded.
 
 ## Scheduler correctness
 
@@ -44,7 +45,7 @@ Denki treats scheduler correctness as a release gate. The implementation pins th
 - strict `Hard < Good < Easy` Review intervals within the maximum interval;
 - no custom Hard or Easy multipliers that alter the model.
 
-Golden-vector tests run before the general test suite in CI. Existing libraries retain their stored stability and difficulty values; every future rating transitions those values under the canonical model.
+Golden-vector tests run before the general test suite in CI. Existing libraries retain their stored stability and difficulty values; the database-v5 migration does not recalculate them. Pre-provenance reviewed states and review logs are conservatively labelled `legacy-unversioned`. A pristine New card can safely enter the current `4.5` lineage, and every future rating stamps both the resulting card state and its review log with the exact scheduler version.
 
 ## Security and data boundaries
 
@@ -54,7 +55,9 @@ Denki treats imported packages, restored backups, rendered card content, saved b
 - Anki archives are inspected before decompression. ZIP64, encrypted, multi-disk, duplicate-path, unsupported-compression, oversized, and excessive-output packages are rejected.
 - Only media referenced by imported card fields is expanded; unused package assets are not decoded.
 - Anki deck and card writes are committed in one IndexedDB transaction, so a failed import leaves no partial decks.
-- Backup envelope versions, database versions, dates, IDs, relationships, and portable preferences are validated before current data is cleared. Preference changes are rolled back if the database transaction fails.
+- Database v5 backfills scheduler provenance without changing intervals or memory parameters, and database create hooks provide a fallback for direct import paths.
+- Backup envelope versions, application/database versions, dates, IDs, relationships, portable preferences, and scheduler provenance are validated before current data is cleared. Preference changes are rolled back if the database transaction fails.
+- Backup v1/v2 remains importable through conservative provenance normalization; malformed or incomplete v3 provenance is rejected rather than guessed.
 - Web and Tauri builds use explicit content security policies; Tauri capabilities remain limited to core application access.
 - CI audits production dependencies, validates version, security, and release artifacts, runs the canonical scheduler gate, typecheck, lint, tests, and build. CodeQL adds interprocedural JavaScript and TypeScript data-flow analysis.
 
@@ -64,7 +67,7 @@ See [SECURITY.md](SECURITY.md) for private-first vulnerability reporting guidanc
 
 Cards, decks, preferences, and review history are stored in the browser by default. Denki does not require an account, analytics tracker, or hosted database. Optional AI generation sends only the submitted source text to the configured provider. Avoid placing patient information, credentials, or other sensitive third-party data in AI generation prompts.
 
-Backups contain classes, decks, cards, review history, target retention, speech speed, and scheduler/database metadata. They do **not** contain the optional AI provider key.
+Backups contain classes, decks, cards, review history, target retention, speech speed, scheduler lineage, and application/database metadata. They do **not** contain the optional AI provider key.
 
 ## Run locally
 
