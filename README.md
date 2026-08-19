@@ -56,7 +56,7 @@ Denki treats imported packages, restored backups, rendered card content, saved b
 - Anki deck and card writes are committed in one IndexedDB transaction, so a failed import leaves no partial decks.
 - Backup envelope versions, database versions, dates, IDs, relationships, and portable preferences are validated before current data is cleared. Preference changes are rolled back if the database transaction fails.
 - Web and Tauri builds use explicit content security policies; Tauri capabilities remain limited to core application access.
-- CI audits production dependencies, validates security and release artifacts, runs the canonical scheduler gate, typecheck, lint, tests, and build. CodeQL adds interprocedural JavaScript and TypeScript data-flow analysis.
+- CI audits production dependencies, validates version, security, and release artifacts, runs the canonical scheduler gate, typecheck, lint, tests, and build. CodeQL adds interprocedural JavaScript and TypeScript data-flow analysis.
 
 See [SECURITY.md](SECURITY.md) for private-first vulnerability reporting guidance.
 
@@ -100,11 +100,25 @@ The app bundle is written to `src-tauri/target/release/bundle/macos/Denki.app`. 
 ./scripts/update-denki.sh --force    # rebuild even with no new commits
 ```
 
+## Release versioning
+
+`version.json` is the canonical application version. The release contract requires it to match Tauri configuration, the Rust package, and the Denki entry in `Cargo.lock`. The private npm workspace intentionally remains `0.0.0` and is never published.
+
+Update all release-bearing files with one command:
+
+```bash
+npm run version:set -- 0.2.0
+npm run test:version
+```
+
+Production builds emit `dist/version.json` with the semantic version and immutable build identifier. GitHub Pages rebuilds the exact validated commit and verifies that identity before deployment. The running version is visible beside Settings in the application sidebar.
+
 ## Validation
 
 ```bash
 npm ci
 npm run audit:prod
+npm run test:version
 npx tsc --noEmit
 npm run test:security
 npm run test:scheduler
@@ -114,7 +128,7 @@ npm run build
 npm run test:artifact
 ```
 
-Pull requests run the complete release checks and CodeQL in GitHub Actions. A push to `main` is deployed to [GitHub Pages](https://dingding-leo.github.io/Denki/) only after those checks succeed for that exact commit, and the rebuilt deployment artifact passes the same structural validator.
+Pull requests run the complete release checks and CodeQL in GitHub Actions. A push to `main` is deployed to [GitHub Pages](https://dingding-leo.github.io/Denki/) only after those checks succeed for that exact commit, and the rebuilt deployment artifact passes the same structural and identity validator.
 
 ## Technology
 
