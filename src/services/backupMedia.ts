@@ -11,9 +11,9 @@ export const BACKUP_MEDIA_LIMITS = {
 
 const HASH_PATTERN = /^[a-f0-9]{64}$/;
 const MEDIA_MIME_PATTERN =
-  '(?:image\/(?:png|jpeg|gif|webp|avif|bmp|svg\+xml)|' +
-  'audio\/(?:mpeg|mp4|aac|wav|ogg|opus|flac)|' +
-  'video\/(?:mp4|webm))';
+  '(?:image/(?:png|jpeg|gif|webp|avif|bmp|svg[+]xml)|' +
+  'audio/(?:mpeg|mp4|aac|wav|ogg|opus|flac)|' +
+  'video/(?:mp4|webm))';
 const DATA_URL_SOURCE =
   `data:(${MEDIA_MIME_PATTERN});base64,([A-Za-z0-9+/]+={0,2})`;
 const TOKEN_SOURCE =
