@@ -50,7 +50,7 @@ describe('runtime media registry', () => {
   });
 
   afterEach(() => {
-    if (activeMediaObjectUrlCount() > 0) revokeAllMediaObjectUrls();
+    revokeAllMediaObjectUrls();
     restoreObjectUrlApi();
     vi.restoreAllMocks();
   });
@@ -70,6 +70,11 @@ describe('runtime media registry', () => {
 
     expect(second).toBe(first);
     expect(await db.media.count()).toBe(1);
+    const stored = await db.media.toCollection().first();
+    expect(Object.prototype.toString.call(stored?.data)).toBe(
+      '[object ArrayBuffer]',
+    );
+
     const asset = await resolveMediaAsset(first);
     expect(asset).toMatchObject({
       hash: first.slice(MEDIA_REFERENCE_PREFIX.length),
@@ -77,6 +82,7 @@ describe('runtime media registry', () => {
       byteLength: 4,
       createdAt,
     });
+    expect(asset?.data).toBeInstanceOf(Blob);
     expect([...new Uint8Array(await asset!.data.arrayBuffer())]).toEqual([
       1, 2, 3, 4,
     ]);
@@ -143,20 +149,22 @@ describe('runtime media registry', () => {
     );
     const hash = reference.slice(MEDIA_REFERENCE_PREFIX.length);
     await db.media.update(hash, {
-      data: new Blob([new Uint8Array([9, 9, 9])], { type: 'image/png' }),
+      data: new Uint8Array([9, 9, 9]).buffer,
     });
 
     await expect(resolveMediaAsset(reference)).rejects.toThrow(/integrity/i);
     await expect(acquireMediaObjectUrl(reference)).rejects.toThrow(/integrity/i);
   });
 
-  it('reuses object URLs until the final lease is released', async () => {
+  it('shares one object URL across concurrent leases until the final release', async () => {
     const reference = await registerMediaBytes(
       'image/png',
       new Uint8Array([1, 2, 3]),
     );
-    const first = await acquireMediaObjectUrl(reference);
-    const second = await acquireMediaObjectUrl(reference);
+    const [first, second] = await Promise.all([
+      acquireMediaObjectUrl(reference),
+      acquireMediaObjectUrl(reference),
+    ]);
 
     expect(first?.url).toBe('blob:denki-test-1');
     expect(second?.url).toBe(first?.url);
