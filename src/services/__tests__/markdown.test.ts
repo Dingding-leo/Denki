@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MEDIA_REFERENCE_PREFIX } from '../mediaRegistry';
 import { renderContent } from '../markdown';
 
 describe('renderContent', () => {
@@ -39,6 +40,44 @@ describe('renderContent', () => {
     expect(html).toContain('data:audio/mpeg;base64,AAAA');
     expect(html).not.toContain('onerror');
     expect(html).not.toContain('onplay');
+  });
+
+  it('turns exact registry references into inert post-sanitization bindings', () => {
+    const reference = `${MEDIA_REFERENCE_PREFIX}${'a'.repeat(64)}`;
+    const html = renderContent(
+      `![diagram](${reference})\n\n<audio controls src="${reference}"></audio>`,
+      false,
+      true,
+    );
+
+    expect(html).toContain(`data-denki-media-src="${reference}"`);
+    expect(html.match(/data-denki-media-src=/g)).toHaveLength(2);
+    expect(html).toContain('data-denki-media-state="pending"');
+    expect(html).toContain('aria-busy="true"');
+    expect(html).not.toContain(`src="${reference}"`);
+  });
+
+  it('restores registry references used as ordinary text without activating them', () => {
+    const reference = `${MEDIA_REFERENCE_PREFIX}${'b'.repeat(64)}`;
+    const html = renderContent(`Reference: ${reference}`, false, true);
+
+    expect(html).toContain(reference);
+    expect(html).not.toContain('data-denki-media-src');
+  });
+
+  it('does not activate malformed registry URLs or srcset candidates', () => {
+    const malformed = `${MEDIA_REFERENCE_PREFIX}not-a-hash`;
+    const valid = `${MEDIA_REFERENCE_PREFIX}${'c'.repeat(64)}`;
+    const html = renderContent(
+      `<img src="${malformed}" srcset="${valid} 2x" alt="unsafe">`,
+      false,
+      true,
+    );
+
+    expect(html).not.toContain('data-denki-media-');
+    expect(html).not.toContain('srcset');
+    expect(html).not.toContain(malformed);
+    expect(html).not.toContain(valid);
   });
 
   it('removes scripts, dangerous URLs, forms, and layout-breaking inline styles', () => {
