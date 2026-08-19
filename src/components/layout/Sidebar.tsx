@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { NavLink, useNavigate, useParams } from 'react-router-dom';
 import { BookOpen, ChevronLeft, ChevronRight, Home, Plus, Search, Settings } from 'lucide-react';
+import { RELEASE_IDENTITY_LABEL, RELEASE_VERSION_LABEL } from '../../services/releaseIdentity';
 import { useFlashcardStore } from '../../store/useFlashcardStore';
 import { useUIStore } from '../../store/uiStore';
 import { CreateClassModal } from '../modals/CreateClassModal';
@@ -152,12 +153,12 @@ export const Sidebar: React.FC = () => {
             type="button"
             onClick={() => setShowSettingsModal(true)}
             className="zine-settings-button"
-            aria-label={`Open settings for Denki ${__DENKI_VERSION__}`}
-            title={`Denki ${__DENKI_VERSION__} settings`}
+            aria-label={`Open settings · ${RELEASE_IDENTITY_LABEL}`}
+            title={`${RELEASE_IDENTITY_LABEL} · settings`}
           >
             <Settings size={16} />
             <span className="zine-settings-copy">
-              Press settings · v{__DENKI_VERSION__}
+              Press settings · {RELEASE_VERSION_LABEL}
             </span>
           </button>
         </footer>
