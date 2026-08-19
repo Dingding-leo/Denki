@@ -21,6 +21,8 @@ The product name is simply **Denki**. It is a general-purpose learning tool for 
 - **Canonical FSRS 4.5 scheduling** using the published 17-weight model and configurable target retention.
 - **Per-record scheduler provenance** on card memory state and review logs, so future migrations can distinguish current FSRS 4.5 transitions from unversioned legacy history.
 - **Local-first storage** through IndexedDB, with persistent-storage protection and offline-ready PWA support.
+- **Content-addressed media registry** with verified SHA-256 identities and lifecycle-managed object URLs.
+- **Mixed media rendering** that supports both existing embedded data URLs and verified `denki-media://sha256/...` references.
 - **Classes and decks** for organising material across subjects.
 - **Standard and cloze cards** with Markdown and syntax highlighting.
 - **Unlimited new-card study** with no daily introduction cap.
@@ -31,7 +33,7 @@ The product name is simply **Denki**. It is a general-purpose learning tool for 
 - **CSV import and bounded local Anki field import** for Basic and cloze-style `.apkg` material. Complex Anki card templates are not currently rendered or guaranteed to round-trip exactly.
 - **Optional AI card generation** using a provider and API key chosen by the learner.
 - **Progress insights** including review history, streaks, due-card statistics, and explicitly labelled scheduling states.
-- **Portable JSON backup v4** for study data, target retention, speech speed, application metadata, and per-record scheduler lineage. Repeated embedded media is stored once by verified SHA-256 identity; provider credentials are deliberately excluded.
+- **Portable JSON backup v5** that atomically preserves classes, decks, cards, reviews, portable preferences, scheduler lineage, and the complete runtime media registry. Repeated embedded and registry media is stored once by verified SHA-256 identity; provider credentials are deliberately excluded.
 
 ## Scheduler correctness
 
@@ -56,9 +58,13 @@ Denki treats imported packages, restored backups, rendered card content, saved b
 - Only media referenced by imported card fields is expanded; unused package assets are not decoded.
 - Anki deck and card writes are committed in one IndexedDB transaction, so a failed import leaves no partial decks.
 - Database v5 backfills scheduler provenance without changing intervals or memory parameters, and database create hooks provide a fallback for direct import paths.
+- Database v6 adds an empty content-addressed media table without rewriting any existing card text.
+- Runtime media is bounded, MIME-allowlisted, SVG-sanitised before hashing, stored as structured-clone-safe bytes, and reverified before Blob or object-URL creation.
+- Registry references remain inert through Markdown parsing and DOMPurify. A verified blob URL is installed only after registry resolution; missing or corrupt media produces an accessible fallback.
 - Backup envelope versions, application/database versions, dates, IDs, relationships, portable preferences, and scheduler provenance are validated before current data is cleared. Preference changes are rolled back if the database transaction fails.
-- Backup v4 replaces repeated supported base64 media with content-addressed references. Import verifies canonical base64, byte length, MIME type, SHA-256 integrity, reference completeness, and strict object/byte limits before replacing the library.
-- Backup v1-v3 remains importable through conservative provenance normalization; malformed provenance or unsupported portable-media references are rejected rather than guessed.
+- Backup v5 reads a consistent five-table snapshot and replaces all five tables in one transaction. It verifies canonical media shape, usage, timestamps, base64, byte length, MIME, SHA-256, reference completeness, and strict object/byte limits before replacement.
+- Backup v1-v4 remains importable through conservative normalization. Legacy formats cannot smuggle future runtime-registry references and clear any pre-existing media registry during complete replacement.
+- Old object URLs are revoked only after a successful durable restore; failed validation or rollback leaves the current renderer generation intact.
 - Web and Tauri builds use explicit content security policies; Tauri capabilities remain limited to core application access.
 - CI audits production dependencies, validates version, security, and release artifacts, runs the canonical scheduler gate, typecheck, lint, tests, and build. CodeQL adds interprocedural JavaScript and TypeScript data-flow analysis.
 
@@ -66,9 +72,9 @@ See [SECURITY.md](SECURITY.md) for private-first vulnerability reporting guidanc
 
 ## Privacy
 
-Cards, decks, preferences, and review history are stored in the browser by default. Denki does not require an account, analytics tracker, or hosted database. Optional AI generation sends only the submitted source text to the configured provider. Avoid placing patient information, credentials, or other sensitive third-party data in AI generation prompts.
+Cards, decks, preferences, review history, and registry media are stored in the browser by default. Denki does not require an account, analytics tracker, or hosted database. Optional AI generation sends only the submitted source text to the configured provider. Avoid placing patient information, credentials, or other sensitive third-party data in AI generation prompts.
 
-Backups contain classes, decks, cards, review history, target retention, speech speed, scheduler lineage, application/database metadata, and deduplicated embedded media. They do **not** contain the optional AI provider key.
+Backups contain classes, decks, cards, review history, target retention, speech speed, scheduler lineage, application/database metadata, embedded media, and the complete runtime media registry. They do **not** contain the optional AI provider key.
 
 ## Run locally
 
@@ -147,6 +153,7 @@ Pull requests run the complete release checks and CodeQL in GitHub Actions. A pu
 ## Project documentation
 
 - [Architecture and engineering invariants](ARCHITECTURE.md)
+- [Runtime media registry](docs/media-registry.md)
 - [Contribution and review contract](CONTRIBUTING.md)
 - [Security policy and reporting](SECURITY.md)
 - [Launch readiness and accurate product messaging](LAUNCH_PLAN.md)
