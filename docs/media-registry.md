@@ -6,7 +6,7 @@ Denki database schema v6 introduces a content-addressed media registry. Schema v
 
 Repeated base64 media can make card rows, imports, and backups unnecessarily large. The registry provides one durable binary object per unique passive media asset. A card or deck note can refer to that object by content identity rather than embedding its bytes repeatedly.
 
-Storage, integrity verification, and mixed rendering are now established. Automatic migration, importer integration, garbage collection, and registry-native backup remain separately gated changes.
+Storage, integrity verification, mixed rendering, and registry-native portable recovery are established. Automatic migration, importer integration, and garbage collection remain separately gated changes.
 
 ## Durable representation
 
@@ -131,22 +131,56 @@ The app-wide hydrator uses `acquireMediaObjectUrl()` rather than creating unmana
 - Hydrator cleanup restores inert registry bindings before revocation, allowing StrictMode, HMR, or a replacement hydrator to reacquire connected media safely.
 - `revokeAllMediaObjectUrls()` revokes every cached URL and invalidates in-flight loads during full teardown.
 
-## Intentional non-goals after mixed rendering
+## Portable backup v5
+
+Format v5 is the first registry-native portable backup. It reads classes, decks, cards, reviews, and media in one consistent read transaction and restores all five tables in one write transaction.
+
+A portable media row contains:
+
+```ts
+interface RegistryNativeBackupMediaAsset {
+  hash: string;
+  mimeType: string;
+  byteLength: number;
+  base64: string;
+  createdAt: string;
+  usage: 'embedded' | 'registry' | 'both';
+}
+```
+
+Usage semantics are explicit:
+
+- `embedded`: bytes came from repeated data URLs and must be hydrated back into the exact card/deck text; the asset is not persisted in the runtime registry.
+- `registry`: the asset is part of the runtime registry and may be registry-only local state.
+- `both`: equal MIME-plus-bytes content is used by embedded text and the runtime registry; it is stored once, then both hydrated and persisted.
+
+Format v5 guarantees:
+
+- equal embedded and registry content is deduplicated by the same SHA-256 identity;
+- every persisted `denki-media` reference has a registry row;
+- registry-only assets are preserved as complete database state, even when currently unreferenced;
+- embedded usage rows cannot be orphaned;
+- MIME, canonical base64, byte length, canonical timestamps, usage, SHA-256, and object/byte limits are validated before replacement;
+- failed validation leaves current data and object URLs unchanged;
+- a failure writing any table rolls all five tables back;
+- successful replacement clears stale object URLs only after the transaction commits.
+
+Formats v1-v4 remain importable. They restore no runtime registry, clear any pre-existing registry as part of full replacement, and reject future `denki-media` references because those formats cannot carry the required registry state.
+
+## Intentional non-goals after registry-native backup
 
 The current registry still does not provide:
 
 - automatic migration of existing card content;
 - Anki import directly into the registry;
-- reference-aware garbage collection;
-- registry-native portable backup and restore.
+- reference-aware garbage collection.
 
-These are intentionally separate because each touches atomic data migration or recovery guarantees.
+These remain separate because each touches atomic data migration or storage reclamation guarantees.
 
 ## Required next phases
 
-1. **Registry-native backup** — include verified registry objects and references in portable backup and clear/replace the registry atomically during full restore.
-2. **Resumable migration** — process bounded card batches and commit registry writes plus card-text updates atomically, with a durable cursor and quota-safe rollback.
-3. **Importer integration** — store referenced Anki media once and emit registry references directly.
-4. **Reference scan and garbage collection** — delete an asset only after a complete scan proves no card or deck note refers to it.
+1. **Resumable migration** — process bounded card batches and commit registry writes plus card-text updates atomically, with a durable cursor and quota-safe rollback.
+2. **Importer integration** — store referenced Anki media once and emit registry references directly.
+3. **Reference scan and garbage collection** — delete an asset only after a complete scan proves no card or deck note refers to it.
 
-No production flow may persist new registry references in normal card content before backup and recovery understand those references. Rendering support alone is not a recovery guarantee.
+Now that mixed rendering and registry-native recovery are both present, a migration may persist registry references only if each batch retains old text on failure and the complete library remains exportable at every cursor boundary.
