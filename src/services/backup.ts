@@ -12,12 +12,15 @@ import {
   isValidSchedulerVersion,
 } from '../domain/schedulerProvenance';
 import { hydrateBackupMedia } from './backupMedia';
+import {
+  assertNoRuntimeRegistryReferences,
+} from './backupRegistryReferences';
 import { markBackupExported } from './dataSafety';
 import { revokeAllMediaObjectUrls } from './mediaRegistry';
 import {
   exportRegistryNativeBackupMedia,
   importRegistryNativeBackupMedia,
-} from './registryBackupMedia';
+} from './registryBackupBoundary';
 import { FSRS_VERSION } from './scheduler';
 import {
   EASY_BONUS_KEY,
@@ -78,6 +81,14 @@ interface NormalizedBackup {
   reviews: ReviewLog[];
   media: MediaAsset[];
   preferences?: BackupPreferences;
+}
+
+interface DatabaseSnapshotRows {
+  classes: Class[];
+  decks: Deck[];
+  cards: Card[];
+  reviews: ReviewLog[];
+  media: MediaAsset[];
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -477,21 +488,29 @@ async function normalizeBackup(snapshot: unknown): Promise<NormalizedBackup> {
     }
   }
 
-  const restoredMedia = formatVersion >= 5
-    ? await importRegistryNativeBackupMedia(
+  let restoredMedia: {
+    decks: Deck[];
+    cards: Card[];
+    media: MediaAsset[];
+  };
+  if (formatVersion >= 5) {
+    restoredMedia = await importRegistryNativeBackupMedia(
+      decks,
+      cards,
+      data.media,
+    );
+  } else {
+    assertNoRuntimeRegistryReferences(decks, cards);
+    restoredMedia = {
+      ...(await hydrateBackupMedia(
         decks,
         cards,
         data.media,
-      )
-    : {
-        ...(await hydrateBackupMedia(
-          decks,
-          cards,
-          data.media,
-          formatVersion,
-        )),
-        media: [] as MediaAsset[],
-      };
+        formatVersion,
+      )),
+      media: [],
+    };
+  }
 
   return {
     classes,
@@ -564,16 +583,32 @@ function applyPreferences(
   return rollback;
 }
 
-/** Export the complete local database and non-secret portable preferences. */
+async function readDatabaseSnapshot(): Promise<DatabaseSnapshotRows> {
+  return db.transaction(
+    'r',
+    [db.classes, db.decks, db.cards, db.reviews, db.media],
+    async () => {
+      const [classes, decks, cards, reviews, media] = await Promise.all([
+        db.classes.toArray(),
+        db.decks.toArray(),
+        db.cards.toArray(),
+        db.reviews.toArray(),
+        db.media.toArray(),
+      ]);
+      return { classes, decks, cards, reviews, media };
+    },
+  );
+}
+
+/** Export a consistent five-table snapshot and non-secret portable preferences. */
 export async function exportDatabase(): Promise<BackupSnapshot> {
-  const [classes, storedDecks, storedCards, storedReviews, storedMedia] =
-    await Promise.all([
-      db.classes.toArray(),
-      db.decks.toArray(),
-      db.cards.toArray(),
-      db.reviews.toArray(),
-      db.media.toArray(),
-    ]);
+  const {
+    classes,
+    decks: storedDecks,
+    cards: storedCards,
+    reviews: storedReviews,
+    media: storedMedia,
+  } = await readDatabaseSnapshot();
   const schedulerParams = loadSchedulerParams();
   const exportedAt = new Date().toISOString();
   const cards = storedCards.map((card) => ({
@@ -614,10 +649,8 @@ export async function exportDatabase(): Promise<BackupSnapshot> {
 }
 
 /**
- * Replace the complete database from a validated backup. Metadata, preferences,
- * dates, scheduler provenance, embedded and registry media, duplicate IDs, and
- * foreign-key relationships are validated before any existing row is cleared.
- * Preference writes are rolled back if the database transaction fails.
+ * Replace all five persistent tables from a fully validated backup. Preference
+ * writes are rolled back if the durable replacement transaction fails.
  */
 export async function importDatabase(snapshot: unknown): Promise<void> {
   const { classes, decks, cards, reviews, media, preferences } =
