@@ -14,6 +14,19 @@ export interface Deck {
   notes?: string;         // Deck-level markdown study notes
 }
 
+/**
+ * Passive binary content keyed by SHA-256(normalized MIME + NUL + stored bytes).
+ * ArrayBuffer is used as the durable IndexedDB representation; Blob objects are
+ * reconstructed only when a renderer acquires an object-URL lease.
+ */
+export interface MediaAsset {
+  hash: string;
+  mimeType: string;
+  byteLength: number;
+  data: ArrayBuffer;
+  createdAt: Date;
+}
+
 export type CardType = 'standard' | 'cloze';
 
 export interface Card {

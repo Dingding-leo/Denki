@@ -3,13 +3,25 @@ import {
   inferLegacyCardSchedulerVersion,
   inferLegacyReviewSchedulerVersion,
 } from '../domain/schedulerProvenance';
-import type { Card, Class, Deck, ReviewLog } from './schema';
+import type {
+  Card,
+  Class,
+  Deck,
+  MediaAsset,
+  ReviewLog,
+} from './schema';
 
+/** Historical v3-v5 stores. Do not retroactively add tables to old versions. */
 export const DENKI_STORES = {
   classes: '++id, name, createdAt',
   decks: '++id, classId, name, createdAt',
   cards: '++id, classId, deckId, state, due, lastReviewed, cardType, lastRating, [classId+due], [deckId+due], [classId+state], [deckId+state]',
   reviews: '++id, cardId, deckId, classId, reviewedAt, rating, [classId+reviewedAt]',
+} as const;
+
+export const DENKI_STORES_V6 = {
+  ...DENKI_STORES,
+  media: '&hash, mimeType, byteLength, createdAt',
 } as const;
 
 export function deriveLatestRatings(
@@ -60,6 +72,7 @@ class DenkiDatabase extends Dexie {
   decks!: Table<Deck, number>;
   cards!: Table<Card, number>;
   reviews!: Table<ReviewLog, number>;
+  media!: Table<MediaAsset, string>;
 
   constructor() {
     super('DenkiDatabase');
@@ -99,6 +112,11 @@ class DenkiDatabase extends Dexie {
     this.version(5)
       .stores(DENKI_STORES)
       .upgrade(migrateSchedulerProvenance);
+
+    // Version 6 adds an empty content-addressed media registry. It deliberately
+    // performs no card rewrite: legacy data URLs remain readable until a later,
+    // separately gated migration introduces explicit denki-media references.
+    this.version(6).stores(DENKI_STORES_V6);
 
     // Database-level hooks protect direct import and test-fixture writes in
     // addition to the explicit scheduler helpers used by production features.
