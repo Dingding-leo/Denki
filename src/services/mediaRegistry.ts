@@ -25,6 +25,10 @@ export interface MediaObjectUrlLease {
 
 const objectUrlCache = new Map<string, CachedObjectUrl>();
 
+export function containsMediaReference(value: string): boolean {
+  return value.includes(MEDIA_REFERENCE_PREFIX);
+}
+
 export function createMediaReference(hash: string): string {
   if (!HASH_PATTERN.test(hash)) {
     throw new Error('Media hash must be a lowercase SHA-256 value.');
@@ -201,6 +205,7 @@ function createLease(
 
 /** Revoke all leases before a full library replacement or application teardown. */
 export function revokeAllMediaObjectUrls(): void {
+  if (objectUrlCache.size === 0) return;
   const objectUrlApi = requireObjectUrlApi();
   for (const entry of objectUrlCache.values()) {
     objectUrlApi.revokeObjectURL(entry.url);
