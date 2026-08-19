@@ -91,6 +91,17 @@ class DenkiDatabase extends Dexie {
           );
         });
       });
+
+    // Database-level hooks protect direct import and test-fixture writes in
+    // addition to the explicit scheduler helpers used by production features.
+    this.cards.hook('creating', (_primaryKey, card) => {
+      card.schedulerVersion = inferLegacyCardSchedulerVersion(card);
+    });
+    this.reviews.hook('creating', (_primaryKey, review) => {
+      review.schedulerVersion = inferLegacyReviewSchedulerVersion(
+        review.schedulerVersion,
+      );
+    });
   }
 }
 
