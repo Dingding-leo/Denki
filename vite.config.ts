@@ -12,10 +12,10 @@ const { version: appVersion } = JSON.parse(
 // Every release artifact receives an immutable build identity. Pull-request and
 // push workflows use GitHub's commit SHA; workflow_run deployments pass the
 // validated source SHA explicitly through DENKI_BUILD_ID.
-const buildId =
-  process.env.DENKI_BUILD_ID?.slice(0, 128) ??
-  process.env.GITHUB_SHA?.slice(0, 12) ??
-  String(Date.now())
+const requestedBuildId = process.env.DENKI_BUILD_ID?.trim()
+const buildId = requestedBuildId
+  ? requestedBuildId.slice(0, 12)
+  : process.env.GITHUB_SHA?.slice(0, 12) ?? String(Date.now())
 
 export default defineConfig({
   base,
