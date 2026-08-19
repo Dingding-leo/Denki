@@ -1,4 +1,8 @@
 import Dexie, { type Table } from 'dexie';
+import {
+  inferLegacyCardSchedulerVersion,
+  inferLegacyReviewSchedulerVersion,
+} from '../domain/schedulerProvenance';
 import type { Card, Class, Deck, ReviewLog } from './schema';
 
 const STORES = {
@@ -66,6 +70,26 @@ class DenkiDatabase extends Dexie {
           const rating = latestRatings.get(cardId);
           if (rating !== undefined) await cards.update(cardId, { lastRating: rating });
         }
+      });
+
+    // Version 5 establishes per-row scheduler provenance. Existing reviewed
+    // memory states cannot be proven canonical retroactively, so they remain
+    // explicitly legacy until their next current-scheduler transition. Pristine
+    // New cards contain no model-derived state and can safely join FSRS 4.5.
+    this.version(5)
+      .stores(STORES)
+      .upgrade(async (transaction) => {
+        const cards = transaction.table<Card, number>('cards');
+        const reviews = transaction.table<ReviewLog, number>('reviews');
+
+        await cards.toCollection().modify((card) => {
+          card.schedulerVersion = inferLegacyCardSchedulerVersion(card);
+        });
+        await reviews.toCollection().modify((review) => {
+          review.schedulerVersion = inferLegacyReviewSchedulerVersion(
+            review.schedulerVersion,
+          );
+        });
       });
   }
 }
