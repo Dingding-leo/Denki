@@ -1,0 +1,24 @@
+[data-denki-media-state='pending'] {
+  opacity: 0.45;
+}
+
+img[data-denki-media-state='pending'] {
+  min-width: 2.5rem;
+  min-height: 2.5rem;
+}
+
+.denki-media-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  min-height: 2.5rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px dashed var(--border);
+  border-radius: 0.45rem;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 0.75rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}

@@ -1,12 +1,12 @@
 # Runtime Media Registry
 
-Denki database schema v6 introduces a content-addressed media registry. This is an engineering foundation: schema v6 does **not** rewrite existing cards, and the current renderer continues to read existing card and deck text exactly as stored.
+Denki database schema v6 introduces a content-addressed media registry. Schema v6 does **not** rewrite existing cards: legacy data URLs remain readable exactly as stored, while the shared renderer can also resolve explicit registry references.
 
 ## Purpose
 
-Repeated base64 media can make card rows, imports, and backups unnecessarily large. The registry provides one durable binary object per unique passive media asset, with cards eventually referring to it by content identity rather than embedding the bytes repeatedly.
+Repeated base64 media can make card rows, imports, and backups unnecessarily large. The registry provides one durable binary object per unique passive media asset. A card or deck note can refer to that object by content identity rather than embedding its bytes repeatedly.
 
-The current phase establishes safe storage and resolution only. Renderer integration and data migration require separate release-gated changes.
+Storage, integrity verification, and mixed rendering are now established. Automatic migration, importer integration, garbage collection, and registry-native backup remain separately gated changes.
 
 ## Durable representation
 
@@ -94,36 +94,59 @@ No external cryptographic or Blob-reading promise is held open inside a Dexie tr
 
 A missing valid reference returns `null`. A malformed or corrupted object fails closed. Successful resolution returns a current-realm Blob reconstructed from the verified ArrayBuffer.
 
+## Mixed rendering
+
+`renderContent()` remains the single Markdown, cloze, HTML, and sanitisation path for Review, Learn, Match, and deck-note previews.
+
+Registry references follow a two-stage trust boundary:
+
+1. Exact references are replaced with opaque, collision-resistant text tokens before Markdown parsing.
+2. DOMPurify sanitizes the complete rendered HTML with user `data-*` attributes disabled.
+3. Trusted post-sanitisation code converts a token only when it occupies an entire supported URI attribute on an allowed media element.
+4. The active `src`, `poster`, or `href` attribute remains absent while the element is pending.
+5. The document-scoped hydrator resolves and verifies the registry object, acquires an object-URL lease, and only then installs the blob URL.
+
+Existing `data:` image, audio, and video values continue through the established sanitizer and are not rewritten by the mixed renderer.
+
+The renderer deliberately rejects or removes:
+
+- malformed Denki references;
+- a valid token embedded inside a larger URI;
+- raw user-supplied `data-denki-media-*` attributes;
+- `srcset`, until each candidate and descriptor can be validated independently;
+- more than 256 registry references in one rendered content block.
+
+Missing or corrupt media is replaced with an accessible `role="status"` fallback. It is never sent to the network as a custom-protocol request.
+
 ## Object-URL leases
 
-Renderers must use `acquireMediaObjectUrl()` rather than creating unmanaged URLs.
+The app-wide hydrator uses `acquireMediaObjectUrl()` rather than creating unmanaged URLs.
 
 - Concurrent requests for one hash share one load and one object URL.
 - Each successful caller receives a lease with an idempotent `release()` method.
 - The URL is revoked immediately after the final lease is released.
 - At most 256 hashes may have active object URLs simultaneously.
-- `revokeAllMediaObjectUrls()` revokes every cached URL and invalidates in-flight loads during teardown or full-library replacement.
+- Nodes moved synchronously within the connected document keep their lease.
+- Nodes removed from the document release their lease through the MutationObserver.
+- Hydrator cleanup restores inert registry bindings before revocation, allowing StrictMode, HMR, or a replacement hydrator to reacquire connected media safely.
+- `revokeAllMediaObjectUrls()` revokes every cached URL and invalidates in-flight loads during full teardown.
 
-A component that acquires a lease must release it on dependency change and unmount.
+## Intentional non-goals after mixed rendering
 
-## Intentional non-goals in schema v6
+The current registry still does not provide:
 
-This phase does not yet provide:
-
-- mixed data-URL and registry-reference rendering;
 - automatic migration of existing card content;
 - Anki import directly into the registry;
 - reference-aware garbage collection;
 - registry-native portable backup and restore.
 
-These are intentionally separate because each touches card rendering, atomic data migration, or recovery guarantees.
+These are intentionally separate because each touches atomic data migration or recovery guarantees.
 
 ## Required next phases
 
-1. **Mixed renderer** — resolve registry references while preserving current data URLs and showing safe missing-media fallbacks.
+1. **Registry-native backup** — include verified registry objects and references in portable backup and clear/replace the registry atomically during full restore.
 2. **Resumable migration** — process bounded card batches and commit registry writes plus card-text updates atomically, with a durable cursor and quota-safe rollback.
 3. **Importer integration** — store referenced Anki media once and emit registry references directly.
 4. **Reference scan and garbage collection** — delete an asset only after a complete scan proves no card or deck note refers to it.
-5. **Registry-native backup** — include verified registry objects and references in portable backup without expanding them back into duplicate data URLs.
 
-No phase may enable registry references in normal card content before the renderer and backup/recovery paths understand them.
+No production flow may persist new registry references in normal card content before backup and recovery understand those references. Rendering support alone is not a recovery guarantee.
