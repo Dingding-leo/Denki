@@ -14,6 +14,18 @@ export interface Deck {
   notes?: string;         // Deck-level markdown study notes
 }
 
+/**
+ * Passive binary content keyed by SHA-256(normalized MIME + NUL + stored bytes).
+ * Cards do not use this table until they contain an explicit denki-media reference.
+ */
+export interface MediaAsset {
+  hash: string;
+  mimeType: string;
+  byteLength: number;
+  data: Blob;
+  createdAt: Date;
+}
+
 export type CardType = 'standard' | 'cloze';
 
 export interface Card {
