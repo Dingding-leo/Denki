@@ -148,6 +148,7 @@ export function prepareRenderedMediaHtml(
       if (tokens.has(value)) {
         if (
           exactReference === null ||
+          exactReference === undefined ||
           !isAllowedBinding(element, attribute)
         ) {
           invalidTargets.add(fallbackTarget(element));
