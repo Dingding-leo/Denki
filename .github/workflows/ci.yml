@@ -29,6 +29,8 @@ jobs:
       - run: npm ci
       - name: Production dependency audit
         run: npm run audit:prod
+      - name: Release version contract
+        run: npm run test:version
       - name: TypeScript
         run: npx tsc --noEmit
       - name: Security configuration

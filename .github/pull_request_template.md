@@ -14,6 +14,7 @@
 
 <!-- Check every boundary touched and explain how its invariant is preserved. -->
 
+- [ ] Release version, build identity, or distribution metadata
 - [ ] Scheduler or review semantics
 - [ ] IndexedDB schema, migration, or durable mutation
 - [ ] Study-session creation, persistence, or restoration
@@ -32,6 +33,7 @@ Details:
 
 - [ ] `npm ci`
 - [ ] `npm run audit:prod`
+- [ ] `npm run test:version`
 - [ ] `npx tsc --noEmit`
 - [ ] `npm run test:security`
 - [ ] `npm run test:scheduler`

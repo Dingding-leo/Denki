@@ -58,16 +58,17 @@ A launch candidate is not releasable unless its exact commit passes:
 
 - clean dependency installation;
 - production dependency audit;
+- canonical application-version consistency across `version.json`, Tauri, Cargo, and `Cargo.lock`;
 - strict TypeScript;
 - web and Tauri security-policy validation;
 - canonical FSRS 4.5 golden vectors;
 - zero-warning ESLint;
 - the complete Vitest suite;
 - production build;
-- final `dist` artifact validation;
+- final `dist` artifact and immutable build-identity validation;
 - CodeQL JavaScript and TypeScript analysis.
 
-GitHub Pages must deploy only the exact successful `main` commit and must rerun artifact validation on the rebuilt upload.
+GitHub Pages must deploy only the exact successful `main` commit. Its rebuilt upload must identify that validated SHA and pass the same artifact validator.
 
 ## Manual release-candidate smoke test
 
@@ -113,6 +114,7 @@ Run this against a clean browser profile or isolated origin using the candidate 
 - [ ] Load every lazy route once on the candidate release.
 - [ ] Install or activate the PWA in a supported browser.
 - [ ] Go offline and reload the dashboard, class page, study page, and local Anki importer.
+- [ ] Confirm `version.json` remains available offline and matches the visible application version.
 - [ ] Upgrade from the previous production release and confirm no mixed-version chunk failure.
 - [ ] Confirm an incomplete cache installation does not replace the current working release.
 
@@ -136,15 +138,18 @@ Run this against a clean browser profile or isolated origin using the candidate 
 ## Release procedure
 
 1. Confirm `main` rules require pull requests, `Release checks`, and CodeQL.
-2. Align the application, package, and Tauri versions for the release.
-3. Update release notes with user impact, migrations, limitations, and rollback guidance.
-4. Run the complete manual smoke test on the release candidate.
-5. Merge only the validated release change.
-6. Confirm the `main` CI run succeeds for the merge commit.
-7. Confirm Pages deploys that exact SHA.
-8. Open the production URL in a clean browser and repeat the critical path.
-9. Tag the validated commit using semantic versioning.
-10. Publish launch posts only after the deployed SHA and tag agree.
+2. Set the intended application version with `npm run version:set -- <version>`.
+3. Run `npm run test:version` and review every generated version-file change.
+4. Update release notes with user impact, migrations, limitations, and rollback guidance.
+5. Run the complete manual smoke test on the release candidate.
+6. Merge only the validated release change.
+7. Confirm the `main` CI run succeeds for the merge commit.
+8. Confirm Pages deploys that exact SHA and its `version.json` reports the expected semantic version and build ID.
+9. Open the production URL in a clean browser and repeat the critical path.
+10. Tag the validated commit using the same semantic version.
+11. Publish launch posts only after the deployed SHA, visible version, generated metadata, and tag agree.
+
+The private npm workspace intentionally remains at `0.0.0`; it is not the Denki release version and must never be published.
 
 ## Suggested launch copy
 
@@ -171,7 +176,7 @@ Ask for concrete workflow evidence rather than generic feature voting:
 
 During the first public feedback period:
 
-- reproduce defects against the deployed commit SHA;
+- reproduce defects against the deployed commit SHA and visible version;
 - distinguish data-loss risk from cosmetic issues;
 - prioritise scheduler, persistence, backup, import, and offline regressions;
 - request a minimal non-sensitive fixture for import defects;
@@ -187,5 +192,6 @@ Launch only when:
 - the manual critical path is complete;
 - the public description matches supported behaviour;
 - backup and recovery have been tested on a clean profile;
+- semantic version, build identity, deployed SHA, and release tag agree;
 - known limitations are acceptable and visible;
 - an owner is available to triage scheduler, data, import, and offline reports.

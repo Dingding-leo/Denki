@@ -152,11 +152,13 @@ export const Sidebar: React.FC = () => {
             type="button"
             onClick={() => setShowSettingsModal(true)}
             className="zine-settings-button"
-            aria-label="Open settings"
-            title="App settings"
+            aria-label={`Open settings for Denki ${__DENKI_VERSION__}`}
+            title={`Denki ${__DENKI_VERSION__} settings`}
           >
             <Settings size={16} />
-            <span className="zine-settings-copy">Press settings</span>
+            <span className="zine-settings-copy">
+              Press settings · v{__DENKI_VERSION__}
+            </span>
           </button>
         </footer>
       </aside>
