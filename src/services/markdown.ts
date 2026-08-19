@@ -1,5 +1,9 @@
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
+import {
+  prepareRenderedMediaHtml,
+  tokenizeMediaReferences,
+} from './mediaHydration';
 
 interface ClozeToken {
   token: string;
@@ -17,17 +21,25 @@ const escapeHtml = (value: string): string =>
 /**
  * Convert Denki card content into sanitized HTML.
  *
- * One renderer is shared by Review, Learn, and Match modes so Markdown, cloze
- * deletion, imported Anki media, and security rules cannot drift apart. Raw
- * HTML is accepted only so legitimate imported <img>/<audio> content can work;
- * DOMPurify is always the final step before anything reaches the DOM.
+ * One renderer is shared by Review, Learn, Match, and deck-note preview so
+ * Markdown, cloze deletion, imported Anki media, registry media, and security
+ * rules cannot drift apart. Raw HTML is accepted only so legitimate imported
+ * <img>/<audio> content can work; DOMPurify is always applied before anything
+ * reaches the DOM.
+ *
+ * Valid denki-media references are tokenized before Markdown parsing. After
+ * sanitization they become inert data bindings with no network-capable URI
+ * attribute. The document hydrator resolves those bindings to verified blob
+ * URLs and owns their lifecycle.
  */
 export const renderContent = (
   text: string,
   isCloze: boolean,
   showAnswer: boolean,
 ): string => {
-  let source = String(text ?? '').replace(/^\uFEFF/, '');
+  const rawSource = String(text ?? '').replace(/^\uFEFF/, '');
+  const tokenizedMedia = tokenizeMediaReferences(rawSource);
+  let source = tokenizedMedia.source;
   const clozeTokens: ClozeToken[] = [];
 
   if (isCloze) {
@@ -64,7 +76,7 @@ export const renderContent = (
     rendered = rendered.replaceAll(token, html);
   }
 
-  return DOMPurify.sanitize(rendered, {
+  const sanitized = DOMPurify.sanitize(rendered, {
     USE_PROFILES: { html: true },
     ADD_TAGS: ['audio', 'video', 'source'],
     ADD_ATTR: ['controls', 'preload', 'poster', 'playsinline'],
@@ -85,6 +97,10 @@ export const renderContent = (
       'link',
       'base',
     ],
-    FORBID_ATTR: ['style', 'srcdoc', 'formaction'],
+    // srcset is deliberately excluded until the registry resolver can validate
+    // every candidate and descriptor rather than only one URI attribute.
+    FORBID_ATTR: ['style', 'srcdoc', 'formaction', 'srcset'],
   });
+
+  return prepareRenderedMediaHtml(sanitized, tokenizedMedia.tokens);
 };
