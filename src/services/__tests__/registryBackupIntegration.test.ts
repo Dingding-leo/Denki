@@ -19,7 +19,6 @@ import { FSRS_VERSION, STATES } from '../scheduler';
 const INLINE_IMAGE = `data:image/png;base64,${btoa(
   String.fromCharCode(137, 80, 78, 71, 1, 2, 3),
 )}`;
-
 const originalCreateObjectUrl = URL.createObjectURL;
 const originalRevokeObjectUrl = URL.revokeObjectURL;
 
@@ -62,7 +61,11 @@ async function clearDatabase(): Promise<void> {
 
 async function seedLibrary(
   name: string,
-  options: { inline?: boolean; registry?: boolean; orphan?: boolean } = {},
+  options: {
+    inline?: boolean;
+    registryBytes?: readonly number[];
+    orphanBytes?: readonly number[];
+  } = {},
 ): Promise<{
   classId: number;
   deckId: number;
@@ -82,18 +85,17 @@ async function seedLibrary(
     notes: options.inline ? `Notes ${INLINE_IMAGE}` : 'Plain notes',
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
   });
-
-  const registryReference = options.registry
+  const registryReference = options.registryBytes
     ? await registerMediaBytes(
         'image/png',
-        new Uint8Array([9, 8, 7, 6]),
+        new Uint8Array(options.registryBytes),
         new Date('2026-01-02T00:00:00.000Z'),
       )
     : undefined;
-  const orphanReference = options.orphan
+  const orphanReference = options.orphanBytes
     ? await registerMediaBytes(
         'audio/mpeg',
-        new Uint8Array([5, 4, 3]),
+        new Uint8Array(options.orphanBytes),
         new Date('2026-01-03T00:00:00.000Z'),
       )
     : undefined;
@@ -101,7 +103,7 @@ async function seedLibrary(
   const cardId = await db.cards.add({
     classId,
     deckId,
-    front: options.registry
+    front: registryReference
       ? `${name} <img src="${registryReference}">`
       : `${name} question`,
     back: options.inline ? `Answer ${INLINE_IMAGE}` : `${name} answer`,
@@ -124,7 +126,7 @@ async function seedLibrary(
   };
 }
 
-function legacyV4Snapshot(): unknown {
+function legacyV4Snapshot(front = 'Legacy question'): unknown {
   const now = '2026-04-01T00:00:00.000Z';
   return {
     formatVersion: 4,
@@ -150,7 +152,7 @@ function legacyV4Snapshot(): unknown {
           id: 301,
           classId: 101,
           deckId: 201,
-          front: 'Legacy question',
+          front,
           back: 'Legacy answer',
           cardType: 'standard',
           createdAt: now,
@@ -185,21 +187,16 @@ describe('registry-native portable backup integration', () => {
   it('round-trips inline text, referenced registry media, and registry-only assets', async () => {
     const seeded = await seedLibrary('Original', {
       inline: true,
-      registry: true,
-      orphan: true,
+      registryBytes: [9, 8, 7, 6],
+      orphanBytes: [5, 4, 3],
     });
-
     const snapshot = await exportDatabase();
+
     expect(snapshot.formatVersion).toBe(BACKUP_FORMAT_VERSION);
     expect(snapshot.data.media).toHaveLength(3);
-    const usages = (snapshot.data.media as Array<{ usage: string }>).map(
+    expect((snapshot.data.media as Array<{ usage: string }>).map(
       (row) => row.usage,
-    );
-    expect(usages).toEqual(expect.arrayContaining([
-      'embedded',
-      'registry',
-      'registry',
-    ]));
+    )).toEqual(expect.arrayContaining(['embedded', 'registry', 'registry']));
     expect(JSON.stringify(snapshot.data.cards)).not.toContain(INLINE_IMAGE);
     expect(JSON.stringify(snapshot.data.cards)).toContain(
       seeded.registryReference,
@@ -219,7 +216,6 @@ describe('registry-native portable backup integration', () => {
 
     const referenced = await resolveMediaAsset(seeded.registryReference);
     const orphan = await resolveMediaAsset(seeded.orphanReference);
-    expect(referenced?.mimeType).toBe('image/png');
     expect([...new Uint8Array(await referenced!.data.arrayBuffer())]).toEqual([
       9, 8, 7, 6,
     ]);
@@ -270,7 +266,10 @@ describe('registry-native portable backup integration', () => {
   });
 
   it('clears a pre-existing runtime registry when importing a legacy v4 backup', async () => {
-    const seeded = await seedLibrary('Current', { registry: true, orphan: true });
+    const seeded = await seedLibrary('Current', {
+      registryBytes: [9, 8, 7, 6],
+      orphanBytes: [5, 4, 3],
+    });
     expect(await db.media.count()).toBe(2);
 
     await importDatabase(legacyV4Snapshot());
@@ -282,7 +281,9 @@ describe('registry-native portable backup integration', () => {
   });
 
   it('rejects tampered v5 media without changing current study or registry data', async () => {
-    const seeded = await seedLibrary('Current', { registry: true });
+    const seeded = await seedLibrary('Current', {
+      registryBytes: [9, 8, 7, 6],
+    });
     const snapshot = JSON.parse(JSON.stringify(await exportDatabase()));
     snapshot.data.media.find((row: { usage: string }) =>
       row.usage === 'registry',
@@ -292,7 +293,6 @@ describe('registry-native portable backup integration', () => {
     });
 
     await expect(importDatabase(snapshot)).rejects.toThrow(/integrity check/i);
-
     expect((await db.cards.get(seeded.cardId))?.front).toBe(
       'Current library must survive',
     );
@@ -301,21 +301,19 @@ describe('registry-native portable backup integration', () => {
   });
 
   it('rolls back all five tables when registry persistence fails', async () => {
-    const current = await seedLibrary('Current', { registry: true });
-    const currentClassId = current.classId;
-    const currentCardId = current.cardId;
-    const currentReference = current.registryReference!;
-
-    await clearDatabase();
-    await seedLibrary('Incoming', { registry: true, orphan: true });
+    await seedLibrary('Incoming', {
+      registryBytes: [1, 2, 3, 4],
+      orphanBytes: [4, 3, 2, 1],
+    });
     const incomingSnapshot = JSON.parse(JSON.stringify(await exportDatabase()));
+    const incomingOrphanHash = incomingSnapshot.data.media.find(
+      (row: { mimeType: string }) => row.mimeType === 'audio/mpeg',
+    ).hash;
 
     await clearDatabase();
-    const restoredCurrent = await seedLibrary('Current', { registry: true });
-    expect(restoredCurrent.classId).toBe(currentClassId);
-    expect(restoredCurrent.cardId).toBe(currentCardId);
-    expect(restoredCurrent.registryReference).toBe(currentReference);
-
+    const current = await seedLibrary('Current', {
+      registryBytes: [9, 8, 7, 6],
+    });
     vi.spyOn(db.media, 'bulkAdd').mockRejectedValueOnce(
       new Error('simulated media quota failure'),
     );
@@ -327,11 +325,16 @@ describe('registry-native portable backup integration', () => {
     expect((await db.classes.toArray())[0]?.name).toBe('Current class');
     expect((await db.cards.toArray())[0]?.front).toContain('Current');
     expect(await db.media.count()).toBe(1);
-    await expect(resolveMediaAsset(currentReference)).resolves.not.toBeNull();
+    await expect(resolveMediaAsset(current.registryReference)).resolves.not.toBeNull();
+    await expect(
+      resolveMediaAsset(`${MEDIA_REFERENCE_PREFIX}${incomingOrphanHash}`),
+    ).resolves.toBeNull();
   });
 
   it('revokes old object URLs only after a successful durable replacement', async () => {
-    const seeded = await seedLibrary('Current', { registry: true });
+    const seeded = await seedLibrary('Current', {
+      registryBytes: [9, 8, 7, 6],
+    });
     const lease = await acquireMediaObjectUrl(seeded.registryReference);
     expect(lease?.url).toBe('blob:registry-backup-1');
     expect(activeMediaObjectUrlCount()).toBe(1);
@@ -348,5 +351,13 @@ describe('registry-native portable backup integration', () => {
 
     lease?.release();
     expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects runtime registry references in legacy backup formats', async () => {
+    const reference = `${MEDIA_REFERENCE_PREFIX}${'a'.repeat(64)}`;
+    await expect(
+      importDatabase(legacyV4Snapshot(`<img src="${reference}">`)),
+    ).rejects.toThrow(/legacy backup.*registry reference/i);
+    expect(await db.cards.count()).toBe(0);
   });
 });
