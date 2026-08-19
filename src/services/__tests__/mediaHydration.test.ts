@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '../../db';
 import {
   MAX_MEDIA_REFERENCES_PER_RENDER,
@@ -121,6 +121,69 @@ describe('mixed media renderer', () => {
     });
     expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1);
     expect(activeMediaObjectUrlCount()).toBe(0);
+  });
+
+  it('keeps a verified lease when React-style DOM reparenting leaves the node connected', async () => {
+    const reference = await registerMediaBytes(
+      'image/png',
+      new Uint8Array([8, 9, 10]),
+    );
+    const left = document.createElement('div');
+    const right = document.createElement('div');
+    container.append(left, right);
+    left.innerHTML = renderContent(`![moving](${reference})`, false, true);
+    uninstall = installMediaReferenceHydrator(document);
+
+    const image = left.querySelector('img')!;
+    await waitFor(() => {
+      expect(image.getAttribute('src')).toBe('blob:hydrated-1');
+    });
+
+    right.appendChild(image);
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+
+    expect(image.isConnected).toBe(true);
+    expect(image.getAttribute('src')).toBe('blob:hydrated-1');
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+    expect(activeMediaObjectUrlCount()).toBe(1);
+
+    right.remove();
+    await waitFor(() => {
+      expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:hydrated-1');
+    });
+    expect(activeMediaObjectUrlCount()).toBe(0);
+  });
+
+  it('restores inert bindings before cleanup so a new hydrator can reacquire them', async () => {
+    const reference = await registerMediaBytes(
+      'image/png',
+      new Uint8Array([11, 12, 13]),
+    );
+    container.innerHTML = renderContent(
+      `![restart](${reference})`,
+      false,
+      true,
+    );
+    const image = container.querySelector('img')!;
+
+    uninstall = installMediaReferenceHydrator(document);
+    await waitFor(() => {
+      expect(image.getAttribute('src')).toBe('blob:hydrated-1');
+    });
+
+    uninstall();
+    uninstall = null;
+    expect(image.hasAttribute('src')).toBe(false);
+    expect(image.getAttribute('data-denki-media-src')).toBe(reference);
+    expect(image.getAttribute('data-denki-media-state')).toBe('pending');
+    expect(image.getAttribute('aria-busy')).toBe('true');
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:hydrated-1');
+
+    uninstall = installMediaReferenceHydrator(document);
+    await waitFor(() => {
+      expect(image.getAttribute('src')).toBe('blob:hydrated-2');
+    });
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(2);
   });
 
   it('shows an accessible fallback when a valid reference is missing', async () => {
