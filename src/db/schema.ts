@@ -16,13 +16,14 @@ export interface Deck {
 
 /**
  * Passive binary content keyed by SHA-256(normalized MIME + NUL + stored bytes).
- * Cards do not use this table until they contain an explicit denki-media reference.
+ * ArrayBuffer is used as the durable IndexedDB representation; Blob objects are
+ * reconstructed only when a renderer acquires an object-URL lease.
  */
 export interface MediaAsset {
   hash: string;
   mimeType: string;
   byteLength: number;
-  data: Blob;
+  data: ArrayBuffer;
   createdAt: Date;
 }
 
