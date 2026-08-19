@@ -5,6 +5,7 @@ const SHELL = [
   BASE_URL,
   `${BASE_URL}index.html`,
   `${BASE_URL}manifest.webmanifest`,
+  `${BASE_URL}version.json`,
   `${BASE_URL}denki_logo.png`,
 ];
 
@@ -30,8 +31,8 @@ async function installCompleteRelease() {
     const generatedAssets = await loadPrecacheAssets();
     const requiredUrls = [...new Set([...SHELL, ...generatedAssets])];
 
-    // A release is installable only when every shell, code, style, and WASM
-    // asset is available. Never activate a partially cached offline build.
+    // A release is installable only when every shell, code, style, WASM, and
+    // release-identity asset is available. Never activate a partial build.
     await Promise.all(requiredUrls.map((url) => cache.add(url)));
   } catch (error) {
     await caches.delete(CACHE_NAME);
