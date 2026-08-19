@@ -34,6 +34,7 @@ export interface Card {
   due: Date;              // Exact due date/time
   lastReviewed?: Date;    // Timestamp of last review
   lastRating?: number;    // Current scores are 1-4; legacy 5 is displayed as Easy
+  schedulerVersion: string; // Scheduler lineage that produced the current state
 }
 
 export interface ReviewLog {
@@ -47,4 +48,5 @@ export interface ReviewLog {
   difficulty: number;     // Difficulty before this review
   elapsedDays: number;    // Days elapsed since last review
   scheduledDays: number;  // Next scheduled interval in days
+  schedulerVersion: string; // Scheduler lineage used for this transition
 }
