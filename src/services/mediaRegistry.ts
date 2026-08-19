@@ -47,6 +47,16 @@ export function parseMediaReference(value: unknown): string | null {
   return hash;
 }
 
+function isBlobLike(value: unknown): value is Blob {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<Blob>;
+  return (
+    typeof candidate.size === 'number' &&
+    typeof candidate.type === 'string' &&
+    typeof candidate.arrayBuffer === 'function'
+  );
+}
+
 async function verifyStoredAsset(asset: MediaAsset): Promise<MediaAsset> {
   if (!HASH_PATTERN.test(asset.hash)) {
     throw new Error('Stored media has an invalid SHA-256 key.');
@@ -58,8 +68,10 @@ async function verifyStoredAsset(asset: MediaAsset): Promise<MediaAsset> {
   }
   assertMediaByteLength(asset.byteLength, `Stored media ${asset.hash}`);
 
-  if (!(asset.data instanceof Blob)) {
-    throw new Error(`Stored media ${asset.hash} does not contain a Blob.`);
+  // IndexedDB may deserialize Blob objects from a different JavaScript realm.
+  // `instanceof Blob` is therefore not a portable integrity boundary.
+  if (!isBlobLike(asset.data)) {
+    throw new Error(`Stored media ${asset.hash} does not contain Blob data.`);
   }
   if (asset.data.size !== asset.byteLength) {
     throw new Error(`Stored media ${asset.hash} has inconsistent byte length.`);
