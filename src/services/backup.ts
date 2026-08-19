@@ -5,6 +5,10 @@ import {
   inferLegacyReviewSchedulerVersion,
   isValidSchedulerVersion,
 } from '../domain/schedulerProvenance';
+import {
+  externalizeBackupMedia,
+  hydrateBackupMedia,
+} from './backupMedia';
 import { markBackupExported } from './dataSafety';
 import { FSRS_VERSION } from './scheduler';
 import {
@@ -27,7 +31,7 @@ const BACKUP_ENABLED = import.meta.env.DEV === true;
 const RETIRED_NEW_CARD_LIMIT_KEY = 'denki-new-cards-per-day';
 const SEMVER_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 
-export const BACKUP_FORMAT_VERSION = 3;
+export const BACKUP_FORMAT_VERSION = 4;
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -54,6 +58,8 @@ export interface BackupSnapshot {
     decks: unknown[];
     cards: unknown[];
     reviews: unknown[];
+    /** Required by format v4; absent from v1-v3 data-only backups. */
+    media?: unknown[];
   };
 }
 
@@ -103,7 +109,10 @@ function normalizeCardProvenance(
   return rows.map((row, index) => {
     if (!isRecord(row)) return row;
     const explicitVersion = row.schedulerVersion;
-    if (explicitVersion !== undefined && !isValidSchedulerVersion(explicitVersion)) {
+    if (
+      explicitVersion !== undefined &&
+      !isValidSchedulerVersion(explicitVersion)
+    ) {
       throw new Error(
         `Backup contains an invalid card scheduler version at row ${index + 1}; refusing to import.`,
       );
@@ -129,7 +138,10 @@ function normalizeReviewProvenance(
   return rows.map((row, index) => {
     if (!isRecord(row)) return row;
     const explicitVersion = row.schedulerVersion;
-    if (explicitVersion !== undefined && !isValidSchedulerVersion(explicitVersion)) {
+    if (
+      explicitVersion !== undefined &&
+      !isValidSchedulerVersion(explicitVersion)
+    ) {
       throw new Error(
         `Backup contains an invalid review scheduler version at row ${index + 1}; refusing to import.`,
       );
@@ -148,7 +160,10 @@ function normalizeReviewProvenance(
   });
 }
 
-function assertUniqueIds(rows: readonly { id?: number }[], label: string): void {
+function assertUniqueIds(
+  rows: readonly { id?: number }[],
+  label: string,
+): void {
   const seen = new Set<number>();
   for (const row of rows) {
     if (row.id === undefined) continue;
@@ -271,7 +286,9 @@ function normalizePreferences(value: unknown): BackupPreferences | undefined {
   }
 
   if (!isFiniteNumber(value.speechSpeed)) {
-    throw new Error('Backup speech-speed preference is invalid; refusing to import.');
+    throw new Error(
+      'Backup speech-speed preference is invalid; refusing to import.',
+    );
   }
   const normalizedSpeech = normalizeSpeechRate(value.speechSpeed);
   if (normalizedSpeech !== value.speechSpeed) {
@@ -301,9 +318,14 @@ function validateBackupMetadata(snapshot: Record<string, unknown>): number {
     snapshot.databaseVersion !== undefined &&
     !isPositiveInteger(snapshot.databaseVersion)
   ) {
-    throw new Error('Backup database version is invalid; refusing to import.');
+    throw new Error(
+      'Backup database version is invalid; refusing to import.',
+    );
   }
-  if (snapshot.version !== undefined && !isPositiveInteger(snapshot.version)) {
+  if (
+    snapshot.version !== undefined &&
+    !isPositiveInteger(snapshot.version)
+  ) {
     throw new Error('Backup schema version is invalid; refusing to import.');
   }
   if (
@@ -322,7 +344,10 @@ function validateBackupMetadata(snapshot: Record<string, unknown>): number {
       'Backup is missing its database version; refusing to import.',
     );
   }
-  if (typeof databaseVersion === 'number' && databaseVersion > db.verno) {
+  if (
+    typeof databaseVersion === 'number' &&
+    databaseVersion > db.verno
+  ) {
     throw new Error(
       `Backup database version ${databaseVersion} is newer than this app's schema (${db.verno}); refusing to import.`,
     );
@@ -332,7 +357,9 @@ function validateBackupMetadata(snapshot: Record<string, unknown>): number {
     snapshot.schedulerVersion !== undefined &&
     !isValidSchedulerVersion(snapshot.schedulerVersion)
   ) {
-    throw new Error('Backup scheduler version is invalid; refusing to import.');
+    throw new Error(
+      'Backup scheduler version is invalid; refusing to import.',
+    );
   }
   if (formatVersion >= 3 && snapshot.schedulerVersion === undefined) {
     throw new Error(
@@ -345,7 +372,9 @@ function validateBackupMetadata(snapshot: Record<string, unknown>): number {
     (typeof snapshot.appVersion !== 'string' ||
       !SEMVER_PATTERN.test(snapshot.appVersion))
   ) {
-    throw new Error('Backup application version is invalid; refusing to import.');
+    throw new Error(
+      'Backup application version is invalid; refusing to import.',
+    );
   }
   if (formatVersion >= 3 && snapshot.appVersion === undefined) {
     throw new Error(
@@ -356,9 +385,11 @@ function validateBackupMetadata(snapshot: Record<string, unknown>): number {
   return formatVersion;
 }
 
-function normalizeBackup(snapshot: unknown): NormalizedBackup {
+async function normalizeBackup(snapshot: unknown): Promise<NormalizedBackup> {
   if (!isRecord(snapshot) || !isRecord(snapshot.data)) {
-    throw new Error('Backup is missing its data section; refusing to import.');
+    throw new Error(
+      'Backup is missing its data section; refusing to import.',
+    );
   }
 
   const formatVersion = validateBackupMetadata(snapshot);
@@ -413,7 +444,11 @@ function normalizeBackup(snapshot: unknown): NormalizedBackup {
 
   for (const card of cards) {
     const deck = deckById.get(card.deckId);
-    if (!classIds.has(card.classId) || !deck || deck.classId !== card.classId) {
+    if (
+      !classIds.has(card.classId) ||
+      !deck ||
+      deck.classId !== card.classId
+    ) {
       throw new Error(
         `Card ${card.id} has an invalid class/deck relationship; refusing to import.`,
       );
@@ -422,14 +457,31 @@ function normalizeBackup(snapshot: unknown): NormalizedBackup {
 
   for (const review of reviews) {
     const card = cardById.get(review.cardId);
-    if (!card || card.deckId !== review.deckId || card.classId !== review.classId) {
+    if (
+      !card ||
+      card.deckId !== review.deckId ||
+      card.classId !== review.classId
+    ) {
       throw new Error(
         `Review ${review.id ?? '(without id)'} has invalid card/deck/class references; refusing to import.`,
       );
     }
   }
 
-  return { classes, decks, cards, reviews, preferences };
+  const hydrated = await hydrateBackupMedia(
+    decks,
+    cards,
+    data.media,
+    formatVersion,
+  );
+
+  return {
+    classes,
+    decks: hydrated.decks,
+    cards: hydrated.cards,
+    reviews,
+    preferences,
+  };
 }
 
 function applyPreferences(
@@ -479,11 +531,15 @@ function applyPreferences(
     try {
       rollback();
     } catch (rollbackError) {
-      console.warn('Unable to roll back partially restored preferences:', rollbackError);
+      console.warn(
+        'Unable to roll back partially restored preferences:',
+        rollbackError,
+      );
     }
-    throw new Error('Backup preferences could not be written; import was cancelled.', {
-      cause: error,
-    });
+    throw new Error(
+      'Backup preferences could not be written; import was cancelled.',
+      { cause: error },
+    );
   }
 
   return rollback;
@@ -491,12 +547,13 @@ function applyPreferences(
 
 /** Export the complete local database and non-secret portable preferences. */
 export async function exportDatabase(): Promise<BackupSnapshot> {
-  const [classes, storedDecks, storedCards, storedReviews] = await Promise.all([
-    db.classes.toArray(),
-    db.decks.toArray(),
-    db.cards.toArray(),
-    db.reviews.toArray(),
-  ]);
+  const [classes, storedDecks, storedCards, storedReviews] =
+    await Promise.all([
+      db.classes.toArray(),
+      db.decks.toArray(),
+      db.cards.toArray(),
+      db.reviews.toArray(),
+    ]);
   const schedulerParams = loadSchedulerParams();
   const cards = storedCards.map((card) => ({
     ...card,
@@ -508,6 +565,7 @@ export async function exportDatabase(): Promise<BackupSnapshot> {
       review.schedulerVersion,
     ),
   }));
+  const externalized = await externalizeBackupMedia(storedDecks, cards);
 
   return {
     formatVersion: BACKUP_FORMAT_VERSION,
@@ -519,19 +577,25 @@ export async function exportDatabase(): Promise<BackupSnapshot> {
       requestRetention: schedulerParams.requestRetention,
       speechSpeed: loadSpeechRate(),
     },
-    data: { classes, decks: storedDecks, cards, reviews },
+    data: {
+      classes,
+      decks: externalized.decks,
+      cards: externalized.cards,
+      reviews,
+      media: externalized.media,
+    },
   };
 }
 
 /**
  * Replace the complete database from a validated backup. Metadata, preferences,
- * dates, scheduler provenance, duplicate IDs, and foreign-key relationships are
- * validated before any existing row is cleared. Preference writes are rolled
- * back if the database transaction fails.
+ * dates, scheduler provenance, portable media, duplicate IDs, and foreign-key
+ * relationships are validated before any existing row is cleared. Preference
+ * writes are rolled back if the database transaction fails.
  */
 export async function importDatabase(snapshot: unknown): Promise<void> {
   const { classes, decks, cards, reviews, preferences } =
-    normalizeBackup(snapshot);
+    await normalizeBackup(snapshot);
   const rollbackPreferences = applyPreferences(preferences);
 
   try {
@@ -557,7 +621,10 @@ export async function importDatabase(snapshot: unknown): Promise<void> {
       try {
         rollbackPreferences();
       } catch (rollbackError) {
-        console.warn('Unable to roll back restored preferences:', rollbackError);
+        console.warn(
+          'Unable to roll back restored preferences:',
+          rollbackError,
+        );
       }
     }
     throw error;
@@ -627,7 +694,8 @@ export async function restoreFromBackupIfNeeded(): Promise<boolean> {
     const snapshot: unknown = await response.json();
     if (!isRecord(snapshot) || !isRecord(snapshot.data)) return false;
     const data = snapshot.data;
-    const hasClasses = Array.isArray(data.classes) && data.classes.length > 0;
+    const hasClasses =
+      Array.isArray(data.classes) && data.classes.length > 0;
     const hasCards = Array.isArray(data.cards) && data.cards.length > 0;
     if (!hasClasses && !hasCards) return false;
 
