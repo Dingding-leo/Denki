@@ -14,6 +14,7 @@ import { FSRS_VERSION, STATES } from '../scheduler';
 
 async function clearDatabase(): Promise<void> {
   await Promise.all([
+    db.media.clear(),
     db.reviews.clear(),
     db.cards.clear(),
     db.decks.clear(),
@@ -56,7 +57,7 @@ describe('portable backup scheduler provenance', () => {
     localStorage.clear();
   });
 
-  it('exports format v3 with app metadata and per-row scheduler lineage', async () => {
+  it('exports the current format with app metadata and per-row scheduler lineage', async () => {
     const { classId, deckId } = await seedExistingCard('new card');
     const reviewedAt = new Date('2026-02-01T00:00:00Z');
     const reviewedCardId = await db.cards.add({
@@ -96,7 +97,7 @@ describe('portable backup scheduler provenance', () => {
     expect(snapshot).toMatchObject({
       formatVersion: BACKUP_FORMAT_VERSION,
       appVersion: __DENKI_VERSION__,
-      databaseVersion: 5,
+      databaseVersion: db.verno,
       schedulerVersion: FSRS_VERSION,
     });
     expect(cards.find((card) => card.front === 'new card')?.schedulerVersion).toBe(
