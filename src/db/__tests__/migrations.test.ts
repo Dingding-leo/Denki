@@ -8,11 +8,12 @@ import {
 } from '../../domain/schedulerProvenance';
 import {
   DENKI_STORES,
+  DENKI_STORES_V6,
   db,
   deriveLatestRatings,
   migrateSchedulerProvenance,
 } from '../index';
-import type { Card, ReviewLog } from '../schema';
+import type { Card, MediaAsset, ReviewLog } from '../schema';
 
 function review(
   cardId: number,
@@ -34,8 +35,8 @@ function review(
 }
 
 describe('database migrations', () => {
-  it('uses schema version 5 for scheduler provenance', () => {
-    expect(db.verno).toBe(5);
+  it('uses schema version 6 for the content-addressed media registry', () => {
+    expect(db.verno).toBe(6);
   });
 
   it('derives the latest rating per card independent of review row order', () => {
@@ -210,6 +211,66 @@ describe('database migrations', () => {
         scheduledDays: 12,
         schedulerVersion: LEGACY_SCHEDULER_VERSION,
       });
+    } finally {
+      legacy.close();
+      if (upgraded) {
+        upgraded.close();
+        await upgraded.delete();
+      } else {
+        await Dexie.delete(databaseName);
+      }
+    }
+  });
+
+  it('adds an empty media table without rewriting v5 study data', async () => {
+    const databaseName = `DenkiMediaMigration-${Date.now()}-${Math.random()}`;
+    const legacy = new Dexie(databaseName);
+    legacy.version(5).stores(DENKI_STORES);
+
+    let upgraded: Dexie | null = null;
+    try {
+      await legacy.open();
+      const classId = await legacy.table('classes').add({
+        name: 'Existing class',
+        description: '',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+      });
+      const deckId = await legacy.table('decks').add({
+        classId,
+        name: 'Existing deck',
+        description: '',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+      });
+      const cardId = await legacy.table('cards').add({
+        classId,
+        deckId,
+        front: 'data:image/png;base64,AQID',
+        back: 'Unchanged',
+        cardType: 'standard',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        state: 0,
+        stability: 0,
+        difficulty: 0,
+        elapsedDays: 0,
+        scheduledDays: 0,
+        due: new Date('2026-01-01T00:00:00Z'),
+        schedulerVersion: CURRENT_SCHEDULER_VERSION,
+      });
+      legacy.close();
+
+      upgraded = new Dexie(databaseName);
+      upgraded.version(5).stores(DENKI_STORES);
+      upgraded.version(6).stores(DENKI_STORES_V6);
+      await upgraded.open();
+
+      const card = await upgraded.table<Card>('cards').get(cardId);
+      expect(card).toMatchObject({
+        front: 'data:image/png;base64,AQID',
+        back: 'Unchanged',
+        schedulerVersion: CURRENT_SCHEDULER_VERSION,
+      });
+      expect(await upgraded.table<MediaAsset>('media').count()).toBe(0);
+      expect(upgraded.tables.map((table) => table.name)).toContain('media');
     } finally {
       legacy.close();
       if (upgraded) {
