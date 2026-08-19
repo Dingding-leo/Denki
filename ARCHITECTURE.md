@@ -105,6 +105,34 @@ Database rules:
 - class, deck, card, and review deletion must not leave orphaned records;
 - Date fields must be revived as real `Date` values before IndexedDB writes.
 
+## Release identity boundary
+
+`version.json` is Denki's canonical semantic application version. It must match:
+
+- `src-tauri/tauri.conf.json`;
+- the `[package]` version in `src-tauri/Cargo.toml`;
+- the `denki` package entry in `src-tauri/Cargo.lock`.
+
+The root npm package is a private workspace and intentionally remains `0.0.0`; it is not a distributable Denki artifact.
+
+`npm run version:set -- <version>` updates every release-bearing source file. `npm run test:version` rejects semantic-version errors, missing fields, or disagreement between runtimes.
+
+Vite injects two immutable compile-time values:
+
+- `__DENKI_VERSION__`: the semantic version from `version.json`;
+- `__DENKI_BUILD_ID__`: the validated commit identity for that artifact.
+
+`vite-plugin-precache.ts` emits `dist/version.json` containing both values. The visible application version, service-worker cache identity, deployment artifact, and release tag must all refer to the same release.
+
+Release-identity invariants:
+
+1. A semantic version is changed only through the version helper or an equivalent complete update.
+2. CI validates source version agreement before compiling.
+3. The final artifact validator checks `dist/version.json` against the source version and expected commit identity.
+4. A `workflow_run` deployment passes the successfully validated source SHA explicitly; it must not inherit an unrelated workflow SHA.
+5. Release metadata is cached with the offline shell.
+6. Generated `dist/version.json` is never edited or committed manually.
+
 ## Scheduler boundary
 
 `src/services/scheduler.ts` implements canonical FSRS 4.5 long-term memory equations plus the documented short learning-step state machine.
@@ -205,21 +233,26 @@ The AI-provider key is explicitly excluded.
 
 ### Web/PWA
 
-Vite emits hashed JavaScript, CSS, and WASM assets. `vite-plugin-precache.ts` emits `sw-assets.json` containing the complete generated code-asset set.
+Vite emits hashed JavaScript, CSS, and WASM assets. `vite-plugin-precache.ts` emits:
 
-`public/sw.js` installs a release atomically: every required shell and generated asset must cache successfully. A partially cached release must not activate.
+- `sw-assets.json`, containing the complete generated code-asset set;
+- `version.json`, containing semantic version and immutable build identity.
+
+`public/sw.js` installs a release atomically: every required shell, release-metadata, and generated asset must cache successfully. A partially cached release must not activate.
 
 `npm run test:artifact` validates the final `dist` directory, including:
 
 - required files;
 - resolved entrypoints;
+- semantic version and expected commit identity;
 - CSP invariants;
 - manifest fields and icons;
 - local document references;
 - exact JS/CSS/WASM precache coverage;
+- cached release metadata;
 - atomic service-worker installation behaviour.
 
-GitHub Pages deployment checks out the exact commit that passed CI, rebuilds it, and reruns artifact validation before upload.
+GitHub Pages deployment checks out the exact commit that passed CI, passes that SHA as the build identity, rebuilds it, and reruns version and artifact validation before upload.
 
 ### Tauri
 
@@ -239,7 +272,7 @@ Security is layered:
 - least-privilege Tauri capabilities;
 - production dependency audit;
 - CodeQL `security-extended` analysis;
-- release-artifact validation;
+- release-version and artifact validation;
 - transactional persistence and rollback tests.
 
 See `SECURITY.md` for reporting guidance.
@@ -250,14 +283,15 @@ A change is releasable only after all relevant checks pass on its exact head:
 
 1. clean `npm ci`;
 2. production dependency audit;
-3. strict TypeScript;
-4. security-configuration validation;
-5. canonical FSRS release gate;
-6. zero-warning ESLint;
-7. complete Vitest suite;
-8. production build;
-9. release-artifact validation;
-10. CodeQL analysis.
+3. release-version contract;
+4. strict TypeScript;
+5. security-configuration validation;
+6. canonical FSRS release gate;
+7. zero-warning ESLint;
+8. complete Vitest suite;
+9. production build;
+10. release-artifact and immutable-identity validation;
+11. CodeQL analysis.
 
 Repository administrators must additionally enforce the `Release checks` and CodeQL status checks through a GitHub ruleset for `main`.
 
@@ -265,6 +299,7 @@ Repository administrators must additionally enforce the `Release checks` and Cod
 
 Before implementation, identify which invariant the change touches:
 
+- release version or build identity;
 - persisted data;
 - scheduler semantics;
 - session restoration;
