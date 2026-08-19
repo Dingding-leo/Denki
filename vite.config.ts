@@ -9,11 +9,13 @@ const { version: appVersion } = JSON.parse(
   readFileSync(new URL('./version.json', import.meta.url), 'utf8'),
 ) as { version: string }
 
-// A changing service-worker script URL guarantees that every production build
-// re-evaluates its generated precache manifest instead of keeping an old static
-// cache forever. CI uses the immutable commit SHA; local production builds fall
-// back to a build-time identifier.
-const buildId = process.env.GITHUB_SHA?.slice(0, 12) ?? String(Date.now())
+// Every release artifact receives an immutable build identity. Pull-request and
+// push workflows use GitHub's commit SHA; workflow_run deployments pass the
+// validated source SHA explicitly through DENKI_BUILD_ID.
+const buildId =
+  process.env.DENKI_BUILD_ID?.slice(0, 128) ??
+  process.env.GITHUB_SHA?.slice(0, 12) ??
+  String(Date.now())
 
 export default defineConfig({
   base,
