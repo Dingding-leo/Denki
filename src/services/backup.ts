@@ -1,15 +1,26 @@
 import { db } from '../db';
-import type { Card, Class, Deck, ReviewLog } from '../db/schema';
+import type {
+  Card,
+  Class,
+  Deck,
+  MediaAsset,
+  ReviewLog,
+} from '../db/schema';
 import {
   inferLegacyCardSchedulerVersion,
   inferLegacyReviewSchedulerVersion,
   isValidSchedulerVersion,
 } from '../domain/schedulerProvenance';
+import { hydrateBackupMedia } from './backupMedia';
 import {
-  externalizeBackupMedia,
-  hydrateBackupMedia,
-} from './backupMedia';
+  assertNoRuntimeRegistryReferences,
+} from './backupRegistryReferences';
 import { markBackupExported } from './dataSafety';
+import { revokeAllMediaObjectUrls } from './mediaRegistry';
+import {
+  exportRegistryNativeBackupMedia,
+  importRegistryNativeBackupMedia,
+} from './registryBackupBoundary';
 import { FSRS_VERSION } from './scheduler';
 import {
   EASY_BONUS_KEY,
@@ -31,7 +42,7 @@ const BACKUP_ENABLED = import.meta.env.DEV === true;
 const RETIRED_NEW_CARD_LIMIT_KEY = 'denki-new-cards-per-day';
 const SEMVER_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 
-export const BACKUP_FORMAT_VERSION = 4;
+export const BACKUP_FORMAT_VERSION = 5;
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -58,7 +69,7 @@ export interface BackupSnapshot {
     decks: unknown[];
     cards: unknown[];
     reviews: unknown[];
-    /** Required by format v4; absent from v1-v3 data-only backups. */
+    /** Required by formats v4-v5; absent from v1-v3 data-only backups. */
     media?: unknown[];
   };
 }
@@ -68,7 +79,16 @@ interface NormalizedBackup {
   decks: Deck[];
   cards: Card[];
   reviews: ReviewLog[];
+  media: MediaAsset[];
   preferences?: BackupPreferences;
+}
+
+interface DatabaseSnapshotRows {
+  classes: Class[];
+  decks: Deck[];
+  cards: Card[];
+  reviews: ReviewLog[];
+  media: MediaAsset[];
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -468,18 +488,36 @@ async function normalizeBackup(snapshot: unknown): Promise<NormalizedBackup> {
     }
   }
 
-  const hydrated = await hydrateBackupMedia(
-    decks,
-    cards,
-    data.media,
-    formatVersion,
-  );
+  let restoredMedia: {
+    decks: Deck[];
+    cards: Card[];
+    media: MediaAsset[];
+  };
+  if (formatVersion >= 5) {
+    restoredMedia = await importRegistryNativeBackupMedia(
+      decks,
+      cards,
+      data.media,
+    );
+  } else {
+    assertNoRuntimeRegistryReferences(decks, cards);
+    restoredMedia = {
+      ...(await hydrateBackupMedia(
+        decks,
+        cards,
+        data.media,
+        formatVersion,
+      )),
+      media: [],
+    };
+  }
 
   return {
     classes,
-    decks: hydrated.decks,
-    cards: hydrated.cards,
+    decks: restoredMedia.decks,
+    cards: restoredMedia.cards,
     reviews,
+    media: restoredMedia.media,
     preferences,
   };
 }
@@ -545,16 +583,34 @@ function applyPreferences(
   return rollback;
 }
 
-/** Export the complete local database and non-secret portable preferences. */
+async function readDatabaseSnapshot(): Promise<DatabaseSnapshotRows> {
+  return db.transaction(
+    'r',
+    [db.classes, db.decks, db.cards, db.reviews, db.media],
+    async () => {
+      const [classes, decks, cards, reviews, media] = await Promise.all([
+        db.classes.toArray(),
+        db.decks.toArray(),
+        db.cards.toArray(),
+        db.reviews.toArray(),
+        db.media.toArray(),
+      ]);
+      return { classes, decks, cards, reviews, media };
+    },
+  );
+}
+
+/** Export a consistent five-table snapshot and non-secret portable preferences. */
 export async function exportDatabase(): Promise<BackupSnapshot> {
-  const [classes, storedDecks, storedCards, storedReviews] =
-    await Promise.all([
-      db.classes.toArray(),
-      db.decks.toArray(),
-      db.cards.toArray(),
-      db.reviews.toArray(),
-    ]);
+  const {
+    classes,
+    decks: storedDecks,
+    cards: storedCards,
+    reviews: storedReviews,
+    media: storedMedia,
+  } = await readDatabaseSnapshot();
   const schedulerParams = loadSchedulerParams();
+  const exportedAt = new Date().toISOString();
   const cards = storedCards.map((card) => ({
     ...card,
     schedulerVersion: inferLegacyCardSchedulerVersion(card),
@@ -565,14 +621,19 @@ export async function exportDatabase(): Promise<BackupSnapshot> {
       review.schedulerVersion,
     ),
   }));
-  const externalized = await externalizeBackupMedia(storedDecks, cards);
+  const externalized = await exportRegistryNativeBackupMedia(
+    storedDecks,
+    cards,
+    storedMedia,
+    exportedAt,
+  );
 
   return {
     formatVersion: BACKUP_FORMAT_VERSION,
     appVersion: __DENKI_VERSION__,
     databaseVersion: db.verno,
     schedulerVersion: FSRS_VERSION,
-    exportedAt: new Date().toISOString(),
+    exportedAt,
     preferences: {
       requestRetention: schedulerParams.requestRetention,
       speechSpeed: loadSpeechRate(),
@@ -588,32 +649,32 @@ export async function exportDatabase(): Promise<BackupSnapshot> {
 }
 
 /**
- * Replace the complete database from a validated backup. Metadata, preferences,
- * dates, scheduler provenance, portable media, duplicate IDs, and foreign-key
- * relationships are validated before any existing row is cleared. Preference
- * writes are rolled back if the database transaction fails.
+ * Replace all five persistent tables from a fully validated backup. Preference
+ * writes are rolled back if the durable replacement transaction fails.
  */
 export async function importDatabase(snapshot: unknown): Promise<void> {
-  const { classes, decks, cards, reviews, preferences } =
+  const { classes, decks, cards, reviews, media, preferences } =
     await normalizeBackup(snapshot);
   const rollbackPreferences = applyPreferences(preferences);
 
   try {
     await db.transaction(
       'rw',
-      [db.classes, db.decks, db.cards, db.reviews],
+      [db.classes, db.decks, db.cards, db.reviews, db.media],
       async () => {
         await Promise.all([
           db.classes.clear(),
           db.decks.clear(),
           db.cards.clear(),
           db.reviews.clear(),
+          db.media.clear(),
         ]);
 
         if (classes.length > 0) await db.classes.bulkAdd(classes);
         if (decks.length > 0) await db.decks.bulkAdd(decks);
         if (cards.length > 0) await db.cards.bulkAdd(cards);
         if (reviews.length > 0) await db.reviews.bulkAdd(reviews);
+        if (media.length > 0) await db.media.bulkAdd(media);
       },
     );
   } catch (error) {
@@ -630,6 +691,13 @@ export async function importDatabase(snapshot: unknown): Promise<void> {
     throw error;
   }
 
+  // Durable replacement succeeded. Existing object URLs point at the old
+  // registry generation and must not survive into the restored library.
+  try {
+    revokeAllMediaObjectUrls();
+  } catch (error) {
+    console.warn('Unable to revoke stale media object URLs:', error);
+  }
   clearPersistedStudySession();
   triggerAutoSave();
 }

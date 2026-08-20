@@ -1,20 +1,18 @@
 # Denki Architecture
 
-This document describes Denki's current engineering structure, the boundaries that protect learner data, and the invariants that future changes must preserve.
+This document defines Denki's current engineering boundaries and the invariants that protect learner data, scheduling correctness, media integrity, offline releases, and recovery.
 
 ## Product boundary
 
-Denki is a local-first spaced-repetition workspace. The browser or Tauri WebView owns the learner's primary database. There is no account system, hosted application database, analytics pipeline, or mandatory cloud dependency.
+Denki is a local-first spaced-repetition workspace. The browser or Tauri WebView owns the primary database. There is no account system, hosted application database, analytics pipeline, or mandatory cloud dependency.
 
-Optional AI generation is the only product flow that sends learner-supplied content to a third-party service. That request occurs only after an explicit user action and uses the endpoint and API key configured by the learner.
-
-## System overview
+Optional AI generation is the only flow that sends learner-supplied content to a third party. It runs only after an explicit action and uses the endpoint and API key configured by the learner.
 
 ```mermaid
 flowchart TD
   UI[React pages and components]
   STORE[Zustand domain store]
-  SERVICES[Pure and boundary services]
+  SERVICES[Domain and boundary services]
   DB[(Dexie / IndexedDB)]
   LS[(localStorage)]
   SW[Service worker cache]
@@ -32,161 +30,145 @@ flowchart TD
   FILES --> SERVICES
 ```
 
-The arrows are deliberately one-directional. UI code may request work, but domain state and persistence rules belong below the component layer.
+UI code may request work, but scheduling, validation, persistence, sanitisation, backup, and media-integrity rules belong below the component layer.
 
-## Runtime layers
+## Application shell
 
-### 1. Application shell
-
-`src/main.tsx` mounts React, registers production service-worker behaviour, and performs the limited lifecycle work that must happen outside React.
+`src/main.tsx` mounts React, imports global styles, registers production service-worker behaviour, and flushes transient state during browser lifecycle events.
 
 `src/App.tsx` owns:
 
 - startup restoration and database hydration;
 - persistent-storage and backup-safety checks;
-- route composition;
-- lazy page loading;
+- route composition and lazy page loading;
 - application and study-route error boundaries.
 
-Startup must fail visibly. A database or restoration error must never leave a blank screen that looks like successful initialization.
+Startup failures must be visible. A database, migration, or restoration error must never look like successful initialization.
 
-### 2. Pages and components
+`src/components/ui/GlobalUI.tsx` owns application-wide transient UI and the single document-scoped media hydrator. Individual study modes must not install competing hydrators or unmanaged object URLs.
 
-Pages orchestrate user flows. Components render controls and local interaction state. They should not recreate persistence, scheduling, import, or sanitisation rules.
-
-Important page boundaries include:
-
-- `DashboardPage`: global study entry and analytics;
-- `ClassViewPage`: class/deck organisation and scoped actions;
-- `StudySessionPage`: active Review, Drill, Learn, and Match flows;
-- `AIGeneratePage`: explicit provider-backed draft generation and review.
-
-Reusable modal components own presentation and form state, while Zustand actions own durable mutations.
-
-### 3. Domain state
+## Domain state
 
 `src/store/useFlashcardStore.ts` composes five Zustand slices:
 
-- `classSlice`;
-- `deckSlice`;
-- `cardSlice`;
-- `studySlice`;
-- `statsSlice`.
+- classes;
+- decks;
+- cards;
+- study sessions;
+- statistics.
 
-`src/store/uiStore.ts` is separate because transient UI concerns such as toasts and confirmation dialogs are not part of the learner's study model.
+`src/store/uiStore.ts` remains separate because toasts, confirmation dialogs, command-palette state, and similar controls are not part of the durable study model.
 
 Store invariants:
 
 1. Persistent mutations validate IDs and relationships at the store or service boundary.
 2. Related database writes use a Dexie transaction.
 3. A failed durable write must not be represented as success in memory.
-4. Destructive mutations invalidate active sessions that reference deleted or edited cards.
-5. Asynchronous loaders use latest-request guards so stale IndexedDB results cannot overwrite a newer navigation scope.
-6. Derived statistics describe what is actually measured. FSRS `Review` state is not labelled as mastery.
+4. Destructive changes invalidate active sessions that reference changed or deleted cards.
+5. Asynchronous loaders use latest-request guards so stale IndexedDB reads cannot overwrite newer navigation state.
+6. Metrics are labelled by what they actually measure; FSRS Review state is not called mastery.
 
-### 4. Database
+## Database
 
-`src/db/index.ts` defines the Dexie database and migrations. `src/db/schema.ts` defines the persisted record shapes.
+`src/db/index.ts` defines Dexie versions and migrations. `src/db/schema.ts` defines durable shapes.
 
-Core tables:
+Schema v6 has five tables:
 
 - `classes`;
 - `decks`;
 - `cards`;
-- `reviews`.
+- `reviews`;
+- `media`.
 
-The schema stores denormalised `classId` and `deckId` values on cards and review logs to support indexed scoped queries. Because IndexedDB does not enforce foreign keys, Denki must validate and preserve these relationships itself.
+Cards and review logs carry denormalised class/deck IDs for indexed scoped queries. IndexedDB does not enforce foreign keys, so imports, restores, and destructive operations must preserve those relationships explicitly.
 
-Database schema v5 also stores `schedulerVersion` on every card and review log:
+### Scheduler provenance — schema v5
 
-- on a card, it identifies the scheduler lineage that produced the current memory state;
-- on a review log, it identifies the scheduler used for that transition.
+Every persisted card state and review transition carries `schedulerVersion`:
 
-The TypeScript fields remain optional only so pre-v5 records and legacy backup rows can be represented while they are normalized. Once opened through database v5, persisted rows are expected to carry valid provenance.
+- card provenance identifies the scheduler lineage that produced the current memory state;
+- review provenance identifies the scheduler used for that transition.
+
+Migration v5 does **not** recalculate interval, stability, difficulty, state, due date, or rating. It classifies:
+
+- pristine, unreviewed New cards as current `4.5`;
+- all other unversioned cards and review logs as `legacy-unversioned`;
+- valid explicit provenance without modification.
+
+Database create hooks provide defense-in-depth for direct imports and fixtures, but production flows should still use explicit scheduler/card-initialisation helpers.
+
+### Runtime media registry — schema v6
+
+The `media` table is keyed by:
+
+```text
+SHA-256(normalized MIME + NUL + exact persisted bytes)
+```
+
+A row stores canonical MIME, byte length, `ArrayBuffer`, and creation time. Schema v6 creates an empty table and deliberately performs no card-text migration.
 
 Database rules:
 
-- schema changes require a new Dexie version and migration tests;
-- migrations must be deterministic and safe to rerun only as Dexie permits;
-- imports and restores validate complete referential integrity before replacing data;
-- class, deck, card, and review deletion must not leave orphaned records;
-- Date fields must be revived as real `Date` values before IndexedDB writes;
-- scheduler provenance must be preserved or conservatively inferred before a row is persisted;
-- migrations must not relabel uncertain historical scheduling as canonical.
+- every schema change requires a new Dexie version and real migration coverage;
+- migrations must preserve existing rows unless deletion is an explicit product decision;
+- Date fields must be revived as real `Date` objects before writes;
+- uncertain scheduler history must never be relabelled canonical;
+- media rows must be verified before they are served or exported;
+- complete backup replacement must include all five tables in one transaction.
 
-Database-v5 migration deliberately does **not** recalculate interval, stability, difficulty, state, due date, or rating. It classifies:
+## Release identity
 
-- pristine, unreviewed New cards as current `4.5`, because they contain no model-derived memory state;
-- all other unversioned cards and review logs as `legacy-unversioned`;
-- already valid explicit provenance without modification.
-
-Database `creating` hooks apply the same policy as defense-in-depth for direct import paths. Production creation and reset flows should still use the explicit scheduler helper rather than depending on the hook.
-
-## Release identity boundary
-
-`version.json` is Denki's canonical semantic application version. It must match:
+`version.json` is the canonical semantic application version. It must match:
 
 - `src-tauri/tauri.conf.json`;
-- the `[package]` version in `src-tauri/Cargo.toml`;
-- the `denki` package entry in `src-tauri/Cargo.lock`.
+- the Rust package version in `src-tauri/Cargo.toml`;
+- the `denki` entry in `src-tauri/Cargo.lock`.
 
-The root npm package is a private workspace and intentionally remains `0.0.0`; it is not a distributable Denki artifact.
+The root npm package is a private workspace and intentionally remains `0.0.0`.
 
-`npm run version:set -- <version>` updates every release-bearing source file. `npm run test:version` rejects semantic-version errors, missing fields, or disagreement between runtimes.
+Vite injects:
 
-Vite injects two immutable compile-time values:
+- `__DENKI_VERSION__` — semantic application version;
+- `__DENKI_BUILD_ID__` — immutable source identity for that artifact.
 
-- `__DENKI_VERSION__`: the semantic version from `version.json`;
-- `__DENKI_BUILD_ID__`: the validated commit identity for that artifact.
+The build emits `dist/version.json`. The visible version, service-worker cache identity, deployed artifact, and release tag must refer to the same release.
 
-`vite-plugin-precache.ts` emits `dist/version.json` containing both values. The visible application version, service-worker cache identity, deployment artifact, and release tag must all refer to the same release.
+Release invariants:
 
-Release-identity invariants:
+1. Use `npm run version:set -- <version>` or an equivalent complete update.
+2. `npm run test:version` must pass before compilation.
+3. The final artifact validator checks semantic version and expected commit identity.
+4. Pages deployment receives the successful CI `head_sha` explicitly.
+5. Generated release metadata is never edited or committed manually.
 
-1. A semantic version is changed only through the version helper or an equivalent complete update.
-2. CI validates source version agreement before compiling.
-3. The final artifact validator checks `dist/version.json` against the source version and expected commit identity.
-4. A `workflow_run` deployment passes the successfully validated source SHA explicitly; it must not inherit an unrelated workflow SHA.
-5. Release metadata is cached with the offline shell.
-6. Generated `dist/version.json` is never edited or committed manually.
+## Scheduler
 
-## Scheduler boundary
+`src/services/scheduler.ts` implements canonical FSRS 4.5 long-term equations plus the documented short learning-step state machine.
 
-`src/services/scheduler.ts` implements canonical FSRS 4.5 long-term memory equations plus the documented short learning-step state machine.
-
-`src/domain/schedulerProvenance.ts` defines scheduler-lineage semantics shared by the scheduler, database migration, database hooks, and backup importer. The current lineage is `4.5`; historical rows whose producing algorithm cannot be proven are `legacy-unversioned`.
-
-Release-critical constants and behaviour are pinned by `src/services/__tests__/scheduler.test.ts`:
+The explicit scheduler gate pins:
 
 - the published 17-weight vector;
 - `DECAY = -0.5`;
 - `FACTOR = 19/81`;
-- forgetting-curve vectors;
-- target-retention interval vectors;
+- forgetting-curve and target-retention vectors;
 - New, Learning, Review, and Relearning transitions;
 - pre-review difficulty in stability updates;
 - strict `Hard < Good < Easy` Review intervals;
-- maximum-interval boundary behaviour.
-
-Additional provenance tests require every current transition to stamp both the resulting card and review log with `4.5`.
+- maximum-interval boundaries.
 
 Scheduler invariants:
 
-1. The published model weights are not user-adjustable.
-2. Target retention is the only persisted user scheduler parameter.
-3. Custom Hard or Easy multipliers are not permitted under the "canonical FSRS 4.5" claim.
-4. Manual confidence changes use the same scheduler and review-log transaction as Review Mode.
-5. Any scheduler change requires externally derived golden vectors and must keep `npm run test:scheduler` as an explicit release gate.
-6. Existing stored stability and difficulty values remain authoritative unless a separately designed, tested, and communicated migration is introduced.
-7. Every model-derived card state and review log must carry the scheduler version that produced it.
-8. A future scheduler upgrade must introduce a new lineage value rather than overwriting historical provenance.
-9. Resetting a card removes model-derived memory and starts a fresh current-lineage New state.
+1. Model weights are not user-adjustable.
+2. Target retention is the only persisted scheduler parameter.
+3. No custom Hard/Easy multipliers may coexist with the canonical FSRS 4.5 claim.
+4. Manual confidence and Review Mode use the same scheduler path.
+5. Every current transition stamps both card and review log with `4.5`.
+6. Existing stability/difficulty values remain authoritative unless a separately designed migration says otherwise.
+7. A future scheduler must introduce a new lineage value rather than overwriting history.
 
 ## Study sessions
 
-A study session is an in-memory queue plus a compact resumable cursor.
-
-Session scopes are distinct:
+Session scopes remain distinct:
 
 - scheduled deck review;
 - scheduled class review;
@@ -194,173 +176,159 @@ Session scopes are distinct:
 - all-card practice;
 - one-pass deck Drill.
 
-A persisted session stores card IDs and counters, not duplicate card content. Restoration rehydrates current card records from IndexedDB and validates:
-
-- snapshot version and age;
-- scope identity;
-- Drill/practice/scheduled mode identity;
-- queue indices;
-- card existence;
-- class/deck membership.
-
-Completed sessions are not restored. Undo history intentionally does not survive reload because it contains full pre-mutation queue snapshots and database rollback identifiers.
+A persisted session stores card IDs and counters, not duplicate card content. Restoration validates snapshot version, age, scope/mode identity, indices, card existence, and membership. Completed sessions are discarded. Undo history intentionally does not survive reload.
 
 Review durability order:
 
-1. calculate the next FSRS state and current scheduler provenance;
-2. write the updated card and versioned review log in one transaction;
+1. calculate the next canonical state and provenance;
+2. write card and review log in one transaction;
 3. advance the in-memory queue;
-4. coalesce non-critical analytics refreshes;
+4. refresh non-critical caches/analytics;
 5. persist the resumable cursor.
 
-A cache or analytics refresh failure must not duplicate an already durable review.
+A cache refresh failure must not duplicate an already durable review.
 
-## Untrusted input boundaries
+## Untrusted input
 
-Denki treats all imported or externally generated content as untrusted.
+Denki treats Markdown/HTML, CSV, APKG files, JSON backups, AI responses, localStorage values, route parameters, media rows, and user-configured URLs as untrusted.
 
-### Markdown and HTML
+### Markdown and mixed media rendering
 
-`src/services/markdown.ts` is the shared rendering path. Markdown output passes through DOMPurify before entering the DOM. Review, Learn, and Match must not develop separate rendering policies.
+`src/services/markdown.ts` is the single rendering path for Review, Learn, Match, and deck notes.
+
+For runtime registry references:
+
+1. exact `denki-media://sha256/<hash>` values become opaque tokens before Markdown parsing;
+2. DOMPurify sanitizes the complete output with user data attributes disabled;
+3. trusted post-sanitisation code creates inert media bindings with no active URI attribute;
+4. the app-wide hydrator verifies registry bytes and acquires a managed object URL;
+5. only then is `src`, `poster`, or supported `href` installed.
+
+Existing safe data URLs remain supported. Missing/corrupt registry media produces an accessible fallback. `srcset` is forbidden until every candidate can be validated independently. One rendered content block is capped at 256 registry references.
 
 ### CSV
 
-`src/services/csvImport.ts` parses quoted multiline CSV, escaped quotes, BOMs, and malformed final rows. Parsing and destination validation finish before the atomic card write. Imported cards begin as current-lineage pristine New cards.
+CSV parsing supports quoted multiline values, escaped quotes, BOMs, and malformed-row reporting. Parsing and destination validation finish before the atomic card write.
 
 ### Anki packages
 
-`src/services/ankiImport.ts` performs bounded, local field import for supported Basic and cloze-style material. The ZIP archive is inspected before decompression and is rejected for unsafe or unsupported structures, including excessive output, duplicate paths, ZIP64, encryption, and unsupported compression.
+The local Anki importer preflights ZIP structure and declared output before decompression, caps streamed output, decodes only referenced media, sanitizes HTML/SVG, and commits decks/cards atomically.
 
-Only referenced media is decoded. Deck and card creation share one transaction. Imported cards contain no scheduler-derived history and enter the current lineage; the database create hook provides a second enforcement layer.
-
-This is not a complete Anki template renderer. Complex note models, template logic, CSS, and exact multi-template parity are outside the current compatibility promise.
-
-### Backup files
-
-Portable backup v4 separates:
-
-- backup envelope version;
-- producing Denki application version;
-- IndexedDB schema version;
-- current scheduler metadata;
-- per-card and per-review scheduler provenance;
-- portable non-secret preferences;
-- study data;
-- a content-addressed media table for supported embedded images, audio, and video.
-
-Repeated base64 media in card fronts, card backs, and deck notes is replaced in the portable representation by `denki-backup-media://sha256/<hash>` references. The hash covers the normalized MIME type, a zero separator byte, and decoded media bytes, so equal bytes with different declared types do not collide semantically.
-
-Before current database rows are cleared, format-v4 import validates:
-
-- envelope, application, database, and scheduler metadata;
-- dates, IDs, relationships, preferences, and row-level scheduler provenance;
-- exact media-row shape and lowercase SHA-256 identifiers;
-- a passive supported MIME allow-list;
-- canonical base64 and declared byte length;
-- the recomputed SHA-256 digest;
-- duplicate, missing, unreferenced, and malformed media references;
-- a 5,000-object limit, 16 MiB per-object limit, and 160 MiB decoded-total limit.
-
-Only after that complete validation are portable references hydrated back to their original data URLs and the existing library replaced transactionally. Runtime IndexedDB records are not automatically rewritten by this format: backup v4 changes the portable representation, not the current card-rendering storage model.
-
-Format-v3 rows must include explicit scheduler provenance. Format-v1/v2 rows remain compatible through conservative normalization: pristine New cards become current `4.5`, while model-derived states and review logs become `legacy-unversioned`. Format-v1-v3 files without portable media tokens remain importable. Invalid explicit provenance or unsupported media tokens are rejected rather than replaced silently.
-
-Preference changes roll back if the database replacement transaction fails. The AI-provider key is explicitly excluded.
+Compatibility remains field-based for supported Basic and cloze-style material. Complex templates, CSS, add-ons, and full Anki scheduling parity are outside the product promise.
 
 ### AI providers
 
-`src/services/ai.ts` validates endpoint URLs, refuses plaintext remote HTTP, caps input and output size, enforces a timeout, and accepts only supported response shapes. Provider output creates editable drafts; it does not bypass user review or store mutation validation. Filed AI drafts begin as current-lineage New cards through the shared bulk-create path.
+AI endpoints are URL-validated, remote plaintext HTTP is rejected, input/output is bounded, requests time out, and response shapes are checked. Provider output creates editable drafts; it does not bypass destination or store validation.
+
+## Runtime media integrity
+
+The registry accepts a narrow passive image/audio/video MIME allow-list. Each asset is limited to 16 MiB. SVG is sanitized before hashing and storage.
+
+`resolveMediaAsset()` verifies:
+
+- key syntax;
+- canonical MIME;
+- declared/actual byte length;
+- creation timestamp;
+- recomputed SHA-256.
+
+`acquireMediaObjectUrl()` provides reference-counted leases:
+
+- concurrent requests for one hash share one load and one URL;
+- the final release revokes the URL;
+- connected DOM reparenting preserves the lease;
+- removed nodes release leases;
+- hydrator teardown restores inert bindings before revocation;
+- at most 256 hashes may have active URLs.
+
+See `docs/media-registry.md` for the complete contract.
+
+## Portable backup v5
+
+Backup v5 is registry-native and represents a complete local database snapshot.
+
+### Export
+
+All five tables are read within one Dexie read transaction. The portable media envelope deduplicates equal MIME-plus-bytes content and labels each row:
+
+- `embedded` — hydrate back to exact data-URL text only;
+- `registry` — restore to the runtime media table;
+- `both` — hydrate and persist from one shared row.
+
+Registry-only assets are retained because backup represents complete local state, not only currently referenced content.
+
+### Validation
+
+Before current data or preferences are changed, import validates:
+
+- envelope/application/database/scheduler versions;
+- dates, IDs, relationships, preferences, and scheduler provenance;
+- exact media shape and usage;
+- canonical MIME, base64, byte length, and timestamp;
+- recomputed SHA-256;
+- embedded and runtime reference completeness;
+- duplicate/malformed references;
+- 5,000-object, 16 MiB per-object, and 160 MiB total decoded limits.
+
+Every persisted runtime registry reference must have a registry row. Embedded rows may not be orphaned; registry-only rows may be.
+
+### Replacement
+
+Classes, decks, cards, reviews, and media are cleared and restored in one Dexie write transaction. Any failure rolls back all five tables. Preference writes retain their rollback path. Existing object URLs are revoked only after the durable replacement commits.
+
+Formats v1-v4 remain importable through conservative provenance/media normalization. They restore no runtime registry, clear any current registry during complete replacement, and reject future runtime-registry references that those formats cannot carry.
+
+The AI-provider key is excluded from every backup.
 
 ## Offline and distribution
 
-### Web/PWA
+Vite emits hashed JavaScript, CSS, and WASM assets. The precache plugin emits:
 
-Vite emits hashed JavaScript, CSS, and WASM assets. `vite-plugin-precache.ts` emits:
+- `sw-assets.json` — complete generated code-asset set;
+- `version.json` — semantic version and immutable build identity.
 
-- `sw-assets.json`, containing the complete generated code-asset set;
-- `version.json`, containing semantic version and immutable build identity.
+Service-worker installation is atomic: every required shell, release-metadata, code, style, and WASM asset must cache successfully. A partial release must not activate.
 
-`public/sw.js` installs a release atomically: every required shell, release-metadata, and generated asset must cache successfully. A partially cached release must not activate.
+`npm run test:artifact` validates required files, entrypoints, CSP, manifest, local references, exact precache coverage, atomic installation semantics, semantic version, and build identity.
 
-`npm run test:artifact` validates the final `dist` directory, including:
+Pages deployment checks out the exact successful CI commit, rebuilds it, and reruns artifact validation before upload.
 
-- required files;
-- resolved entrypoints;
-- semantic version and expected commit identity;
-- CSP invariants;
-- manifest fields and icons;
-- local document references;
-- exact JS/CSS/WASM precache coverage;
-- cached release metadata;
-- atomic service-worker installation behaviour.
+The Tauri wrapper uses the same web app and IndexedDB model. Web and Tauri CSPs are validated together; capabilities remain least-privilege. Platform support must not be claimed until its bundle is built and smoke-tested.
 
-GitHub Pages deployment checks out the exact commit that passed CI, passes that SHA as the build identity, rebuilds it, and reruns version and artifact validation before upload.
+## Security and release gates
 
-### Tauri
-
-The Tauri wrapper uses the same web application and IndexedDB model. Its capability file grants only core application access. The web and Tauri CSPs are validated together so a future change cannot silently weaken one runtime.
-
-A desktop release should not be claimed as supported on a platform until its bundle is built and smoke-tested on that platform.
-
-## Security controls
-
-Security is layered:
-
-- strict TypeScript;
-- zero-warning ESLint;
-- explicit DOM sanitisation;
-- untrusted-input limits;
-- CSP validation for web and Tauri;
-- least-privilege Tauri capabilities;
-- production dependency audit;
-- CodeQL `security-extended` analysis;
-- release-version and artifact validation;
-- schema migration and provenance tests;
-- content-addressed backup-media integrity and resource-budget tests;
-- transactional persistence and rollback tests.
-
-See `SECURITY.md` for reporting guidance.
-
-## CI and release gates
-
-A change is releasable only after all relevant checks pass on its exact head:
+A releasable exact head passes:
 
 1. clean `npm ci`;
 2. production dependency audit;
 3. release-version contract;
 4. strict TypeScript;
-5. security-configuration validation;
-6. canonical FSRS release gate;
+5. web/Tauri security validation;
+6. canonical FSRS gate;
 7. zero-warning ESLint;
-8. complete Vitest suite, including database, provenance, backup, media-integrity, and rollback coverage;
+8. complete Vitest suite, including migrations, provenance, backup, media integrity, reference completeness, and rollback;
 9. production build;
-10. release-artifact and immutable-identity validation;
-11. CodeQL analysis.
+10. artifact/build-identity validation;
+11. CodeQL `security-extended` analysis.
 
-Repository administrators must additionally enforce the `Release checks` and CodeQL status checks through a GitHub ruleset for `main`.
+Repository-level rules should additionally require the relevant status checks on `main`, prevent force pushes/deletion, and require pull-request-based changes.
 
-## Adding or changing functionality
+## Change review
 
-Before implementation, identify which invariant the change touches:
+Before implementing a change, identify whether it touches:
 
-- release version or build identity;
+- version/build identity;
 - persisted data or schema migration;
-- scheduler semantics or provenance;
-- session restoration;
+- scheduler semantics/provenance;
+- study-session recovery;
 - untrusted input;
-- backup representation or media integrity;
+- media integrity/rendering;
+- backup representation/recovery;
 - offline caching;
 - security policy;
 - analytics meaning;
 - platform distribution.
 
-Then provide:
+Then define user impact, non-goals, compatibility, failure/rollback behaviour, regression coverage, integration coverage, and documentation impact.
 
-- explicit user impact and non-goals;
-- compatibility behaviour;
-- failure and rollback behaviour;
-- regression tests at the lowest useful layer;
-- integration coverage when multiple boundaries interact;
-- documentation updates when the public product promise changes.
-
-Do not solve domain problems inside JSX, duplicate sanitisation rules, bypass store validation with direct database writes, relabel uncertain history as canonical, or weaken a release gate to make a change pass.
+Do not solve domain problems in JSX, duplicate sanitisation rules, bypass store validation with direct database writes, relabel uncertain history as canonical, persist registry references without recoverability, or weaken a release gate to make a change pass.
