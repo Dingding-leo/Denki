@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '../../db';
 import type { Card } from '../../db/schema';
 import { exportDatabase, importDatabase } from '../backup';
+import { BACKUP_MEDIA_REFERENCE_PREFIX } from '../backupMedia';
 import {
   EMBEDDED_MEDIA_MIGRATION_STORAGE_KEY,
   clearEmbeddedMediaMigrationCursor,
@@ -144,7 +145,10 @@ describe('resumable embedded-media migration', () => {
     expect(JSON.stringify(snapshot.data.cards)).toContain(
       MEDIA_REFERENCE_PREFIX,
     );
-    expect(JSON.stringify(snapshot.data.cards)).toContain(PNG_DATA_URL);
+    expect(JSON.stringify(snapshot.data.cards)).toContain(
+      BACKUP_MEDIA_REFERENCE_PREFIX,
+    );
+    expect(JSON.stringify(snapshot.data.cards)).not.toContain(PNG_DATA_URL);
     expect(snapshot.data.media).toMatchObject([{ usage: 'both' }]);
 
     await clearDatabase();
