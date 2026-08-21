@@ -4,7 +4,6 @@ const COORDINATION_DATABASE_NAME = 'DenkiCoordination';
 const GLOBAL_LEASE_NAME = 'exclusive-maintenance';
 const WEB_LOCK_NAME = 'denki-exclusive-maintenance';
 const PRESENCE_STORAGE_KEY = 'denki-maintenance-presence-v1';
-const OWNER_STORAGE_KEY = 'denki-maintenance-owner-v1';
 const BROADCAST_CHANNEL_NAME = 'denki-maintenance-events-v1';
 
 const DEFAULT_LEASE_DURATION_MS = 60_000;
@@ -82,14 +81,6 @@ function randomToken(): string {
   return `${Date.now().toString(36)}-${random}`;
 }
 
-function getSessionStorage(): Storage | null {
-  try {
-    return globalThis.sessionStorage ?? null;
-  } catch {
-    return null;
-  }
-}
-
 function getLocalStorage(): Storage | null {
   try {
     return globalThis.localStorage ?? null;
@@ -98,24 +89,13 @@ function getLocalStorage(): Storage | null {
   }
 }
 
+/**
+ * The owner token is intentionally memory-only. sessionStorage can be cloned
+ * into a newly opened tab, which would make two browsing contexts appear to be
+ * the same owner and defeat the synchronous foreign-tab write fence.
+ */
 export function getMaintenanceOwnerId(): string {
-  if (memoryOwnerId) return memoryOwnerId;
-
-  const storage = getSessionStorage();
-  if (storage) {
-    const existing = storage.getItem(OWNER_STORAGE_KEY);
-    if (existing) {
-      memoryOwnerId = existing;
-      return existing;
-    }
-  }
-
-  memoryOwnerId = randomToken();
-  try {
-    storage?.setItem(OWNER_STORAGE_KEY, memoryOwnerId);
-  } catch {
-    // A memory-only owner still keeps same-tab coordination correct.
-  }
+  memoryOwnerId ??= randomToken();
   return memoryOwnerId;
 }
 
@@ -212,7 +192,7 @@ function readPresence(): MaintenanceActivity | null {
   try {
     storage.removeItem(PRESENCE_STORAGE_KEY);
   } catch {
-    // A stale marker can only block until its declared expiry is ignored.
+    // An invalid marker is ignored even if cleanup is unavailable.
   }
   return null;
 }
@@ -371,6 +351,12 @@ function getWebLocks(): LockManagerLike | null {
   return navigatorObject?.locks ?? null;
 }
 
+function abortError(signal: AbortSignal): Error {
+  return signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException('The operation was aborted.', 'AbortError');
+}
+
 async function runWithDatabaseLease<T>(
   options: MaintenanceLockOptions,
   callback: (context: MaintenanceLockContext) => Promise<T>,
@@ -410,46 +396,61 @@ async function runWithDatabaseLease<T>(
   if (externalSignal?.aborted) abortFromExternal();
   else externalSignal?.addEventListener('abort', abortFromExternal, { once: true });
 
-  let heartbeatRunning = false;
   let currentLease = lease;
-  const heartbeat = globalThis.setInterval(() => {
-    if (heartbeatRunning || controller.signal.aborted) return;
-    heartbeatRunning = true;
-    void renewLease(currentLease, leaseDurationMs)
+  let renewalPromise: Promise<void> | null = null;
+  let closing = false;
+
+  const queueRenewal = (): Promise<void> => {
+    if (controller.signal.aborted) {
+      return Promise.reject(abortError(controller.signal));
+    }
+    if (closing) {
+      return Promise.reject(new MaintenanceLockLostError());
+    }
+    if (renewalPromise) return renewalPromise;
+
+    renewalPromise = renewLease(currentLease, leaseDurationMs)
       .then((renewed) => {
         currentLease = renewed;
         activeLocalLease = renewed;
       })
       .catch((error: unknown) => {
-        controller.abort(
-          error instanceof Error ? error : new MaintenanceLockLostError(),
-        );
+        const reason =
+          error instanceof Error ? error : new MaintenanceLockLostError();
+        controller.abort(reason);
+        throw reason;
       })
       .finally(() => {
-        heartbeatRunning = false;
+        renewalPromise = null;
       });
+    return renewalPromise;
+  };
+
+  const heartbeat = globalThis.setInterval(() => {
+    if (closing || controller.signal.aborted) return;
+    void queueRenewal().catch(() => {
+      // queueRenewal already aborts the shared signal with the exact reason.
+    });
   }, heartbeatMs);
 
   const assertOwned = async () => {
-    if (controller.signal.aborted) {
-      throw controller.signal.reason instanceof Error
-        ? controller.signal.reason
-        : new MaintenanceLockLostError();
-    }
-    currentLease = await renewLease(currentLease, leaseDurationMs);
-    activeLocalLease = currentLease;
+    if (controller.signal.aborted) throw abortError(controller.signal);
+    await queueRenewal();
+    if (controller.signal.aborted) throw abortError(controller.signal);
   };
 
   try {
-    if (controller.signal.aborted) {
-      throw controller.signal.reason instanceof Error
-        ? controller.signal.reason
-        : new DOMException('The operation was aborted.', 'AbortError');
-    }
+    if (controller.signal.aborted) throw abortError(controller.signal);
     return await callback({ signal: controller.signal, assertOwned });
   } finally {
+    closing = true;
     globalThis.clearInterval(heartbeat);
     externalSignal?.removeEventListener('abort', abortFromExternal);
+
+    // A heartbeat that was already in flight must settle before release. Without
+    // this join, it could re-put the lease after release and resurrect a ghost
+    // owner that blocks every tab until expiry.
+    await renewalPromise?.catch(() => undefined);
 
     let released = false;
     try {
@@ -557,7 +558,6 @@ export async function resetMaintenanceLockForTests(): Promise<void> {
   await coordinationDb.leases.clear();
   try {
     getLocalStorage()?.removeItem(PRESENCE_STORAGE_KEY);
-    getSessionStorage()?.removeItem(OWNER_STORAGE_KEY);
   } catch {
     // Ignore test-environment storage failures.
   }
