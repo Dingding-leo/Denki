@@ -116,6 +116,17 @@ validateTauriSchemeCompatibility(webPolicy, 'Web CSP');
 const tauriConfig = JSON.parse(
   readFileSync(new URL('../src-tauri/tauri.conf.json', import.meta.url), 'utf8'),
 );
+const tauriIdentifier = tauriConfig?.identifier;
+if (
+  typeof tauriIdentifier !== 'string' ||
+  !/^[A-Za-z0-9]+(?:[.-][A-Za-z0-9]+)+$/.test(tauriIdentifier)
+) {
+  fail('Tauri identifier must be a stable reverse-DNS-style value.');
+}
+if (tauriIdentifier.toLowerCase().endsWith('.app')) {
+  fail('Tauri identifier must not end in .app on macOS.');
+}
+
 const tauriCsp = tauriConfig?.app?.security?.csp;
 if (!tauriCsp || typeof tauriCsp !== 'object' || Array.isArray(tauriCsp)) {
   fail('Tauri CSP must be a directive object, not null or a permissive string.');
