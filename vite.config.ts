@@ -4,7 +4,12 @@ import react from '@vitejs/plugin-react'
 import { denkiBackupPlugin } from './vite-plugin-backup.ts'
 import { denkiPrecachePlugin } from './vite-plugin-precache.ts'
 
-const base = process.env.GITHUB_ACTIONS ? '/Denki/' : '/'
+const isTauriBuild = Boolean(process.env.TAURI_ENV_PLATFORM)
+const base = isTauriBuild
+  ? './'
+  : process.env.GITHUB_ACTIONS
+    ? '/Denki/'
+    : '/'
 const { version: appVersion } = JSON.parse(
   readFileSync(new URL('./version.json', import.meta.url), 'utf8'),
 ) as { version: string }
@@ -28,4 +33,18 @@ export default defineConfig({
     denkiBackupPlugin(),
     denkiPrecachePlugin({ version: appVersion, buildId }),
   ],
+  // Tauri exposes these variables to its hook commands. Keeping the prefix
+  // explicit makes future frontend code able to inspect target platform values
+  // without opening every environment variable to the client bundle.
+  envPrefix: ['VITE_', 'TAURI_ENV_*'],
+  build: isTauriBuild
+    ? {
+        target:
+          process.env.TAURI_ENV_PLATFORM === 'windows'
+            ? 'chrome105'
+            : 'safari13',
+        minify: process.env.TAURI_ENV_DEBUG === 'true' ? false : 'esbuild',
+        sourcemap: process.env.TAURI_ENV_DEBUG === 'true',
+      }
+    : undefined,
 })
