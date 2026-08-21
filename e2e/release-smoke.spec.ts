@@ -146,9 +146,18 @@ test('production shell, release identity, and lazy routes survive a true offline
     }, releaseUrl);
     expect(cachedRelease).toEqual(release);
 
-    await page.goto(new URL('ai-generate', baseURL).toString(), {
-      waitUntil: 'domcontentloaded',
-    });
+    // Denki intentionally uses HashRouter so a static host never has to serve
+    // arbitrary SPA paths. Use the real navigation link while offline to prove
+    // the lazy chunk is precached, then reload that hash route to prove the
+    // cached shell and route state survive a fresh document load.
+    await page.getByRole('link', { name: 'Card lab' }).click();
+    await expect(page).toHaveURL(/#\/ai-generate$/);
+    await expect(
+      page.getByRole('heading', { name: 'Cut notes into cards.' }),
+    ).toBeVisible();
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page).toHaveURL(/#\/ai-generate$/);
     await expect(
       page.getByRole('heading', { name: 'Cut notes into cards.' }),
     ).toBeVisible();
