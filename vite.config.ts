@@ -5,6 +5,7 @@ import { denkiBackupPlugin } from './vite-plugin-backup.ts'
 import { denkiPrecachePlugin } from './vite-plugin-precache.ts'
 
 const isTauriBuild = Boolean(process.env.TAURI_ENV_PLATFORM)
+const isTauriDebug = process.env.TAURI_ENV_DEBUG === 'true'
 const base = isTauriBuild
   ? './'
   : process.env.GITHUB_ACTIONS
@@ -43,8 +44,11 @@ export default defineConfig({
           process.env.TAURI_ENV_PLATFORM === 'windows'
             ? 'chrome105'
             : 'safari13',
-        minify: process.env.TAURI_ENV_DEBUG === 'true' ? false : 'esbuild',
-        sourcemap: process.env.TAURI_ENV_DEBUG === 'true',
+        // Vite 8 uses Oxc by default. The older explicit esbuild path is
+        // deprecated and requires a separate package, so keep desktop builds on
+        // the current toolchain rather than reviving a legacy minifier.
+        minify: isTauriDebug ? false : 'oxc',
+        sourcemap: isTauriDebug,
       }
     : undefined,
 })
