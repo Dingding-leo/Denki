@@ -65,6 +65,33 @@ async function cacheSuccessfulResponse(request, response) {
   return response;
 }
 
+async function fetchAndCache(request) {
+  try {
+    const response = await fetch(request);
+    return await cacheSuccessfulResponse(request, response);
+  } catch {
+    return Response.error();
+  }
+}
+
+async function serveReleaseResource(request, isNavigate) {
+  // The active worker owns one complete, versioned release. Navigations and
+  // immutable code assets must come from that release first; network-first can
+  // return a browser-generated offline error response without rejecting, which
+  // bypasses a `.catch()` fallback and produces a blank offline reload.
+  const cached = await caches.match(request);
+  if (cached) return cached;
+
+  if (isNavigate) {
+    const shell =
+      (await caches.match(BASE_URL)) ||
+      (await caches.match(`${BASE_URL}index.html`));
+    if (shell) return shell;
+  }
+
+  return fetchAndCache(request);
+}
+
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
@@ -75,31 +102,12 @@ self.addEventListener('fetch', (event) => {
   const isCodeAsset = /\.(?:js|css|mjs|wasm)$/.test(url.pathname);
 
   if (isNavigate || isCodeAsset) {
-    event.respondWith(
-      fetch(event.request)
-        .then((response) => cacheSuccessfulResponse(event.request, response))
-        .catch(async () => {
-          const cached = await caches.match(event.request);
-          if (cached) return cached;
-          if (isNavigate) {
-            return (await caches.match(BASE_URL)) || (await caches.match(`${BASE_URL}index.html`)) || Response.error();
-          }
-          return Response.error();
-        }),
-    );
+    event.respondWith(serveReleaseResource(event.request, isNavigate));
     return;
   }
 
   event.respondWith(
-    caches.match(event.request).then(async (cachedResponse) => {
-      if (cachedResponse) return cachedResponse;
-
-      try {
-        const response = await fetch(event.request);
-        return await cacheSuccessfulResponse(event.request, response);
-      } catch {
-        return Response.error();
-      }
-    }),
+    caches.match(event.request).then((cachedResponse) =>
+      cachedResponse || fetchAndCache(event.request)),
   );
 });
