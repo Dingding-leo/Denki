@@ -17,7 +17,7 @@ jobs:
   check:
     name: Release checks
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     env:
       CI: true
     steps:
@@ -45,3 +45,7 @@ jobs:
         run: npm run build
       - name: Release artifact integrity
         run: npm run test:artifact
+      - name: Install Chromium for release smoke
+        run: npm run test:e2e:install
+      - name: Real-browser release smoke
+        run: npm run test:e2e
