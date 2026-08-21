@@ -1,0 +1,33 @@
+name: Bootstrap Playwright lockfile
+
+on:
+  push:
+    branches: [ci/browser-release-smoke]
+    paths: [.github/workflows/bootstrap-playwright.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  update-lockfile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ci/browser-release-smoke
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - name: Add pinned Playwright test dependency
+        run: npm install --save-dev --save-exact @playwright/test@1.62.1
+      - name: Remove one-time bootstrap workflow
+        run: rm .github/workflows/bootstrap-playwright.yml
+      - name: Commit deterministic dependency metadata
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json .github/workflows/bootstrap-playwright.yml
+          git commit -m "test: add pinned Playwright dependency"
+          git push origin HEAD:ci/browser-release-smoke
