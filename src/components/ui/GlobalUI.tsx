@@ -5,6 +5,7 @@ import { useUIStore } from '../../store/uiStore';
 import { CommandPalette } from '../CommandPalette';
 import { ShortcutsModal } from '../modals/ShortcutsModal';
 import { ConfirmDialogHost } from './ConfirmDialogHost';
+import { MaintenanceBlocker } from './MaintenanceBlocker';
 import { Toaster } from './Toaster';
 
 const isTypingTarget = (target: EventTarget | null) => {
@@ -19,8 +20,8 @@ const isTypingTarget = (target: EventTarget | null) => {
 
 /**
  * App-wide UI chrome: toasts, confirm dialogs, the ⌘K command palette, the
- * shortcut reference, and one lifecycle owner for prepared registry media.
- * Mounted once inside the router so the palette can navigate.
+ * shortcut reference, one lifecycle owner for prepared registry media, and the
+ * cross-tab read-only surface used during exclusive maintenance.
  */
 export const GlobalUI: React.FC = () => {
   useEffect(() => installMediaReferenceHydrator(document), []);
@@ -71,6 +72,7 @@ export const GlobalUI: React.FC = () => {
       <ShortcutsModal />
       <ConfirmDialogHost />
       <Toaster />
+      <MaintenanceBlocker />
     </>
   );
 };

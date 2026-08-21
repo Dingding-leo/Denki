@@ -3,6 +3,7 @@ import {
   inferLegacyCardSchedulerVersion,
   inferLegacyReviewSchedulerVersion,
 } from '../domain/schedulerProvenance';
+import { assertMaintenanceWriteAllowed } from '../services/maintenanceLock';
 import type {
   Card,
   Class,
@@ -118,12 +119,32 @@ class DenkiDatabase extends Dexie {
     // separately gated migration introduces explicit denki-media references.
     this.version(6).stores(DENKI_STORES_V6);
 
-    // Database-level hooks protect direct import and test-fixture writes in
-    // addition to the explicit scheduler helpers used by production features.
+    // Every main-database mutation consults the synchronous cross-tab presence
+    // fence. The tab that owns the maintenance lease may write; other tabs fail
+    // closed before stale in-memory state can overwrite a restore or migration.
+    const guardWrite = () => assertMaintenanceWriteAllowed();
+    this.classes.hook('creating', guardWrite);
+    this.classes.hook('updating', guardWrite);
+    this.classes.hook('deleting', guardWrite);
+    this.decks.hook('creating', guardWrite);
+    this.decks.hook('updating', guardWrite);
+    this.decks.hook('deleting', guardWrite);
+    this.cards.hook('updating', guardWrite);
+    this.cards.hook('deleting', guardWrite);
+    this.reviews.hook('updating', guardWrite);
+    this.reviews.hook('deleting', guardWrite);
+    this.media.hook('creating', guardWrite);
+    this.media.hook('updating', guardWrite);
+    this.media.hook('deleting', guardWrite);
+
+    // Database-level provenance hooks protect direct import and test-fixture
+    // writes in addition to the explicit scheduler helpers used by features.
     this.cards.hook('creating', (_primaryKey, card) => {
+      guardWrite();
       card.schedulerVersion = inferLegacyCardSchedulerVersion(card);
     });
     this.reviews.hook('creating', (_primaryKey, review) => {
+      guardWrite();
       review.schedulerVersion = inferLegacyReviewSchedulerVersion(
         review.schedulerVersion,
       );

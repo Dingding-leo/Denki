@@ -10,6 +10,7 @@ import {
   migrateEmbeddedMediaToCompletion,
   runEmbeddedMediaMigrationBatch,
 } from '../embeddedMediaMigration';
+import { resetMaintenanceLockForTests } from '../maintenanceLock';
 import {
   MEDIA_REFERENCE_PREFIX,
   resolveMediaAsset,
@@ -81,6 +82,7 @@ function references(text: string): string[] {
 describe('resumable embedded-media migration', () => {
   beforeEach(async () => {
     vi.restoreAllMocks();
+    await resetMaintenanceLockForTests();
     await clearDatabase();
     localStorage.clear();
   });
@@ -184,10 +186,24 @@ describe('resumable embedded-media migration', () => {
     const seeded = await seedLibrary({
       cardMedia: `<img src="${PNG_DATA_URL}">`,
     });
-    const setItem = vi.spyOn(Storage.prototype, 'setItem');
-    setItem.mockImplementationOnce(() => {
-      throw new Error('simulated browser quota failure');
-    });
+    const originalSetItem = Storage.prototype.setItem;
+    let checkpointFailed = false;
+    const setItem = vi
+      .spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(function setItemWithCheckpointFailure(
+        this: Storage,
+        key,
+        value,
+      ) {
+        if (
+          key === EMBEDDED_MEDIA_MIGRATION_STORAGE_KEY &&
+          !checkpointFailed
+        ) {
+          checkpointFailed = true;
+          throw new Error('simulated browser quota failure');
+        }
+        return originalSetItem.call(this, key, value);
+      });
 
     await expect(runEmbeddedMediaMigrationBatch(10)).rejects.toThrow(
       /batch was committed.*checkpoint/i,
