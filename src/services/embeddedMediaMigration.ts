@@ -9,9 +9,8 @@ import {
   hashMediaBytes,
   normalizeMediaBytes,
 } from './mediaIntegrity';
-import {
-  createMediaReference,
-} from './mediaRegistry';
+import { withExclusiveMaintenanceLock } from './maintenanceLock';
+import { createMediaReference } from './mediaRegistry';
 
 export const EMBEDDED_MEDIA_MIGRATION_STORAGE_KEY =
   'denki-embedded-media-migration-v1';
@@ -21,6 +20,7 @@ const CURSOR_VERSION = 1;
 const MAX_BATCH_SIZE = 100;
 
 type MigrationPhase = 'cards' | 'decks' | 'complete';
+type OwnershipAssertion = () => Promise<void>;
 
 export interface EmbeddedMediaMigrationCursor {
   version: 1;
@@ -442,10 +442,12 @@ function persistAfterCommit(cursor: EmbeddedMediaMigrationCursor): void {
   }
 }
 
-export async function runEmbeddedMediaMigrationBatch(
-  batchSize = DEFAULT_EMBEDDED_MEDIA_MIGRATION_BATCH_SIZE,
+async function runEmbeddedMediaMigrationBatchUnlocked(
+  batchSize: number,
+  assertOwned: OwnershipAssertion,
 ): Promise<EmbeddedMediaMigrationBatchResult> {
   const boundedBatchSize = validateBatchSize(batchSize);
+  await assertOwned();
   const cursor = getEmbeddedMediaMigrationStatus() ?? createInitialCursor();
 
   if (cursor.phase === 'complete') {
@@ -465,6 +467,7 @@ export async function runEmbeddedMediaMigrationBatch(
       .limit(boundedBatchSize)
       .toArray();
     if (cards.length === 0) {
+      await assertOwned();
       const next = advanceCursor(cursor, 'decks', 0, 0, 0, 0);
       writeCursor(next);
       return {
@@ -477,6 +480,7 @@ export async function runEmbeddedMediaMigrationBatch(
     }
 
     const plan = await planCardBatch(cards);
+    await assertOwned();
     const created = await commitCardBatch(plan);
     const migrated = plan.updates.filter((update) => update.changed).length;
     const lastId = cards[cards.length - 1]?.id;
@@ -507,6 +511,7 @@ export async function runEmbeddedMediaMigrationBatch(
     .limit(boundedBatchSize)
     .toArray();
   if (decks.length === 0) {
+    await assertOwned();
     const next = advanceCursor(cursor, 'complete', 0, 0, 0, 0);
     writeCursor(next);
     return {
@@ -519,6 +524,7 @@ export async function runEmbeddedMediaMigrationBatch(
   }
 
   const plan = await planDeckBatch(decks);
+  await assertOwned();
   const created = await commitDeckBatch(plan);
   const migrated = plan.updates.filter((update) => update.changed).length;
   const lastId = decks[decks.length - 1]?.id;
@@ -543,10 +549,54 @@ export async function runEmbeddedMediaMigrationBatch(
   };
 }
 
+/** Run exactly one batch while holding the global cross-tab maintenance lease. */
+export async function runEmbeddedMediaMigrationBatch(
+  batchSize = DEFAULT_EMBEDDED_MEDIA_MIGRATION_BATCH_SIZE,
+): Promise<EmbeddedMediaMigrationBatchResult> {
+  return withExclusiveMaintenanceLock(
+    {
+      operation: 'embedded-media-migration-batch',
+      label: 'Media storage optimization',
+    },
+    ({ assertOwned }) =>
+      runEmbeddedMediaMigrationBatchUnlocked(batchSize, assertOwned),
+  );
+}
+
 function yieldToBrowser(): Promise<void> {
   return new Promise((resolve) => {
     globalThis.setTimeout(resolve, 0);
   });
+}
+
+async function migrateEmbeddedMediaToCompletionUnlocked(
+  options: {
+    batchSize?: number;
+    restart?: boolean;
+    signal: AbortSignal;
+    onProgress?: (result: EmbeddedMediaMigrationBatchResult) => void;
+  },
+  assertOwned: OwnershipAssertion,
+): Promise<EmbeddedMediaMigrationRunResult> {
+  await assertOwned();
+  if (options.restart) clearEmbeddedMediaMigrationCursor();
+  let cursor = getEmbeddedMediaMigrationStatus() ?? createInitialCursor();
+
+  while (cursor.phase !== 'complete') {
+    if (options.signal.aborted) return { cursor, stopped: true };
+    const result = await runEmbeddedMediaMigrationBatchUnlocked(
+      options.batchSize ?? DEFAULT_EMBEDDED_MEDIA_MIGRATION_BATCH_SIZE,
+      assertOwned,
+    );
+    cursor = result.cursor;
+    options.onProgress?.(result);
+    if (options.signal.aborted && cursor.phase !== 'complete') {
+      return { cursor, stopped: true };
+    }
+    await yieldToBrowser();
+  }
+
+  return { cursor, stopped: false };
 }
 
 export async function migrateEmbeddedMediaToCompletion(options: {
@@ -555,19 +605,19 @@ export async function migrateEmbeddedMediaToCompletion(options: {
   signal?: AbortSignal;
   onProgress?: (result: EmbeddedMediaMigrationBatchResult) => void;
 } = {}): Promise<EmbeddedMediaMigrationRunResult> {
-  if (options.restart) clearEmbeddedMediaMigrationCursor();
-  let cursor = getEmbeddedMediaMigrationStatus() ?? createInitialCursor();
-
-  while (cursor.phase !== 'complete') {
-    if (options.signal?.aborted) return { cursor, stopped: true };
-    const result = await runEmbeddedMediaMigrationBatch(options.batchSize);
-    cursor = result.cursor;
-    options.onProgress?.(result);
-    if (options.signal?.aborted && cursor.phase !== 'complete') {
-      return { cursor, stopped: true };
-    }
-    await yieldToBrowser();
-  }
-
-  return { cursor, stopped: false };
+  return withExclusiveMaintenanceLock(
+    {
+      operation: 'embedded-media-migration',
+      label: 'Media storage optimization',
+      signal: options.signal,
+    },
+    ({ signal, assertOwned }) =>
+      migrateEmbeddedMediaToCompletionUnlocked(
+        {
+          ...options,
+          signal,
+        },
+        assertOwned,
+      ),
+  );
 }
