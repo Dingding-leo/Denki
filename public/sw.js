@@ -65,6 +65,43 @@ async function cacheSuccessfulResponse(request, response) {
   return response;
 }
 
+async function fetchAndCache(request) {
+  try {
+    const response = await fetch(request);
+    return await cacheSuccessfulResponse(request, response);
+  } catch {
+    return Response.error();
+  }
+}
+
+async function matchReleaseResource(request) {
+  // Static hosts commonly attach `Vary: Origin` to module responses. Cache.add()
+  // and a later browser module request can then differ only by request headers
+  // even though the immutable, same-origin URL and release identity are exact.
+  // The cache namespace is already versioned, so ignoring Vary here cannot mix
+  // releases or origins and prevents a fully installed chunk from appearing
+  // absent during offline navigation.
+  return caches.match(request, { ignoreVary: true });
+}
+
+async function serveReleaseResource(request, isNavigate) {
+  // The active worker owns one complete, versioned release. Navigations and
+  // immutable code assets must come from that release first; network-first can
+  // return a browser-generated offline error response without rejecting, which
+  // bypasses a `.catch()` fallback and produces a blank offline reload.
+  const cached = await matchReleaseResource(request);
+  if (cached) return cached;
+
+  if (isNavigate) {
+    const shell =
+      (await matchReleaseResource(BASE_URL)) ||
+      (await matchReleaseResource(`${BASE_URL}index.html`));
+    if (shell) return shell;
+  }
+
+  return fetchAndCache(request);
+}
+
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
@@ -75,31 +112,12 @@ self.addEventListener('fetch', (event) => {
   const isCodeAsset = /\.(?:js|css|mjs|wasm)$/.test(url.pathname);
 
   if (isNavigate || isCodeAsset) {
-    event.respondWith(
-      fetch(event.request)
-        .then((response) => cacheSuccessfulResponse(event.request, response))
-        .catch(async () => {
-          const cached = await caches.match(event.request);
-          if (cached) return cached;
-          if (isNavigate) {
-            return (await caches.match(BASE_URL)) || (await caches.match(`${BASE_URL}index.html`)) || Response.error();
-          }
-          return Response.error();
-        }),
-    );
+    event.respondWith(serveReleaseResource(event.request, isNavigate));
     return;
   }
 
   event.respondWith(
-    caches.match(event.request).then(async (cachedResponse) => {
-      if (cachedResponse) return cachedResponse;
-
-      try {
-        const response = await fetch(event.request);
-        return await cacheSuccessfulResponse(event.request, response);
-      } catch {
-        return Response.error();
-      }
-    }),
+    matchReleaseResource(event.request).then((cachedResponse) =>
+      cachedResponse || fetchAndCache(event.request)),
   );
 });
