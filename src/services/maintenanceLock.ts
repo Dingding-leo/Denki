@@ -357,6 +357,13 @@ function abortError(signal: AbortSignal): Error {
     : new DOMException('The operation was aborted.', 'AbortError');
 }
 
+async function ignorePromiseFailure(
+  promise: Promise<void> | null,
+): Promise<void> {
+  if (!promise) return;
+  await promise.catch(() => undefined);
+}
+
 async function runWithDatabaseLease<T>(
   options: MaintenanceLockOptions,
   callback: (context: MaintenanceLockContext) => Promise<T>,
@@ -450,7 +457,7 @@ async function runWithDatabaseLease<T>(
     // A heartbeat that was already in flight must settle before release. Without
     // this join, it could re-put the lease after release and resurrect a ghost
     // owner that blocks every tab until expiry.
-    await renewalPromise?.catch(() => undefined);
+    await ignorePromiseFailure(renewalPromise);
 
     let released = false;
     try {
