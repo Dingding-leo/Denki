@@ -16,6 +16,50 @@ async function waitForServiceWorkerControl(page: Page): Promise<void> {
   await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
 }
 
+async function assertCompleteReleaseCache(page: Page): Promise<void> {
+  const missing = await page.evaluate(async () => {
+    const cacheNames = (await caches.keys()).filter((name) =>
+      name.startsWith('denki-cache-'),
+    );
+    if (cacheNames.length !== 1) {
+      throw new Error(
+        `Expected one active Denki release cache, found ${cacheNames.length}.`,
+      );
+    }
+
+    const base = new URL('./', location.href);
+    const manifestResponse = await fetch(new URL('sw-assets.json', base), {
+      cache: 'no-store',
+    });
+    if (!manifestResponse.ok) {
+      throw new Error(`sw-assets.json returned ${manifestResponse.status}.`);
+    }
+    const manifest = (await manifestResponse.json()) as { assets?: unknown };
+    if (!Array.isArray(manifest.assets)) {
+      throw new Error('sw-assets.json does not contain an assets array.');
+    }
+
+    const required = [
+      base.href,
+      new URL('index.html', base).href,
+      new URL('manifest.webmanifest', base).href,
+      new URL('version.json', base).href,
+      new URL('denki_logo.png', base).href,
+      ...manifest.assets.map((asset) => new URL(String(asset), base).href),
+    ];
+    const cache = await caches.open(cacheNames[0]);
+    const results = await Promise.all(
+      [...new Set(required)].map(async (url) => ({
+        url,
+        present: Boolean(await cache.match(url)),
+      })),
+    );
+    return results.filter((result) => !result.present).map((result) => result.url);
+  });
+
+  expect(missing).toEqual([]);
+}
+
 async function countIndexedDbRows(
   page: Page,
   storeName: string,
@@ -85,10 +129,12 @@ test('production shell, release identity, and lazy routes survive a true offline
       ),
     )
     .toBe(true);
+  await assertCompleteReleaseCache(page);
 
   await context.setOffline(true);
   try {
     await page.reload({ waitUntil: 'domcontentloaded' });
+    expect(page.url()).toBe(baseURL);
     await expect(
       page.getByRole('heading', { name: 'The Study Desk' }),
     ).toBeVisible();
