@@ -53,6 +53,32 @@ const completeCursor = {
   mediaObjectsCreated: 4,
 } as const;
 
+const activeSession = {
+  deckId: 1,
+  queue: [
+    {
+      id: 1,
+      classId: 1,
+      deckId: 1,
+      front: 'Question',
+      back: 'Answer',
+      cardType: 'standard' as const,
+      createdAt: new Date('2026-08-20T00:00:00.000Z'),
+      state: 0,
+      stability: 0,
+      difficulty: 0,
+      elapsedDays: 0,
+      scheduledDays: 0,
+      due: new Date('2026-08-20T00:00:00.000Z'),
+    },
+  ],
+  currentIndex: 0,
+  completedCount: 0,
+  initialQueueSize: 1,
+  totalCards: 1,
+  history: [],
+};
+
 describe('Settings media optimization', () => {
   beforeEach(() => {
     mocks.status = null;
@@ -110,8 +136,8 @@ describe('Settings media optimization', () => {
     expect(mocks.reload).toHaveBeenCalledWith(350);
   });
 
-  it('blocks optimization while a study session is active', async () => {
-    useFlashcardStore.setState({ session: {} as never });
+  it('blocks optimization while a valid study session is active', async () => {
+    useFlashcardStore.setState({ session: activeSession });
     render(<SettingsModal onClose={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Optimize media' }));
