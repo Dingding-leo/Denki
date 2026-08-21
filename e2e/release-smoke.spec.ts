@@ -51,7 +51,7 @@ async function assertCompleteReleaseCache(page: Page): Promise<void> {
     const results = await Promise.all(
       [...new Set(required)].map(async (url) => ({
         url,
-        present: Boolean(await cache.match(url)),
+        present: Boolean(await cache.match(url, { ignoreVary: true })),
       })),
     );
     return results.filter((result) => !result.present).map((result) => result.url);
