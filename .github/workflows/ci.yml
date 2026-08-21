@@ -90,7 +90,7 @@ jobs:
           test -d "$APP"
           test -f "$INFO"
           EXPECTED_VERSION="$(node -p "require('./version.json').version")"
-          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$INFO")" = "com.denki.app"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$INFO")" = "com.dingdingleo.denki"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$INFO")" = "$EXPECTED_VERSION"
           file "$APP/Contents/MacOS/denki" | tee "$RUNNER_TEMP/denki-binary.txt"
           grep -q "${{ matrix.arch == 'arm64' && 'arm64' || 'x86_64' }}" "$RUNNER_TEMP/denki-binary.txt"
