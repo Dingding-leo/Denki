@@ -190,7 +190,11 @@ describe('resumable embedded-media migration', () => {
     let checkpointFailed = false;
     const setItem = vi
       .spyOn(Storage.prototype, 'setItem')
-      .mockImplementation(function setItemWithCheckpointFailure(key, value) {
+      .mockImplementation(function setItemWithCheckpointFailure(
+        this: Storage,
+        key,
+        value,
+      ) {
         if (
           key === EMBEDDED_MEDIA_MIGRATION_STORAGE_KEY &&
           !checkpointFailed
