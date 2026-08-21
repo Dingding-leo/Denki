@@ -11,10 +11,10 @@ import {
 } from 'lucide-react';
 import {
   downloadBackup,
-  importDatabase,
   type BackupSnapshot,
 } from '../../services/backup';
 import { scheduleApplicationReload } from '../../services/appReload';
+import { importDatabaseExclusively } from '../../services/maintenanceOperations';
 import { celebrate } from '../../services/celebrate';
 import {
   clearEmbeddedMediaMigrationCursor,
@@ -250,7 +250,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
     setImporting(true);
     try {
       const parsed: unknown = JSON.parse(await file.text());
-      await importDatabase(parsed as BackupSnapshot);
+      await importDatabaseExclusively(parsed as BackupSnapshot);
       try {
         clearEmbeddedMediaMigrationCursor();
       } catch (error) {
