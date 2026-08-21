@@ -4,11 +4,13 @@ import {
   MaintenanceLockUnavailableError,
   assertMaintenanceWriteAllowed,
   getForeignMaintenanceActivity,
+  getMaintenanceOwnerId,
   resetMaintenanceLockForTests,
   withExclusiveMaintenanceLock,
 } from '../maintenanceLock';
 
 const PRESENCE_STORAGE_KEY = 'denki-maintenance-presence-v1';
+const RETIRED_SESSION_OWNER_KEY = 'denki-maintenance-owner-v1';
 
 function foreignPresence(expiresAt = Date.now() + 60_000) {
   const now = Date.now();
@@ -42,6 +44,12 @@ describe('cross-tab maintenance lock', () => {
     await resetMaintenanceLockForTests();
     localStorage.clear();
     sessionStorage.clear();
+  });
+
+  it('never trusts a sessionStorage owner that a duplicated tab could inherit', () => {
+    sessionStorage.setItem(RETIRED_SESSION_OWNER_KEY, 'copied-tab-owner');
+
+    expect(getMaintenanceOwnerId()).not.toBe('copied-tab-owner');
   });
 
   it('allows the owner tab to write and rejects a concurrent maintenance operation', async () => {
