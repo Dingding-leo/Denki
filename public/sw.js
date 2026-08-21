@@ -74,18 +74,28 @@ async function fetchAndCache(request) {
   }
 }
 
+async function matchReleaseResource(request) {
+  // Static hosts commonly attach `Vary: Origin` to module responses. Cache.add()
+  // and a later browser module request can then differ only by request headers
+  // even though the immutable, same-origin URL and release identity are exact.
+  // The cache namespace is already versioned, so ignoring Vary here cannot mix
+  // releases or origins and prevents a fully installed chunk from appearing
+  // absent during offline navigation.
+  return caches.match(request, { ignoreVary: true });
+}
+
 async function serveReleaseResource(request, isNavigate) {
   // The active worker owns one complete, versioned release. Navigations and
   // immutable code assets must come from that release first; network-first can
   // return a browser-generated offline error response without rejecting, which
   // bypasses a `.catch()` fallback and produces a blank offline reload.
-  const cached = await caches.match(request);
+  const cached = await matchReleaseResource(request);
   if (cached) return cached;
 
   if (isNavigate) {
     const shell =
-      (await caches.match(BASE_URL)) ||
-      (await caches.match(`${BASE_URL}index.html`));
+      (await matchReleaseResource(BASE_URL)) ||
+      (await matchReleaseResource(`${BASE_URL}index.html`));
     if (shell) return shell;
   }
 
@@ -107,7 +117,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) =>
+    matchReleaseResource(event.request).then((cachedResponse) =>
       cachedResponse || fetchAndCache(event.request)),
   );
 });
