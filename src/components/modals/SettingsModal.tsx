@@ -11,10 +11,11 @@ import {
 } from 'lucide-react';
 import {
   downloadBackup,
-  type BackupSnapshot,
+  prepareBackupImport,
+  type BackupImportSummary,
 } from '../../services/backup';
 import { scheduleApplicationReload } from '../../services/appReload';
-import { importDatabaseExclusively } from '../../services/maintenanceOperations';
+import { importPreparedDatabaseExclusively } from '../../services/maintenanceOperations';
 import { celebrate } from '../../services/celebrate';
 import {
   clearEmbeddedMediaMigrationCursor,
@@ -103,12 +104,40 @@ function migrationStatusText(
   return `Paused in ${phase}: ${status.scannedRows.toLocaleString()} rows checked, ${status.migratedRows.toLocaleString()} rows optimized, ${status.mediaObjectsCreated.toLocaleString()} media objects created.`;
 }
 
+type ImportPhase = 'idle' | 'inspecting' | 'restoring';
+
+function formatByteCount(bytes: number): string {
+  if (bytes < 1024) return `${bytes.toLocaleString()} B`;
+  const kibibytes = bytes / 1024;
+  if (kibibytes < 1024) return `${kibibytes.toFixed(1)} KiB`;
+  return `${(kibibytes / 1024).toFixed(1)} MiB`;
+}
+
+function formatBackupTimestamp(value: string | null): string {
+  if (!value) return 'Not recorded';
+  return new Date(value).toLocaleString();
+}
+
+function backupSourceLabel(summary: BackupImportSummary): string {
+  return summary.appVersion
+    ? `Denki ${summary.appVersion} · format ${summary.formatVersion}`
+    : `Legacy Denki backup · format ${summary.formatVersion}`;
+}
+
+function backupPreferenceLabel(summary: BackupImportSummary): string {
+  if (!summary.preferences) {
+    return 'Not included; current preferences stay unchanged';
+  }
+  return `${Math.round(summary.preferences.requestRetention * 100)}% target retention · ${summary.preferences.speechSpeed.toFixed(1)}× speech`;
+}
+
 export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
   const initialScheduler = loadSchedulerParams();
   const [retention, setRetention] = useState(initialScheduler.requestRetention);
   const [speechSpeed, setSpeechSpeed] = useState(loadSpeechRate);
   const [exporting, setExporting] = useState(false);
-  const [importing, setImporting] = useState(false);
+  const [importPhase, setImportPhase] = useState<ImportPhase>('idle');
+  const importing = importPhase !== 'idle';
   const [optimizingMedia, setOptimizingMedia] = useState(false);
   const [stoppingMedia, setStoppingMedia] = useState(false);
   const [migrationStatus, setMigrationStatus] = useState(
@@ -127,7 +156,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        if (!optimizingMedia) onClose();
+        if (!optimizingMedia && !importing) onClose();
         return;
       }
 
@@ -152,7 +181,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
       window.removeEventListener('keydown', handleKeyDown, true);
       previousFocus?.focus();
     };
-  }, [onClose, optimizingMedia]);
+  }, [onClose, optimizingMedia, importing]);
 
   useEffect(() => () => {
     migrationAbortRef.current?.abort();
@@ -160,7 +189,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
 
   const handleSave = (event: React.FormEvent) => {
     event.preventDefault();
-    if (optimizingMedia) return;
+    if (optimizingMedia || importing) return;
 
     const normalizedScheduler = normalizeSchedulerParams({
       requestRetention: retention,
@@ -191,7 +220,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
   };
 
   const handleReset = async () => {
-    if (optimizingMedia) return;
+    if (optimizingMedia || importing) return;
     const confirmed = await confirmDialog({
       title: 'Reset preferences',
       message:
@@ -216,7 +245,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
   };
 
   const handleExport = async () => {
-    if (exporting || optimizingMedia) return;
+    if (exporting || optimizingMedia || importing) return;
     setExporting(true);
     try {
       await downloadBackup();
@@ -236,21 +265,52 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
   ) => {
     const file = event.target.files?.[0];
     event.target.value = '';
-    if (!file || importing || optimizingMedia) return;
+    if (!file || importing || optimizingMedia || exporting) return;
 
-    const confirmed = await confirmDialog({
-      title: 'Import portable backup',
-      message:
-        'This replaces every current class, deck, card, review log, media object, and active study queue. When included, target retention and speech speed are restored too; your AI-provider key remains unchanged. This cannot be undone.',
-      confirmLabel: 'Replace data & preferences',
-      danger: true,
-    });
-    if (!confirmed) return;
-
-    setImporting(true);
+    setImportPhase('inspecting');
     try {
-      const parsed: unknown = JSON.parse(await file.text());
-      await importDatabaseExclusively(parsed as BackupSnapshot);
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(await file.text());
+      } catch (error) {
+        throw new Error('Backup file is not valid JSON.', {
+          cause: error,
+        });
+      }
+
+      const prepared = await prepareBackupImport(parsed);
+      const summary = prepared.summary;
+      const confirmed = await confirmDialog({
+        title: 'Restore this validated backup?',
+        message:
+          'This file passed Denki’s complete schema, relationship, scheduler-provenance, and media-integrity checks. Restoring it replaces the entire local library and active study queue on this device. This cannot be undone.',
+        details: [
+          { label: 'File', value: file.name },
+          { label: 'Backup source', value: backupSourceLabel(summary) },
+          {
+            label: 'Exported',
+            value: formatBackupTimestamp(summary.exportedAt),
+          },
+          {
+            label: 'Contents',
+            value: `${summary.classes.toLocaleString()} classes · ${summary.decks.toLocaleString()} decks · ${summary.cards.toLocaleString()} cards · ${summary.reviews.toLocaleString()} reviews`,
+          },
+          {
+            label: 'Media',
+            value: `${summary.media.toLocaleString()} objects · ${formatByteCount(summary.mediaBytes)}`,
+          },
+          {
+            label: 'Preferences',
+            value: backupPreferenceLabel(summary),
+          },
+        ],
+        confirmLabel: 'Replace local library',
+        danger: true,
+      });
+      if (!confirmed) return;
+
+      setImportPhase('restoring');
+      await importPreparedDatabaseExclusively(prepared);
       try {
         clearEmbeddedMediaMigrationCursor();
       } catch (error) {
@@ -264,7 +324,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
         'error',
       );
     } finally {
-      setImporting(false);
+      setImportPhase('idle');
     }
   };
 
@@ -335,12 +395,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
         ? 'Resume optimization'
         : 'Optimize media';
 
+  const importButtonLabel =
+    importPhase === 'inspecting'
+      ? 'Inspecting…'
+      : importPhase === 'restoring'
+        ? 'Restoring…'
+        : 'Import backup';
+
   return (
     <div
       onMouseDown={(event) => {
         if (
           event.target === event.currentTarget &&
-          !optimizingMedia
+          !optimizingMedia &&
+          !importing
         ) {
           onClose();
         }
@@ -401,7 +469,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
             ref={closeButtonRef}
             type="button"
             onClick={onClose}
-            disabled={optimizingMedia}
+            disabled={optimizingMedia || importing}
             className="btn-premium-secondary"
             aria-label="Close preferences"
             style={{ width: '32px', height: '32px', padding: 0 }}
@@ -474,7 +542,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
             max={SCHEDULER_SETTING_RANGES.retention.max}
             step="0.01"
             value={retention}
-            disabled={optimizingMedia}
+            disabled={optimizingMedia || importing}
             onChange={(event) =>
               setRetention(event.currentTarget.valueAsNumber)
             }
@@ -526,7 +594,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
             max={SPEECH_SPEED_MAX}
             step="0.1"
             value={speechSpeed}
-            disabled={optimizingMedia}
+            disabled={optimizingMedia || importing}
             onChange={(event) =>
               setSpeechSpeed(event.currentTarget.valueAsNumber)
             }
@@ -622,7 +690,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
               disabled={exporting || importing || optimizingMedia}
               className="btn-premium-secondary"
             >
-              <Upload size={13} /> {importing ? 'Validating…' : 'Import backup'}
+              <Upload size={13} /> {importButtonLabel}
             </button>
             <input
               ref={fileInputRef}
@@ -648,7 +716,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
           <button
             type="button"
             onClick={() => void handleReset()}
-            disabled={optimizingMedia}
+            disabled={optimizingMedia || importing}
             className="btn-premium-danger"
           >
             <RotateCcw size={12} /> Reset defaults
@@ -657,14 +725,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
             <button
               type="button"
               onClick={onClose}
-              disabled={optimizingMedia}
+              disabled={optimizingMedia || importing}
               className="btn-premium-secondary"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={optimizingMedia}
+              disabled={optimizingMedia || importing}
               className="btn-premium-primary"
             >
               Apply changes

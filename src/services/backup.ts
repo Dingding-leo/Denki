@@ -91,6 +91,38 @@ interface DatabaseSnapshotRows {
   media: MediaAsset[];
 }
 
+export interface BackupLibraryCounts {
+  classes: number;
+  decks: number;
+  cards: number;
+  reviews: number;
+  media: number;
+}
+
+export interface BackupImportSummary extends BackupLibraryCounts {
+  formatVersion: number;
+  appVersion: string | null;
+  databaseVersion: number | null;
+  schedulerVersion: string | null;
+  exportedAt: string | null;
+  mediaBytes: number;
+  preferences: Readonly<BackupPreferences> | null;
+}
+
+/**
+ * Opaque, fully validated import plan. Its normalized rows stay private
+ * inside this module so callers can inspect the summary without being
+ * able to mutate the data that will later replace the library.
+ */
+export interface PreparedBackupImport {
+  readonly summary: Readonly<BackupImportSummary>;
+}
+
+const preparedBackupRows = new WeakMap<
+  PreparedBackupImport,
+  NormalizedBackup
+>();
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === 'object' && !Array.isArray(value);
 
@@ -102,6 +134,13 @@ const isFiniteNumber = (value: unknown): value is number =>
 
 const isValidDate = (value: unknown): value is Date =>
   value instanceof Date && Number.isFinite(value.getTime());
+
+function optionalCanonicalIsoDate(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const parsed = new Date(value);
+  if (!Number.isFinite(parsed.getTime())) return null;
+  return parsed.toISOString() === value ? value : null;
+}
 
 function reviveDateValue(value: unknown): unknown {
   if (value instanceof Date) return new Date(value.getTime());
@@ -522,6 +561,65 @@ async function normalizeBackup(snapshot: unknown): Promise<NormalizedBackup> {
   };
 }
 
+function createBackupImportSummary(
+  snapshot: unknown,
+  normalized: NormalizedBackup,
+): BackupImportSummary {
+  if (!isRecord(snapshot)) {
+    throw new Error('Backup preview could not be created.');
+  }
+
+  const rawDatabaseVersion =
+    snapshot.databaseVersion ?? snapshot.version;
+  const preferences = normalized.preferences
+    ? Object.freeze({ ...normalized.preferences })
+    : null;
+
+  return {
+    formatVersion: Number(snapshot.formatVersion ?? 1),
+    appVersion:
+      typeof snapshot.appVersion === 'string'
+        ? snapshot.appVersion
+        : null,
+    databaseVersion:
+      typeof rawDatabaseVersion === 'number'
+        ? rawDatabaseVersion
+        : null,
+    schedulerVersion:
+      typeof snapshot.schedulerVersion === 'string'
+        ? snapshot.schedulerVersion
+        : null,
+    exportedAt: optionalCanonicalIsoDate(snapshot.exportedAt),
+    classes: normalized.classes.length,
+    decks: normalized.decks.length,
+    cards: normalized.cards.length,
+    reviews: normalized.reviews.length,
+    media: normalized.media.length,
+    mediaBytes: normalized.media.reduce(
+      (total, asset) => total + asset.byteLength,
+      0,
+    ),
+    preferences,
+  };
+}
+
+/**
+ * Fully validate a portable backup before asking the user to replace
+ * local data. Media hashes, scheduler provenance, dates, relationships,
+ * and preferences are all checked exactly once.
+ */
+export async function prepareBackupImport(
+  snapshot: unknown,
+): Promise<PreparedBackupImport> {
+  const normalized = await normalizeBackup(snapshot);
+  const summary = Object.freeze(
+    createBackupImportSummary(snapshot, normalized),
+  );
+  const prepared = Object.freeze({ summary });
+  preparedBackupRows.set(prepared, normalized);
+  return prepared;
+}
+
 function applyPreferences(
   preferences: BackupPreferences | undefined,
 ): (() => void) | null {
@@ -649,12 +747,15 @@ export async function exportDatabase(): Promise<BackupSnapshot> {
 }
 
 /**
- * Replace all five persistent tables from a fully validated backup. Preference
- * writes are rolled back if the durable replacement transaction fails.
+ * Replace all five persistent tables from rows that already passed the
+ * complete backup validator. Preference writes are rolled back if the
+ * durable replacement transaction fails.
  */
-export async function importDatabase(snapshot: unknown): Promise<void> {
+async function replaceDatabase(
+  normalized: NormalizedBackup,
+): Promise<void> {
   const { classes, decks, cards, reviews, media, preferences } =
-    await normalizeBackup(snapshot);
+    normalized;
   const rollbackPreferences = applyPreferences(preferences);
 
   try {
@@ -691,8 +792,8 @@ export async function importDatabase(snapshot: unknown): Promise<void> {
     throw error;
   }
 
-  // Durable replacement succeeded. Existing object URLs point at the old
-  // registry generation and must not survive into the restored library.
+  // Durable replacement succeeded. Existing object URLs point at the
+  // old registry generation and must not survive into the restored library.
   try {
     revokeAllMediaObjectUrls();
   } catch (error) {
@@ -700,6 +801,30 @@ export async function importDatabase(snapshot: unknown): Promise<void> {
   }
   clearPersistedStudySession();
   triggerAutoSave();
+}
+
+/** Apply one opaque, prevalidated import plan exactly once. */
+export async function importPreparedDatabase(
+  prepared: PreparedBackupImport,
+): Promise<void> {
+  const normalized = preparedBackupRows.get(prepared);
+  if (!normalized) {
+    throw new Error(
+      'Backup import preview is invalid or has already been used.',
+    );
+  }
+
+  try {
+    await replaceDatabase(normalized);
+  } finally {
+    preparedBackupRows.delete(prepared);
+  }
+}
+
+/** Validate and replace the library without an interactive preview. */
+export async function importDatabase(snapshot: unknown): Promise<void> {
+  const prepared = await prepareBackupImport(snapshot);
+  await importPreparedDatabase(prepared);
 }
 
 async function saveToFilesystem(): Promise<void> {

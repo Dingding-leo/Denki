@@ -27,11 +27,22 @@ export const ConfirmDialogHost: React.FC = () => {
         e.preventDefault();
         resolveConfirm(false);
       } else if (e.key === 'Enter') {
-        // Enter only confirms when the dialog itself is the focus target. If the
-        // user is typing in a field (a confirm can open over a form), a bare
-        // Enter must not confirm a destructive action by accident.
+        // Native buttons must retain their own Enter semantics: Enter on Cancel
+        // cancels, while Enter on Confirm confirms through the button click.
+        // A bare Enter elsewhere in the dialog remains a confirm shortcut.
         const target = e.target as HTMLElement | null;
-        if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) {
+        if (
+          target instanceof HTMLButtonElement ||
+          (
+            target &&
+            (
+              target.tagName === 'INPUT' ||
+              target.tagName === 'TEXTAREA' ||
+              target.tagName === 'SELECT' ||
+              target.isContentEditable
+            )
+          )
+        ) {
           return;
         }
         e.stopPropagation();
@@ -64,6 +75,9 @@ export const ConfirmDialogHost: React.FC = () => {
   if (!pending) return null;
 
   const danger = pending.danger ?? false;
+  const descriptionIds = pending.details?.length
+    ? 'confirm-dialog-message confirm-dialog-details'
+    : 'confirm-dialog-message';
 
   return (
     <div
@@ -86,7 +100,7 @@ export const ConfirmDialogHost: React.FC = () => {
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
-        aria-describedby="confirm-dialog-message"
+        aria-describedby={descriptionIds}
         onClick={e => e.stopPropagation()}
         className="glass-panel"
         style={{
@@ -114,6 +128,53 @@ export const ConfirmDialogHost: React.FC = () => {
         <p id="confirm-dialog-message" style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.55 }}>
           {pending.message}
         </p>
+
+        {pending.details && pending.details.length > 0 && (
+          <dl
+            id="confirm-dialog-details"
+            style={{
+              display: 'grid',
+              gap: '8px',
+              margin: 0,
+              padding: '12px',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              background: 'rgba(255, 255, 255, 0.035)',
+            }}
+          >
+            {pending.details.map((detail, index) => (
+              <div
+                key={`${detail.label}-${index}`}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'minmax(92px, 0.7fr) minmax(0, 1.3fr)',
+                  gap: '12px',
+                  alignItems: 'start',
+                }}
+              >
+                <dt
+                  style={{
+                    color: 'var(--text-muted)',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                  }}
+                >
+                  {detail.label}
+                </dt>
+                <dd
+                  style={{
+                    margin: 0,
+                    color: 'var(--text-primary)',
+                    fontSize: '12px',
+                    lineHeight: 1.45,
+                    overflowWrap: 'anywhere',
+                  }}
+                >
+                  {detail.value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        )}
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '4px' }}>
           <button

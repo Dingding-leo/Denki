@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   importDatabase: vi.fn(),
+  importPreparedDatabase: vi.fn(),
 }));
 
 vi.mock('../backup', () => ({
   importDatabase: mocks.importDatabase,
+  importPreparedDatabase: mocks.importPreparedDatabase,
 }));
 
 import {
@@ -13,11 +15,15 @@ import {
   resetMaintenanceLockForTests,
   withExclusiveMaintenanceLock,
 } from '../maintenanceLock';
-import { importDatabaseExclusively } from '../maintenanceOperations';
+import {
+  importDatabaseExclusively,
+  importPreparedDatabaseExclusively,
+} from '../maintenanceOperations';
 
 describe('exclusive backup restore', () => {
   beforeEach(async () => {
     mocks.importDatabase.mockReset();
+    mocks.importPreparedDatabase.mockReset();
     localStorage.clear();
     await resetMaintenanceLockForTests();
   });
@@ -54,6 +60,38 @@ describe('exclusive backup restore', () => {
     await restore;
   });
 
+  it('holds the lease while applying a prevalidated import plan', async () => {
+    let finishRestore: (() => void) | undefined;
+    let restoreStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      restoreStarted = resolve;
+    });
+    const prepared = { summary: {} } as never;
+
+    mocks.importPreparedDatabase.mockImplementation(async () => {
+      restoreStarted?.();
+      await new Promise<void>((resolve) => {
+        finishRestore = resolve;
+      });
+    });
+
+    const restore = importPreparedDatabaseExclusively(prepared);
+    await started;
+
+    await expect(
+      withExclusiveMaintenanceLock(
+        {
+          operation: 'competing-maintenance',
+          label: 'Competing maintenance',
+        },
+        async () => undefined,
+      ),
+    ).rejects.toBeInstanceOf(MaintenanceLockUnavailableError);
+    expect(mocks.importPreparedDatabase).toHaveBeenCalledWith(prepared);
+
+    finishRestore?.();
+    await restore;
+  });
   it('does not enter the restore callback when another maintenance operation owns the lease', async () => {
     let releaseOwner: (() => void) | undefined;
     let ownerStarted: (() => void) | undefined;
