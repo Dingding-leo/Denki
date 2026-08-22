@@ -14,8 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
-    name: Release checks
+  web:
+    name: Web release checks
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -49,3 +49,76 @@ jobs:
         run: npm run test:e2e:install
       - name: Real-browser release smoke
         run: npm run test:e2e
+
+  desktop:
+    name: macOS desktop checks (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+            target: aarch64-apple-darwin
+          - arch: x86_64
+            runner: macos-15-intel
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    env:
+      CI: true
+      APPLE_SIGNING_IDENTITY: '-'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - run: npm ci
+      - name: Release version contract
+        run: npm run test:version
+      - name: Build ad-hoc signed app and DMG
+        run: npm run tauri:build -- --target "${{ matrix.target }}" --bundles app,dmg
+      - name: Verify app identity, architecture, and signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="src-tauri/target/${{ matrix.target }}/release/bundle/macos/Denki.app"
+          INFO="$APP/Contents/Info.plist"
+          test -d "$APP"
+          test -f "$INFO"
+          EXPECTED_VERSION="$(node -p "require('./version.json').version")"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$INFO")" = "com.dingdingleo.denki"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$INFO")" = "$EXPECTED_VERSION"
+          file "$APP/Contents/MacOS/denki" | tee "$RUNNER_TEMP/denki-binary.txt"
+          grep -q "${{ matrix.arch == 'arm64' && 'arm64' || 'x86_64' }}" "$RUNNER_TEMP/denki-binary.txt"
+          codesign --verify --deep --strict --verbose=4 "$APP"
+      - name: Verify the DMG and its contained app
+        shell: bash
+        run: |
+          set -euo pipefail
+          DMG="$(find "src-tauri/target/${{ matrix.target }}/release/bundle/dmg" -maxdepth 1 -name '*.dmg' -print -quit)"
+          test -n "$DMG"
+          hdiutil verify "$DMG"
+          MOUNT="$RUNNER_TEMP/denki-dmg-${{ matrix.arch }}"
+          mkdir -p "$MOUNT"
+          hdiutil attach "$DMG" -nobrowse -readonly -mountpoint "$MOUNT"
+          trap 'hdiutil detach "$MOUNT" >/dev/null 2>&1 || true' EXIT
+          test -d "$MOUNT/Denki.app"
+          codesign --verify --deep --strict --verbose=4 "$MOUNT/Denki.app"
+          hdiutil detach "$MOUNT"
+          trap - EXIT
+
+  gate:
+    name: Release checks
+    if: always()
+    needs: [web, desktop]
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    steps:
+      - name: Require web and both desktop architectures
+        run: |
+          test "${{ needs.web.result }}" = "success"
+          test "${{ needs.desktop.result }}" = "success"
