@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: feat/backup-import-preflight
-          fetch-depth: 4
+          fetch-depth: 5
       - name: Recover and run the reviewed patch script
         run: |
           python3 - <<'PY'
@@ -28,7 +28,7 @@ jobs:
               [
                   'git',
                   'show',
-                  'HEAD^^^:.github/workflows/bootstrap-backup-import-preflight.yml',
+                  'HEAD^^^^:.github/workflows/bootstrap-backup-import-preflight.yml',
               ],
               text=True,
           )
@@ -36,11 +36,75 @@ jobs:
           start = history.index(opener) + len(opener)
           end = history.rindex("\n          PY\n")
           script = textwrap.dedent(history[start:end])
-          script = script.replace(
-              "\n        {pending.message}\n",
-              "\n          {pending.message}\n",
-              1,
+
+          fragile_start = script.index(
+              'replace_once(\n    confirm_host,\n    """        <p id="confirm-dialog-message"',
           )
+          fragile_end_marker = (
+              "\n)\n\nsettings = 'src/components/modals/SettingsModal.tsx'"
+          )
+          fragile_end = script.index(fragile_end_marker, fragile_start) + 2
+          robust_patch = r'''confirm_text = Path(confirm_host).read_text()
+          confirm_anchor = """        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '4px' }}>"""
+          confirm_details = """        {pending.details && pending.details.length > 0 && (
+            <dl
+              id="confirm-dialog-details"
+              style={{
+                display: 'grid',
+                gap: '8px',
+                margin: 0,
+                padding: '12px',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                background: 'rgba(255, 255, 255, 0.035)',
+              }}
+            >
+              {pending.details.map((detail, index) => (
+                <div
+                  key={`${detail.label}-${index}`}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(92px, 0.7fr) minmax(0, 1.3fr)',
+                    gap: '12px',
+                    alignItems: 'start',
+                  }}
+                >
+                  <dt
+                    style={{
+                      color: 'var(--text-muted)',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                    }}
+                  >
+                    {detail.label}
+                  </dt>
+                  <dd
+                    style={{
+                      margin: 0,
+                      color: 'var(--text-primary)',
+                      fontSize: '12px',
+                      lineHeight: 1.45,
+                      overflowWrap: 'anywhere',
+                    }}
+                  >
+                    {detail.value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          )}
+
+          """
+          if confirm_anchor not in confirm_text:
+              raise SystemExit('Confirm-dialog action row anchor was not found.')
+          Path(confirm_host).write_text(
+              confirm_text.replace(confirm_anchor, confirm_details + confirm_anchor, 1),
+          )'''
+          script = (
+              script[:fragile_start]
+              + robust_patch
+              + script[fragile_end:]
+          )
+
           destination = Path('/tmp/apply-backup-import-preflight.py')
           destination.write_text(script)
           subprocess.run(['python3', str(destination)], check=True)
