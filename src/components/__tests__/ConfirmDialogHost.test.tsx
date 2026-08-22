@@ -37,4 +37,24 @@ describe('ConfirmDialogHost details', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     await expect(result).resolves.toBe(false);
   });
+
+  it('does not turn Enter on the Cancel button into confirmation', async () => {
+    render(<ConfirmDialogHost />);
+    let result!: Promise<boolean>;
+
+    act(() => {
+      result = useUIStore.getState().confirm({
+        title: 'Delete data?',
+        message: 'This cannot be undone.',
+        danger: true,
+      });
+    });
+
+    const cancel = screen.getByRole('button', { name: 'Cancel' });
+    cancel.focus();
+    fireEvent.keyDown(cancel, { key: 'Enter' });
+    fireEvent.click(cancel);
+
+    await expect(result).resolves.toBe(false);
+  });
 });
