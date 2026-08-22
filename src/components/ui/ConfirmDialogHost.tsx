@@ -86,7 +86,11 @@ export const ConfirmDialogHost: React.FC = () => {
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
-        aria-describedby="confirm-dialog-message"
+        aria-describedby={
+        pending.details && pending.details.length > 0
+          ? 'confirm-dialog-message confirm-dialog-details'
+          : 'confirm-dialog-message'
+      }
         onClick={e => e.stopPropagation()}
         className="glass-panel"
         style={{
@@ -114,6 +118,53 @@ export const ConfirmDialogHost: React.FC = () => {
         <p id="confirm-dialog-message" style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.55 }}>
           {pending.message}
         </p>
+
+        {pending.details && pending.details.length > 0 && (
+  <dl
+    id="confirm-dialog-details"
+    style={{
+      display: 'grid',
+      gap: '8px',
+      margin: 0,
+      padding: '12px',
+      border: '1px solid rgba(255, 255, 255, 0.1)',
+      background: 'rgba(255, 255, 255, 0.035)',
+    }}
+  >
+    {pending.details.map((detail, index) => (
+      <div
+        key={`${detail.label}-${index}`}
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(92px, 0.7fr) minmax(0, 1.3fr)',
+          gap: '12px',
+          alignItems: 'start',
+        }}
+      >
+        <dt
+          style={{
+            color: 'var(--text-muted)',
+            fontSize: '11px',
+            fontWeight: 700,
+          }}
+        >
+          {detail.label}
+        </dt>
+        <dd
+          style={{
+            margin: 0,
+            color: 'var(--text-primary)',
+            fontSize: '12px',
+            lineHeight: 1.45,
+            overflowWrap: 'anywhere',
+          }}
+        >
+          {detail.value}
+        </dd>
+      </div>
+    ))}
+  </dl>
+)}
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '4px' }}>
           <button

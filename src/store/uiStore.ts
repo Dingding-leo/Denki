@@ -8,9 +8,15 @@ export interface Toast {
   type: ToastType;
 }
 
+export interface ConfirmDetail {
+  label: string;
+  value: string;
+}
+
 export interface ConfirmOptions {
   title: string;
   message: string;
+  details?: readonly ConfirmDetail[];
   confirmLabel?: string;
   cancelLabel?: string;
   danger?: boolean;
@@ -54,7 +60,13 @@ export const useUIStore = create<UIState>((set, get) => ({
     new Promise<boolean>(resolve => {
       // A second confirm while one is open cancels the first
       get().pendingConfirm?.resolve(false);
-      set({ pendingConfirm: { ...options, resolve } });
+      set({
+      pendingConfirm: {
+        ...options,
+        details: options.details?.map((detail) => ({ ...detail })),
+        resolve,
+      },
+    });
     }),
 
   resolveConfirm: (confirmed) => {
