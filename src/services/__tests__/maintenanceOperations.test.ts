@@ -61,38 +61,37 @@ describe('exclusive backup restore', () => {
   });
 
   it('holds the lease while applying a prevalidated import plan', async () => {
-  let finishRestore: (() => void) | undefined;
-  let restoreStarted: (() => void) | undefined;
-  const started = new Promise<void>((resolve) => {
-    restoreStarted = resolve;
-  });
-  const prepared = { summary: {} } as never;
-
-  mocks.importPreparedDatabase.mockImplementation(async () => {
-    restoreStarted?.();
-    await new Promise<void>((resolve) => {
-      finishRestore = resolve;
+    let finishRestore: (() => void) | undefined;
+    let restoreStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      restoreStarted = resolve;
     });
+    const prepared = { summary: {} } as never;
+
+    mocks.importPreparedDatabase.mockImplementation(async () => {
+      restoreStarted?.();
+      await new Promise<void>((resolve) => {
+        finishRestore = resolve;
+      });
+    });
+
+    const restore = importPreparedDatabaseExclusively(prepared);
+    await started;
+
+    await expect(
+      withExclusiveMaintenanceLock(
+        {
+          operation: 'competing-maintenance',
+          label: 'Competing maintenance',
+        },
+        async () => undefined,
+      ),
+    ).rejects.toBeInstanceOf(MaintenanceLockUnavailableError);
+    expect(mocks.importPreparedDatabase).toHaveBeenCalledWith(prepared);
+
+    finishRestore?.();
+    await restore;
   });
-
-  const restore = importPreparedDatabaseExclusively(prepared);
-  await started;
-
-  await expect(
-    withExclusiveMaintenanceLock(
-      {
-        operation: 'competing-maintenance',
-        label: 'Competing maintenance',
-      },
-      async () => undefined,
-    ),
-  ).rejects.toBeInstanceOf(MaintenanceLockUnavailableError);
-  expect(mocks.importPreparedDatabase).toHaveBeenCalledWith(prepared);
-
-  finishRestore?.();
-  await restore;
-});
-
   it('does not enter the restore callback when another maintenance operation owns the lease', async () => {
     let releaseOwner: (() => void) | undefined;
     let ownerStarted: (() => void) | undefined;

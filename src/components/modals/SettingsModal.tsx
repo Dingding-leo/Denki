@@ -156,7 +156,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        if (!optimizingMedia) onClose();
+        if (!optimizingMedia && !importing) onClose();
         return;
       }
 
@@ -181,7 +181,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
       window.removeEventListener('keydown', handleKeyDown, true);
       previousFocus?.focus();
     };
-  }, [onClose, optimizingMedia]);
+  }, [onClose, optimizingMedia, importing]);
 
   useEffect(() => () => {
     migrationAbortRef.current?.abort();

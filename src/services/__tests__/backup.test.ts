@@ -132,43 +132,42 @@ describe('backup export/import integrity', () => {
   });
 
   it('prepares a validated one-shot import summary before replacing data', async () => {
-  const { cardId } = await seedCard('preview-source');
-  await registerMediaBytes(
-    'image/png',
-    new Uint8Array([1, 2, 3, 4]),
-  );
-  localStorage.setItem(RETENTION_KEY, '0.87');
-  localStorage.setItem(SPEECH_SPEED_KEY, '1.3');
-  const snapshot = JSON.parse(JSON.stringify(await exportDatabase()));
+    const { cardId } = await seedCard('preview-source');
+    await registerMediaBytes(
+      'image/png',
+      new Uint8Array([1, 2, 3, 4]),
+    );
+    localStorage.setItem(RETENTION_KEY, '0.87');
+    localStorage.setItem(SPEECH_SPEED_KEY, '1.3');
+    const snapshot = JSON.parse(JSON.stringify(await exportDatabase()));
 
-  const prepared = await prepareBackupImport(snapshot);
+    const prepared = await prepareBackupImport(snapshot);
 
-  expect(prepared.summary).toMatchObject({
-    formatVersion: BACKUP_FORMAT_VERSION,
-    appVersion: snapshot.appVersion,
-    databaseVersion: db.verno,
-    schedulerVersion: FSRS_VERSION,
-    exportedAt: snapshot.exportedAt,
-    classes: 1,
-    decks: 1,
-    cards: 1,
-    reviews: 0,
-    media: 1,
-    mediaBytes: 4,
-    preferences: {
-      requestRetention: 0.87,
-      speechSpeed: 1.3,
-    },
+    expect(prepared.summary).toMatchObject({
+      formatVersion: BACKUP_FORMAT_VERSION,
+      appVersion: snapshot.appVersion,
+      databaseVersion: db.verno,
+      schedulerVersion: FSRS_VERSION,
+      exportedAt: snapshot.exportedAt,
+      classes: 1,
+      decks: 1,
+      cards: 1,
+      reviews: 0,
+      media: 1,
+      mediaBytes: 4,
+      preferences: {
+        requestRetention: 0.87,
+        speechSpeed: 1.3,
+      },
+    });
+
+    await db.cards.update(cardId, { front: 'changed after preview' });
+    await importPreparedDatabase(prepared);
+    expect((await db.cards.get(cardId))?.front).toBe('preview-source');
+    await expect(importPreparedDatabase(prepared)).rejects.toThrow(
+      /already been used/i,
+    );
   });
-
-  await db.cards.update(cardId, { front: 'changed after preview' });
-  await importPreparedDatabase(prepared);
-  expect((await db.cards.get(cardId))?.front).toBe('preview-source');
-  await expect(importPreparedDatabase(prepared)).rejects.toThrow(
-    /already been used/i,
-  );
-});
-
   it('restores target retention and speech speed while clearing retired overrides', async () => {
     await seedCard('preferences');
     localStorage.setItem(RETENTION_KEY, '0.86');

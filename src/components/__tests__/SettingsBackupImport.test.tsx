@@ -144,6 +144,31 @@ describe('Settings backup preflight', () => {
     expect(mocks.reload).toHaveBeenCalledTimes(1);
   });
 
+  it('cannot close Settings with Escape while inspection is still running', async () => {
+  let finishInspection: ((value: typeof prepared) => void) | undefined;
+  mocks.prepare.mockImplementation(
+    () => new Promise((resolve) => {
+      finishInspection = resolve;
+    }),
+  );
+  const onClose = vi.fn();
+  render(<SettingsModal onClose={onClose} />);
+  chooseFile(backupFile());
+
+  await waitFor(() =>
+    expect(
+      screen.getByRole('button', { name: 'Inspecting…' }),
+    ).toBeDisabled(),
+  );
+  fireEvent.keyDown(window, { key: 'Escape' });
+  expect(onClose).not.toHaveBeenCalled();
+
+  await act(async () => {
+    finishInspection?.(prepared);
+  });
+  await waitFor(() => expect(mocks.confirm).toHaveBeenCalledTimes(1));
+});
+
   it('does not open a destructive confirmation for an invalid backup', async () => {
     mocks.prepare.mockRejectedValue(new Error('invalid card at row 2'));
     render(<SettingsModal onClose={vi.fn()} />);
