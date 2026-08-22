@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: feat/backup-import-preflight
-          fetch-depth: 3
+          fetch-depth: 4
       - name: Recover and run the reviewed patch script
         run: |
           python3 - <<'PY'
@@ -28,7 +28,7 @@ jobs:
               [
                   'git',
                   'show',
-                  'HEAD^^:.github/workflows/bootstrap-backup-import-preflight.yml',
+                  'HEAD^^^:.github/workflows/bootstrap-backup-import-preflight.yml',
               ],
               text=True,
           )
@@ -36,6 +36,11 @@ jobs:
           start = history.index(opener) + len(opener)
           end = history.rindex("\n          PY\n")
           script = textwrap.dedent(history[start:end])
+          script = script.replace(
+              "\n        {pending.message}\n",
+              "\n          {pending.message}\n",
+              1,
+          )
           destination = Path('/tmp/apply-backup-import-preflight.py')
           destination.write_text(script)
           subprocess.run(['python3', str(destination)], check=True)
