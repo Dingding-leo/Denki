@@ -27,17 +27,20 @@ export const ConfirmDialogHost: React.FC = () => {
         e.preventDefault();
         resolveConfirm(false);
       } else if (e.key === 'Enter') {
-        // Enter only confirms when the dialog itself is the focus target. If the
-        // user is typing in a field (a confirm can open over a form), a bare
-        // Enter must not confirm a destructive action by accident.
+        // Native buttons must retain their own Enter semantics: Enter on Cancel
+        // cancels, while Enter on Confirm confirms through the button click.
+        // A bare Enter elsewhere in the dialog remains a confirm shortcut.
         const target = e.target as HTMLElement | null;
         if (
-          target &&
+          target instanceof HTMLButtonElement ||
           (
-            target.tagName === 'INPUT' ||
-            target.tagName === 'TEXTAREA' ||
-            target.tagName === 'SELECT' ||
-            target.isContentEditable
+            target &&
+            (
+              target.tagName === 'INPUT' ||
+              target.tagName === 'TEXTAREA' ||
+              target.tagName === 'SELECT' ||
+              target.isContentEditable
+            )
           )
         ) {
           return;
