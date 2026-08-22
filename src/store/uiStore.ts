@@ -61,12 +61,12 @@ export const useUIStore = create<UIState>((set, get) => ({
       // A second confirm while one is open cancels the first
       get().pendingConfirm?.resolve(false);
       set({
-      pendingConfirm: {
-        ...options,
-        details: options.details?.map((detail) => ({ ...detail })),
-        resolve,
-      },
-    });
+        pendingConfirm: {
+          ...options,
+          details: options.details?.map((detail) => ({ ...detail })),
+          resolve,
+        },
+      });
     }),
 
   resolveConfirm: (confirmed) => {
