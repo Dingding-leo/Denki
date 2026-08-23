@@ -1,0 +1,104 @@
+name: Bootstrap integrity cancellation fix
+
+on:
+  push:
+    branches: [feat/library-integrity-audit]
+    paths: [.github/workflows/bootstrap-integrity-abort-fix.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feat/library-integrity-audit
+      - name: Apply cancellation and progress fixes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/services/libraryIntegrity.ts')
+          text = path.read_text()
+
+          replacements = [
+              (
+                  """const PROGRESS_INTERVAL = 250;
+          const MEDIA_PROGRESS_INTERVAL = 10;""",
+                  """const MAX_PROGRESS_EVENTS_PER_PHASE = 200;
+          const MEDIA_PROGRESS_INTERVAL = 10;""",
+              ),
+              (
+                  """function isUserAbort(error: unknown): boolean {
+            return error instanceof DOMException && error.name === 'AbortError';
+          }""",
+                  """function hasAbortName(value: unknown): boolean {
+            return (
+              !!value &&
+              typeof value === 'object' &&
+              'name' in value &&
+              value.name === 'AbortError'
+            );
+          }
+
+          function isUserAbort(error: unknown, signal: AbortSignal): boolean {
+            // IndexedDB and fake-indexeddb may surface a DOMException from a
+            // different realm, where `instanceof DOMException` is false.
+            return hasAbortName(error) || hasAbortName(signal.reason);
+          }""",
+              ),
+              (
+                  """  if (
+            !force &&
+            processed !== total &&
+            processed % PROGRESS_INTERVAL !== 0
+          ) {
+            return;
+          }""",
+                  """  const interval = Math.max(
+            1,
+            Math.ceil(total / MAX_PROGRESS_EVENTS_PER_PHASE),
+          );
+          if (!force && processed !== total && processed % interval !== 0) {
+            return;
+          }""",
+              ),
+              (
+                  "emitProgress(state, options, 'media', mediaIndex, totals.media, true);",
+                  "emitProgress(state, options, 'media', mediaIndex, totals.media);",
+              ),
+              (
+                  "if (isUserAbort(error)) {",
+                  "if (isUserAbort(error, signal)) {",
+              ),
+          ]
+
+          for old, new in replacements:
+              if old not in text:
+                  raise SystemExit(f'Expected source fragment not found: {old!r}')
+              text = text.replace(old, new, 1)
+
+          path.write_text(text)
+          PY
+      - name: Remove one-time workflow
+        run: rm .github/workflows/bootstrap-integrity-abort-fix.yml
+      - name: Validate focused feature
+        run: |
+          git diff --check
+          npm ci
+          npx tsc --noEmit
+          npm run lint
+          npx vitest run \
+            src/services/__tests__/libraryIntegrity.test.ts \
+            src/components/__tests__/LibraryIntegrityPanel.test.tsx \
+            src/components/__tests__/StorageHealthPanel.test.tsx
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/services/libraryIntegrity.ts .github/workflows/bootstrap-integrity-abort-fix.yml
+          git commit -m "fix: handle cross-realm audit cancellation"
+          git push origin HEAD:feat/library-integrity-audit
