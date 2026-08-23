@@ -23,7 +23,6 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import subprocess
-          import textwrap
 
           source = Path(
               '.github/workflows/bootstrap-backup-resource-budgets.yml'
@@ -31,7 +30,12 @@ jobs:
           opener = "          python3 - <<'PY'\n"
           start = source.index(opener) + len(opener)
           end = source.rindex("\n          PY\n")
-          script = textwrap.dedent(source[start:end])
+          lines = source[start:end].splitlines()
+          prefix = '          '
+          script = '\n'.join(
+              line[len(prefix):] if line.startswith(prefix) else line
+              for line in lines
+          )
           destination = Path('/tmp/apply-backup-resource-budgets.py')
           destination.write_text(script)
           subprocess.run(['python3', str(destination)], check=True)
