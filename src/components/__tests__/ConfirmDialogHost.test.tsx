@@ -27,14 +27,17 @@ describe('ConfirmDialogHost details', () => {
 
     expect(screen.getByText('Contents')).toBeInTheDocument();
     expect(screen.getByText('824 cards · 2,941 reviews')).toBeInTheDocument();
-    expect(
-      screen.getByRole('alertdialog'),
-    ).toHaveAttribute(
+    expect(screen.getByRole('alertdialog')).toHaveAttribute(
       'aria-describedby',
       'confirm-dialog-message confirm-dialog-details',
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    const cancel = screen.getByRole('button', { name: 'Cancel' });
+    const confirm = screen.getByRole('button', { name: 'Confirm' });
+    expect(cancel).toHaveAttribute('type', 'button');
+    expect(confirm).toHaveAttribute('type', 'button');
+
+    fireEvent.click(cancel);
     await expect(result).resolves.toBe(false);
   });
 
