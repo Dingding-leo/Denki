@@ -26,6 +26,26 @@ describe('portable backup file boundary', () => {
     expect(file.text).not.toHaveBeenCalled();
   });
 
+  it('rechecks actual text bytes after reading the file', async () => {
+    const NativeBlob = globalThis.Blob;
+    class OversizedBlob extends NativeBlob {
+      override get size(): number {
+        return MAX_BACKUP_FILE_BYTES + 1;
+      }
+    }
+    vi.stubGlobal('Blob', OversizedBlob);
+    const file = fakeFile({ size: 2, source: '{}' });
+
+    try {
+      await expect(readBackupJsonFile(file)).rejects.toThrow(
+        /at most 512 MiB/i,
+      );
+      expect(file.text).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('accepts a UTF-8 BOM and returns parsed JSON', async () => {
     const source = '\ufeff{"formatVersion":5,"data":{}}';
     const file = fakeFile({ size: new Blob([source]).size, source });
