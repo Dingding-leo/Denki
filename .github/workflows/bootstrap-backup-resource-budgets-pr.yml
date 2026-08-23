@@ -36,6 +36,35 @@ jobs:
               line[len(prefix):] if line.startswith(prefix) else line
               for line in lines
           )
+
+          fragile_start = (
+              '\nreplace_once(\n'
+              '    backup,\n'
+              '    """  for (const table of requiredTables) {'
+          )
+          stable_next = (
+              "\n\nreplace_once(\n"
+              "    backup,\n"
+              "    '      body: JSON.stringify(snapshot),',"
+          )
+          start_index = script.find(fragile_start)
+          end_index = script.find(stable_next, start_index)
+          if start_index < 0 or end_index < 0:
+              raise SystemExit('Could not locate the fragile table-validation patch.')
+          stable_insertion = '''
+insert_before(
+    backup,
+    "  const classes = reviveDates(data.classes as unknown[], ['createdAt']);",
+    "  assertBackupResourceBudget(data);\\n\\n",
+)
+'''
+          script = (
+              script[:start_index]
+              + '\n'
+              + stable_insertion.strip('\n')
+              + script[end_index:]
+          )
+
           destination = Path('/tmp/apply-backup-resource-budgets.py')
           destination.write_text(script)
           subprocess.run(['python3', str(destination)], check=True)
