@@ -211,4 +211,22 @@ describe('library integrity audit', () => {
       ),
     ).resolves.toBe('released');
   });
+
+  it('does not misclassify an unrelated AbortError as user cancellation', async () => {
+    await seedLibrary();
+
+    await expect(
+      auditLibraryIntegrityExclusively({
+        onProgress(progress) {
+          if (progress.phase === 'classes') {
+            throw new DOMException(
+              'IndexedDB aborted independently',
+              'AbortError',
+            );
+          }
+        },
+      }),
+    ).rejects.toThrow('IndexedDB aborted independently');
+  });
+
 });
