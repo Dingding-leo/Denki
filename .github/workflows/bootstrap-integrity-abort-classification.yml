@@ -1,0 +1,99 @@
+name: Bootstrap integrity abort classification fix
+
+on:
+  pull_request:
+    branches: [main]
+    paths: [.github/workflows/bootstrap-integrity-abort-classification.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: fix/integrity-abort-classification
+      - name: Apply classification and unmount fixes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          service = Path('src/services/libraryIntegrity.ts')
+          text = service.read_text()
+          old = "return hasAbortName(error) || hasAbortName(signal.reason);"
+          new = """return (
+              signal.aborted &&
+              (hasAbortName(error) || hasAbortName(signal.reason))
+            );"""
+          if old not in text:
+              raise SystemExit('Expected abort classification not found')
+          service.write_text(text.replace(old, new, 1))
+
+          panel = Path('src/components/settings/LibraryIntegrityPanel.tsx')
+          text = panel.read_text()
+          old = """      .finally(() => {
+            controllerRef.current = null;
+            onRunningChange?.(false);
+            if (!mountedRef.current) return;
+            setRunning(false);
+            setStopping(false);
+          });"""
+          new = """      .finally(() => {
+            controllerRef.current = null;
+            if (!mountedRef.current) return;
+            onRunningChange?.(false);
+            setRunning(false);
+            setStopping(false);
+          });"""
+          if old not in text:
+              raise SystemExit('Expected integrity panel finalizer not found')
+          panel.write_text(text.replace(old, new, 1))
+
+          tests = Path('src/services/__tests__/libraryIntegrity.test.ts')
+          text = tests.read_text()
+          marker = '\n});'
+          index = text.rfind(marker)
+          if index < 0:
+              raise SystemExit('Test suite terminator not found')
+          addition = """
+
+            it('does not misclassify an unrelated AbortError as user cancellation', async () => {
+              await seedLibrary();
+
+              await expect(
+                auditLibraryIntegrityExclusively({
+                  onProgress(progress) {
+                    if (progress.phase === 'classes') {
+                      throw new DOMException(
+                        'IndexedDB aborted independently',
+                        'AbortError',
+                      );
+                    }
+                  },
+                }),
+              ).rejects.toThrow('IndexedDB aborted independently');
+            });
+          """
+          tests.write_text(text[:index] + addition + text[index:])
+          PY
+      - name: Remove one-time workflow
+        run: rm .github/workflows/bootstrap-integrity-abort-classification.yml
+      - name: Validate focused fix
+        run: |
+          git diff --check
+          npm ci
+          npx tsc --noEmit
+          npm run lint
+          npx vitest run \
+            src/services/__tests__/libraryIntegrity.test.ts \
+            src/components/__tests__/LibraryIntegrityPanel.test.tsx
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src .github/workflows/bootstrap-integrity-abort-classification.yml
+          git commit -m "fix: distinguish user cancellation from audit failures"
+          git push origin HEAD:fix/integrity-abort-classification
