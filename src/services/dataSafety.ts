@@ -26,6 +26,14 @@ const readTimestamp = (key: string): number => {
   }
 };
 
+/** Last user-initiated portable backup export, or null when unavailable. */
+export function getLastBackupExportedAt(): Date | null {
+  const timestamp = readTimestamp(LAST_BACKUP_EXPORT_KEY);
+  if (timestamp <= 0) return null;
+  const date = new Date(timestamp);
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+
 let persistRequested = false;
 
 /**
