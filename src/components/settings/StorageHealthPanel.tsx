@@ -1,9 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Database, RefreshCw, ShieldCheck } from 'lucide-react';
 import {
+  requestPersistentStorageFromUserGesture,
+} from '../../services/dataSafety';
+import {
   collectStorageHealth,
   type StorageHealthSnapshot,
 } from '../../services/storageHealth';
+import { toast } from '../../store/uiStore';
 
 interface StorageHealthPanelProps {
   disabled?: boolean;
@@ -53,6 +57,7 @@ export const StorageHealthPanel: React.FC<StorageHealthPanelProps> = ({
 }) => {
   const [snapshot, setSnapshot] = useState<StorageHealthSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
+  const [requestingPersistence, setRequestingPersistence] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestId = useRef(0);
 
@@ -99,11 +104,47 @@ export const StorageHealthPanel: React.FC<StorageHealthPanelProps> = ({
     };
   }, []);
 
+  const requestProtection = useCallback(() => {
+    if (disabled || loading || requestingPersistence) return;
+    setRequestingPersistence(true);
+
+    void requestPersistentStorageFromUserGesture()
+      .then((result) => {
+        if (result === 'granted') {
+          setSnapshot((current) =>
+            current
+              ? {
+                  ...current,
+                  browser: {
+                    ...current.browser,
+                    persisted: true,
+                  },
+                }
+              : current,
+          );
+          toast('Persistent storage protection granted', 'success');
+          return;
+        }
+
+        toast(
+          result === 'denied'
+            ? 'The browser did not grant persistent storage. Keep portable backups current.'
+            : 'Persistent storage requests are unavailable in this browser.',
+          'info',
+          7000,
+        );
+      })
+      .finally(() => setRequestingPersistence(false));
+  }, [disabled, loading, requestingPersistence]);
+
   const unavailableLabel = loading ? 'Loading…' : 'Unavailable';
   const browserUsage = snapshot
     ? `${formatBytes(snapshot.browser.usageBytes)} of ${formatBytes(snapshot.browser.quotaBytes)}`
     : unavailableLabel;
   const usagePercent = snapshot?.browser.usagePercent;
+  const canRequestProtection =
+    snapshot?.browser.persisted !== true &&
+    snapshot?.browser.canRequestPersistence === true;
 
   return (
     <section
@@ -151,7 +192,7 @@ export const StorageHealthPanel: React.FC<StorageHealthPanelProps> = ({
         <button
           type="button"
           onClick={refresh}
-          disabled={disabled || loading}
+          disabled={disabled || loading || requestingPersistence}
           className="btn-premium-secondary"
           aria-label="Refresh storage health"
           style={{ flex: '0 0 auto' }}
@@ -240,6 +281,23 @@ export const StorageHealthPanel: React.FC<StorageHealthPanelProps> = ({
           <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>
             Browser-controlled protection status
           </span>
+          {canRequestProtection && (
+            <button
+              type="button"
+              onClick={requestProtection}
+              disabled={disabled || loading || requestingPersistence}
+              className="btn-premium-secondary"
+              style={{
+                justifySelf: 'start',
+                marginTop: '5px',
+                minHeight: '30px',
+                padding: '0 10px',
+                fontSize: '11px',
+              }}
+            >
+              {requestingPersistence ? 'Requesting…' : 'Request protection'}
+            </button>
+          )}
         </div>
 
         <div style={metricStyle()}>
