@@ -10,7 +10,7 @@ export interface StorageHealthSnapshot {
     reviews: number;
     mediaObjects: number;
     mediaBytes: number;
-    mediaIntegrityWarnings: number;
+    mediaMetadataWarnings: number;
   };
   browser: {
     usageBytes: number | null;
@@ -27,9 +27,9 @@ function finiteNonNegative(value: unknown): number | null {
     : null;
 }
 
-function arrayBufferByteLength(value: unknown): number | null {
-  return Object.prototype.toString.call(value) === '[object ArrayBuffer]'
-    ? (value as ArrayBuffer).byteLength
+function safeStoredByteLength(value: unknown): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+    ? value
     : null;
 }
 
@@ -68,9 +68,9 @@ async function readBrowserStorage(): Promise<StorageHealthSnapshot['browser']> {
 
 /**
  * Read one consistent library snapshot, then query browser-origin storage.
- * Browser usage includes IndexedDB, Cache Storage, and other same-origin data.
- * Registry byte totals are scanned by cursor so diagnostics never retain every
- * binary object in one JavaScript array.
+ * Browser usage is origin-wide and can include other apps hosted on the same
+ * origin. Registry byte totals use the byteLength index, so opening Settings
+ * does not deserialize every stored media ArrayBuffer merely to total metadata.
  */
 export async function collectStorageHealth(): Promise<StorageHealthSnapshot> {
   const library = await db.transaction(
@@ -85,20 +85,26 @@ export async function collectStorageHealth(): Promise<StorageHealthSnapshot> {
         db.media.count(),
       ]);
 
+      let indexedMediaObjects = 0;
       let mediaBytes = 0;
-      let mediaIntegrityWarnings = 0;
-      await db.media.toCollection().each((asset) => {
-        const actualBytes = arrayBufferByteLength(asset.data);
-        if (
-          actualBytes === null ||
-          !Number.isSafeInteger(asset.byteLength) ||
-          asset.byteLength < 0 ||
-          asset.byteLength !== actualBytes
-        ) {
-          mediaIntegrityWarnings += 1;
+      let mediaMetadataWarnings = 0;
+      await db.media.orderBy('byteLength').eachKey((key) => {
+        indexedMediaObjects += 1;
+        const byteLength = safeStoredByteLength(key);
+        if (byteLength === null) {
+          mediaMetadataWarnings += 1;
+        } else {
+          mediaBytes += byteLength;
         }
-        if (actualBytes !== null) mediaBytes += actualBytes;
       });
+
+      // Records with a missing or non-indexable byteLength do not appear in the
+      // byteLength index at all. Count them as metadata warnings without loading
+      // their binary payloads.
+      mediaMetadataWarnings += Math.max(
+        0,
+        mediaObjects - indexedMediaObjects,
+      );
 
       return {
         classes,
@@ -107,7 +113,7 @@ export async function collectStorageHealth(): Promise<StorageHealthSnapshot> {
         reviews,
         mediaObjects,
         mediaBytes,
-        mediaIntegrityWarnings,
+        mediaMetadataWarnings,
       };
     },
   );
