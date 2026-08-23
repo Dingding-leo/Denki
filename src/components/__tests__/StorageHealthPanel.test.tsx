@@ -3,10 +3,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   collect: vi.fn(),
+  requestProtection: vi.fn(),
+  toast: vi.fn(),
 }));
 
 vi.mock('../../services/storageHealth', () => ({
   collectStorageHealth: mocks.collect,
+}));
+
+vi.mock('../../services/dataSafety', () => ({
+  requestPersistentStorageFromUserGesture: mocks.requestProtection,
+}));
+
+vi.mock('../../store/uiStore', () => ({
+  toast: mocks.toast,
 }));
 
 import { StorageHealthPanel } from '../settings/StorageHealthPanel';
@@ -27,14 +37,26 @@ const snapshot = {
     quotaBytes: 1024 * 1024 * 1024,
     usagePercent: 12.5,
     persisted: true,
+    canRequestPersistence: true,
   },
   lastBackupExportedAt: '2026-08-20T00:00:00.000Z',
+};
+
+const unprotectedSnapshot = {
+  ...snapshot,
+  browser: {
+    ...snapshot.browser,
+    persisted: false,
+  },
 };
 
 describe('StorageHealthPanel', () => {
   beforeEach(() => {
     mocks.collect.mockReset();
+    mocks.requestProtection.mockReset();
+    mocks.toast.mockReset();
     mocks.collect.mockResolvedValue(snapshot);
+    mocks.requestProtection.mockResolvedValue('granted');
   });
 
   it('loads browser, library, media, persistence, and backup diagnostics', async () => {
@@ -56,6 +78,9 @@ describe('StorageHealthPanel', () => {
       screen.getByText(/Hosted deployments may share that origin/i),
     ).toBeInTheDocument();
     expect(screen.getByText(/Last portable backup:/i)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Request protection' }),
+    ).not.toBeInTheDocument();
   });
 
   it('refreshes on demand and surfaces a later failure without erasing data', async () => {
@@ -94,12 +119,62 @@ describe('StorageHealthPanel', () => {
     ).toBeEnabled();
   });
 
+  it('requests protection from a user gesture and updates only on a real grant', async () => {
+    mocks.collect.mockResolvedValue(unprotectedSnapshot);
+    render(<StorageHealthPanel />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Request protection' }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.requestProtection).toHaveBeenCalledTimes(1),
+    );
+    expect(
+      await screen.findByText('Protected from routine eviction'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Request protection' }),
+    ).not.toBeInTheDocument();
+    expect(mocks.toast).toHaveBeenCalledWith(
+      'Persistent storage protection granted',
+      'success',
+    );
+  });
+
+  it('keeps best-effort status when the browser denies protection', async () => {
+    mocks.collect.mockResolvedValue(unprotectedSnapshot);
+    mocks.requestProtection.mockResolvedValue('denied');
+    render(<StorageHealthPanel />);
+
+    const button = await screen.findByRole('button', {
+      name: 'Request protection',
+    });
+    fireEvent.click(button);
+
+    await waitFor(() =>
+      expect(mocks.toast).toHaveBeenCalledWith(
+        expect.stringMatching(/did not grant persistent storage/i),
+        'info',
+        7000,
+      ),
+    );
+    expect(
+      screen.getByText('Best-effort browser storage'),
+    ).toBeInTheDocument();
+    expect(button).toBeEnabled();
+  });
+
   it('respects a parent maintenance lock', async () => {
+    mocks.collect.mockResolvedValue(unprotectedSnapshot);
     render(<StorageHealthPanel disabled />);
     await screen.findByText(/824 cards · 2,941 reviews/i);
 
     expect(
       screen.getByRole('button', { name: 'Refresh storage health' }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Request protection' }),
     ).toBeDisabled();
   });
 });

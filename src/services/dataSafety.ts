@@ -54,6 +54,29 @@ export async function requestPersistentStorage() {
   }
 }
 
+export type PersistentStorageRequestResult =
+  | 'granted'
+  | 'denied'
+  | 'unavailable';
+
+/**
+ * Retry persistent-storage protection directly from a user gesture. This path
+ * deliberately bypasses the once-per-boot automatic-request guard: browsers
+ * may reject an early background request but accept one initiated explicitly
+ * from Settings. It never claims success unless `StorageManager.persist()`
+ * resolves to true.
+ */
+export async function requestPersistentStorageFromUserGesture(): Promise<PersistentStorageRequestResult> {
+  const storage = globalThis.navigator?.storage;
+  if (typeof storage?.persist !== 'function') return 'unavailable';
+
+  try {
+    return (await storage.persist()) ? 'granted' : 'denied';
+  } catch {
+    return 'unavailable';
+  }
+}
+
 let nudgeChecked = false;
 
 /** Test-only: clear the once-per-boot guards. */

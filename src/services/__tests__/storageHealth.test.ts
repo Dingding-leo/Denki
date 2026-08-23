@@ -22,6 +22,7 @@ function installStorageApi(options: {
         quota: options.quota,
       })),
       persisted: vi.fn(async () => options.persisted ?? false),
+      persist: vi.fn(async () => true),
     },
   });
 }
@@ -121,6 +122,7 @@ describe('storage health diagnostics', () => {
       quotaBytes: 100,
       usagePercent: 25,
       persisted: true,
+      canRequestPersistence: true,
     });
     expect(result.lastBackupExportedAt).toBe('2026-08-20T00:00:00.000Z');
   });
@@ -144,6 +146,7 @@ describe('storage health diagnostics', () => {
     expect(result.browser.usageBytes).toBeNull();
     expect(result.browser.quotaBytes).toBeNull();
     expect(result.browser.usagePercent).toBeNull();
+    expect(result.browser.canRequestPersistence).toBe(true);
   });
 
   it('keeps database diagnostics available when browser APIs fail', async () => {
@@ -168,6 +171,7 @@ describe('storage health diagnostics', () => {
       quotaBytes: null,
       usagePercent: null,
       persisted: null,
+      canRequestPersistence: false,
     });
   });
 });

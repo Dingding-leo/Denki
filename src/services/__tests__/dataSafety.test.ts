@@ -1,8 +1,18 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '../../db';
-import { useUIStore } from '../../store/uiStore';
-import { maybeNudgeBackup, markBackupExported, _resetDataSafetyForTests } from '../dataSafety';
 import type { Card } from '../../db/schema';
+import { useUIStore } from '../../store/uiStore';
+import {
+  _resetDataSafetyForTests,
+  markBackupExported,
+  maybeNudgeBackup,
+  requestPersistentStorageFromUserGesture,
+} from '../dataSafety';
+
+const originalStorageDescriptor = Object.getOwnPropertyDescriptor(
+  globalThis.navigator,
+  'storage',
+);
 
 const seedCard = (i: number): Card => ({
   classId: 1,
@@ -19,13 +29,35 @@ const seedCard = (i: number): Card => ({
   due: new Date(),
 });
 
-describe('dataSafety backup nudge', () => {
+function installPersistenceApi(
+  persist: () => Promise<boolean>,
+): void {
+  Object.defineProperty(globalThis.navigator, 'storage', {
+    configurable: true,
+    value: { persist },
+  });
+}
+
+describe('data safety', () => {
   beforeEach(async () => {
     await db.cards.clear();
     localStorage.removeItem('denki-last-backup-export');
     localStorage.removeItem('denki-backup-nudge-at');
     useUIStore.setState({ toasts: [] });
     _resetDataSafetyForTests();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    if (originalStorageDescriptor) {
+      Object.defineProperty(
+        globalThis.navigator,
+        'storage',
+        originalStorageDescriptor,
+      );
+    } else {
+      Reflect.deleteProperty(globalThis.navigator, 'storage');
+    }
   });
 
   it('stays quiet below the card threshold', async () => {
@@ -57,5 +89,41 @@ describe('dataSafety backup nudge', () => {
     localStorage.setItem('denki-backup-nudge-at', String(Date.now() - 1000));
     await maybeNudgeBackup();
     expect(useUIStore.getState().toasts).toHaveLength(0);
+  });
+
+  it('reports a user-initiated persistent-storage grant exactly', async () => {
+    const persist = vi.fn(async () => true);
+    installPersistenceApi(persist);
+
+    await expect(
+      requestPersistentStorageFromUserGesture(),
+    ).resolves.toBe('granted');
+    expect(persist).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not claim protection when the browser denies the request', async () => {
+    const persist = vi.fn(async () => false);
+    installPersistenceApi(persist);
+
+    await expect(
+      requestPersistentStorageFromUserGesture(),
+    ).resolves.toBe('denied');
+  });
+
+  it('reports persistent-storage requests as unavailable when unsupported or failing', async () => {
+    Object.defineProperty(globalThis.navigator, 'storage', {
+      configurable: true,
+      value: {},
+    });
+    await expect(
+      requestPersistentStorageFromUserGesture(),
+    ).resolves.toBe('unavailable');
+
+    installPersistenceApi(async () => {
+      throw new Error('blocked');
+    });
+    await expect(
+      requestPersistentStorageFromUserGesture(),
+    ).resolves.toBe('unavailable');
   });
 });
