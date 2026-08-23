@@ -1,0 +1,60 @@
+name: Bootstrap backup resource budgets PR
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/bootstrap-backup-resource-budgets.yml
+      - .github/workflows/bootstrap-backup-resource-budgets-pr.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: security/backup-resource-budgets
+      - name: Recover and apply the reviewed patch script
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+          import textwrap
+
+          source = Path(
+              '.github/workflows/bootstrap-backup-resource-budgets.yml'
+          ).read_text()
+          opener = "          python3 - <<'PY'\n"
+          start = source.index(opener) + len(opener)
+          end = source.rindex("\n          PY\n")
+          script = textwrap.dedent(source[start:end])
+          destination = Path('/tmp/apply-backup-resource-budgets.py')
+          destination.write_text(script)
+          subprocess.run(['python3', str(destination)], check=True)
+          PY
+      - name: Remove one-time bootstrap workflows
+        run: |
+          rm .github/workflows/bootstrap-backup-resource-budgets.yml
+          rm .github/workflows/bootstrap-backup-resource-budgets-pr.yml
+      - name: Validate focused hardening
+        run: |
+          git diff --check
+          npm ci
+          npx tsc --noEmit
+          npm run lint
+          npx vitest run \
+            src/services/__tests__/backupFile.test.ts \
+            src/services/__tests__/backupResourceLimits.test.ts \
+            src/services/__tests__/backup.test.ts \
+            src/components/__tests__/SettingsBackupImport.test.tsx
+      - name: Commit hardening
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src .github/workflows
+          git commit -m "security: bound portable backup resource usage"
+          git push origin HEAD:security/backup-resource-budgets
