@@ -1,0 +1,307 @@
+name: Bootstrap backup resource budgets
+
+on:
+  push:
+    branches: [security/backup-resource-budgets]
+    paths: [.github/workflows/bootstrap-backup-resource-budgets.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: security/backup-resource-budgets
+      - name: Apply resource budgets to backup boundaries
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              if old not in text:
+                  raise SystemExit(f'Expected text not found in {path}: {old[:120]!r}')
+              file.write_text(text.replace(old, new, 1))
+
+          def insert_before(path: str, marker: str, addition: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              if marker not in text:
+                  raise SystemExit(f'Marker not found in {path}: {marker!r}')
+              file.write_text(text.replace(marker, addition + marker, 1))
+
+          backup = 'src/services/backup.ts'
+          replace_once(
+              backup,
+              "import { markBackupExported } from './dataSafety';\n",
+              """import { markBackupExported } from './dataSafety';
+          import {
+            parseBackupJsonText,
+            serializeBackupJson,
+          } from './backupFile';
+          """,
+          )
+          replace_once(
+              backup,
+              """export const BACKUP_FORMAT_VERSION = 5;
+
+          let debounceTimer""",
+              """export const BACKUP_FORMAT_VERSION = 5;
+
+          const MEBIBYTE = 1024 * 1024;
+          export const BACKUP_RESOURCE_LIMITS = {
+            maxClasses: 10_000,
+            maxDecks: 50_000,
+            maxCards: 250_000,
+            maxReviews: 2_000_000,
+            maxMediaRows: 5_000,
+            maxClassNameCharacters: 64 * 1024,
+            maxClassDescriptionCharacters: 4 * MEBIBYTE,
+            maxDeckNameCharacters: 64 * 1024,
+            maxDeckDescriptionCharacters: 4 * MEBIBYTE,
+            maxDeckNotesCharacters: 8 * MEBIBYTE,
+            maxCardFieldCharacters: 4 * MEBIBYTE,
+            maxTotalTextCharacters: 96 * MEBIBYTE,
+          } as const;
+
+          let debounceTimer""",
+          )
+
+          insert_before(
+              backup,
+              'function reviveDateValue',
+              """function assertBackupTableLimit(
+            rows: unknown[],
+            label: string,
+            maximum: number,
+          ): void {
+            if (rows.length > maximum) {
+              throw new Error(
+                `Backup contains more than ${maximum.toLocaleString('en-US')} ${label}; refusing to import.`,
+              );
+            }
+          }
+
+          function accountBackupText(
+            value: unknown,
+            label: string,
+            maximum: number,
+            budget: { total: number },
+          ): void {
+            if (typeof value !== 'string') return;
+            if (value.length > maximum) {
+              throw new Error(
+                `${label} exceeds the ${maximum.toLocaleString('en-US')} character limit; refusing to import.`,
+              );
+            }
+
+            budget.total += value.length;
+            if (budget.total > BACKUP_RESOURCE_LIMITS.maxTotalTextCharacters) {
+              throw new Error(
+                `Backup text exceeds the ${BACKUP_RESOURCE_LIMITS.maxTotalTextCharacters.toLocaleString('en-US')} character total limit; refusing to import.`,
+              );
+            }
+          }
+
+          function assertBackupResourceBudget(
+            data: Record<string, unknown>,
+          ): void {
+            const classes = data.classes as unknown[];
+            const decks = data.decks as unknown[];
+            const cards = data.cards as unknown[];
+            const reviews = data.reviews as unknown[];
+
+            assertBackupTableLimit(
+              classes,
+              'classes',
+              BACKUP_RESOURCE_LIMITS.maxClasses,
+            );
+            assertBackupTableLimit(
+              decks,
+              'decks',
+              BACKUP_RESOURCE_LIMITS.maxDecks,
+            );
+            assertBackupTableLimit(
+              cards,
+              'cards',
+              BACKUP_RESOURCE_LIMITS.maxCards,
+            );
+            assertBackupTableLimit(
+              reviews,
+              'reviews',
+              BACKUP_RESOURCE_LIMITS.maxReviews,
+            );
+            if (Array.isArray(data.media)) {
+              assertBackupTableLimit(
+                data.media,
+                'media objects',
+                BACKUP_RESOURCE_LIMITS.maxMediaRows,
+              );
+            }
+
+            const budget = { total: 0 };
+            classes.forEach((row, index) => {
+              if (!isRecord(row)) return;
+              accountBackupText(
+                row.name,
+                `Backup class ${index + 1} name`,
+                BACKUP_RESOURCE_LIMITS.maxClassNameCharacters,
+                budget,
+              );
+              accountBackupText(
+                row.description,
+                `Backup class ${index + 1} description`,
+                BACKUP_RESOURCE_LIMITS.maxClassDescriptionCharacters,
+                budget,
+              );
+            });
+            decks.forEach((row, index) => {
+              if (!isRecord(row)) return;
+              accountBackupText(
+                row.name,
+                `Backup deck ${index + 1} name`,
+                BACKUP_RESOURCE_LIMITS.maxDeckNameCharacters,
+                budget,
+              );
+              accountBackupText(
+                row.description,
+                `Backup deck ${index + 1} description`,
+                BACKUP_RESOURCE_LIMITS.maxDeckDescriptionCharacters,
+                budget,
+              );
+              accountBackupText(
+                row.notes,
+                `Backup deck ${index + 1} notes`,
+                BACKUP_RESOURCE_LIMITS.maxDeckNotesCharacters,
+                budget,
+              );
+            });
+            cards.forEach((row, index) => {
+              if (!isRecord(row)) return;
+              accountBackupText(
+                row.front,
+                `Backup card ${index + 1} front`,
+                BACKUP_RESOURCE_LIMITS.maxCardFieldCharacters,
+                budget,
+              );
+              accountBackupText(
+                row.back,
+                `Backup card ${index + 1} back`,
+                BACKUP_RESOURCE_LIMITS.maxCardFieldCharacters,
+                budget,
+              );
+            });
+          }
+
+          """,
+          )
+
+          replace_once(
+              backup,
+              """  for (const table of requiredTables) {
+            if (!Array.isArray(data[table])) {
+              throw new Error(
+                `Backup is missing a valid ${table} table; refusing to import.`,
+              );
+            }
+          }
+
+          const classes = reviveDates(data.classes as unknown[], ['createdAt']);""",
+              """  for (const table of requiredTables) {
+            if (!Array.isArray(data[table])) {
+              throw new Error(
+                `Backup is missing a valid ${table} table; refusing to import.`,
+              );
+            }
+          }
+          assertBackupResourceBudget(data);
+
+          const classes = reviveDates(data.classes as unknown[], ['createdAt']);""",
+          )
+
+          replace_once(
+              backup,
+              '      body: JSON.stringify(snapshot),',
+              '      body: serializeBackupJson(snapshot),',
+          )
+          replace_once(
+              backup,
+              '    const snapshot: unknown = await response.json();',
+              '    const snapshot: unknown = parseBackupJsonText(await response.text());',
+          )
+          replace_once(
+              backup,
+              """  const blob = new Blob([JSON.stringify(snapshot, null, 2)], {
+            type: 'application/json',
+          });""",
+              """  const json = serializeBackupJson(snapshot);
+          const blob = new Blob([json], {
+            type: 'application/json',
+          });""",
+          )
+
+          settings = 'src/components/modals/SettingsModal.tsx'
+          replace_once(
+              settings,
+              """} from '../../services/backup';
+          import { scheduleApplicationReload }""",
+              """} from '../../services/backup';
+          import { readBackupJsonFile } from '../../services/backupFile';
+          import { scheduleApplicationReload }""",
+          )
+          replace_once(
+              settings,
+              """      let parsed: unknown;
+              try {
+                parsed = JSON.parse(await file.text());
+              } catch (error) {
+                throw new Error('Backup file is not valid JSON.', {
+                  cause: error,
+                });
+              }
+
+              const prepared = await prepareBackupImport(parsed);""",
+              """      let parsed: unknown = await readBackupJsonFile(file);
+
+              const prepared = await prepareBackupImport(parsed);""",
+          )
+
+          settings_test = 'src/components/__tests__/SettingsBackupImport.test.tsx'
+          replace_once(
+              settings_test,
+              """  return {
+            name: 'denki-backup-2026-08-21.json',
+            text: vi.fn(async () => source),
+          } as unknown as File;""",
+              """  return {
+            name: 'denki-backup-2026-08-21.json',
+            size: new Blob([source]).size,
+            text: vi.fn(async () => source),
+          } as unknown as File;""",
+          )
+          PY
+      - name: Remove one-time bootstrap workflow
+        run: rm .github/workflows/bootstrap-backup-resource-budgets.yml
+      - name: Validate focused hardening
+        run: |
+          git diff --check
+          npm ci
+          npx tsc --noEmit
+          npm run lint
+          npx vitest run \
+            src/services/__tests__/backupFile.test.ts \
+            src/services/__tests__/backupResourceLimits.test.ts \
+            src/services/__tests__/backup.test.ts \
+            src/components/__tests__/SettingsBackupImport.test.tsx
+      - name: Commit hardening
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src .github/workflows/bootstrap-backup-resource-budgets.yml
+          git commit -m "security: bound portable backup resource usage"
+          git push origin HEAD:security/backup-resource-budgets
