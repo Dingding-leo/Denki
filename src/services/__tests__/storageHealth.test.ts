@@ -114,7 +114,7 @@ describe('storage health diagnostics', () => {
       reviews: 1,
       mediaObjects: 1,
       mediaBytes: 4,
-      mediaIntegrityWarnings: 0,
+      mediaMetadataWarnings: 0,
     });
     expect(result.browser).toEqual({
       usageBytes: 25,
@@ -125,22 +125,22 @@ describe('storage health diagnostics', () => {
     expect(result.lastBackupExportedAt).toBe('2026-08-20T00:00:00.000Z');
   });
 
-  it('surfaces corrupt media metadata without hiding the remaining counts', async () => {
+  it('surfaces malformed media metadata without reading binary payloads', async () => {
     await seedLibrary();
     await db.media.put({
-      hash: 'a'.repeat(64),
+      hash: 'b'.repeat(64),
       mimeType: 'image/png',
-      byteLength: 99,
-      data: new Uint8Array([1, 2, 3, 4]).buffer,
+      byteLength: 'invalid' as never,
+      data: new Uint8Array([9, 9]).buffer,
       createdAt: new Date(),
     });
     installStorageApi({});
 
     const result = await collectStorageHealth();
 
-    expect(result.library.mediaObjects).toBe(1);
+    expect(result.library.mediaObjects).toBe(2);
     expect(result.library.mediaBytes).toBe(4);
-    expect(result.library.mediaIntegrityWarnings).toBe(1);
+    expect(result.library.mediaMetadataWarnings).toBe(1);
     expect(result.browser.usageBytes).toBeNull();
     expect(result.browser.quotaBytes).toBeNull();
     expect(result.browser.usagePercent).toBeNull();
