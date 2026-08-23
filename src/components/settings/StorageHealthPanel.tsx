@@ -99,9 +99,10 @@ export const StorageHealthPanel: React.FC<StorageHealthPanelProps> = ({
     };
   }, []);
 
+  const unavailableLabel = loading ? 'Loading…' : 'Unavailable';
   const browserUsage = snapshot
     ? `${formatBytes(snapshot.browser.usageBytes)} of ${formatBytes(snapshot.browser.quotaBytes)}`
-    : 'Loading…';
+    : unavailableLabel;
   const usagePercent = snapshot?.browser.usagePercent;
 
   return (
@@ -143,8 +144,8 @@ export const StorageHealthPanel: React.FC<StorageHealthPanelProps> = ({
               lineHeight: 1.45,
             }}
           >
-            Browser usage includes IndexedDB, offline caches, and other Denki
-            data on this origin.
+            Reported usage covers every browser store on this origin. Hosted
+            deployments may share that origin with other apps.
           </p>
         </div>
         <button
@@ -202,15 +203,17 @@ export const StorageHealthPanel: React.FC<StorageHealthPanelProps> = ({
               letterSpacing: '0.5px',
             }}
           >
-            <Database size={12} aria-hidden="true" /> Browser usage
+            <Database size={12} aria-hidden="true" /> Reported origin usage
           </span>
           <strong style={{ color: 'var(--text-primary)', fontSize: '13px' }}>
             {browserUsage}
           </strong>
           <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>
-            {usagePercent === null || usagePercent === undefined
-              ? 'Percentage unavailable'
-              : `${usagePercent.toFixed(1)}% of reported quota`}
+            {!snapshot && loading
+              ? 'Checking reported quota…'
+              : usagePercent === null || usagePercent === undefined
+                ? 'Percentage unavailable'
+                : `${usagePercent.toFixed(1)}% of reported quota`}
           </span>
         </div>
 
@@ -232,7 +235,7 @@ export const StorageHealthPanel: React.FC<StorageHealthPanelProps> = ({
           <strong style={{ color: 'var(--text-primary)', fontSize: '13px' }}>
             {snapshot
               ? persistenceLabel(snapshot.browser.persisted)
-              : 'Loading…'}
+              : unavailableLabel}
           </strong>
           <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>
             Browser-controlled protection status
@@ -254,12 +257,14 @@ export const StorageHealthPanel: React.FC<StorageHealthPanelProps> = ({
           <strong style={{ color: 'var(--text-primary)', fontSize: '13px' }}>
             {snapshot
               ? `${snapshot.library.cards.toLocaleString()} cards · ${snapshot.library.reviews.toLocaleString()} reviews`
-              : 'Loading…'}
+              : unavailableLabel}
           </strong>
           <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>
             {snapshot
               ? `${snapshot.library.classes.toLocaleString()} classes · ${snapshot.library.decks.toLocaleString()} decks`
-              : 'Consistent database snapshot'}
+              : loading
+                ? 'Reading a consistent database snapshot…'
+                : 'Database snapshot unavailable'}
           </span>
         </div>
 
@@ -278,22 +283,24 @@ export const StorageHealthPanel: React.FC<StorageHealthPanelProps> = ({
           <strong style={{ color: 'var(--text-primary)', fontSize: '13px' }}>
             {snapshot
               ? `${snapshot.library.mediaObjects.toLocaleString()} objects · ${formatBytes(snapshot.library.mediaBytes)}`
-              : 'Loading…'}
+              : unavailableLabel}
           </strong>
           <span
             style={{
               color:
-                snapshot && snapshot.library.mediaIntegrityWarnings > 0
+                snapshot && snapshot.library.mediaMetadataWarnings > 0
                   ? 'var(--danger)'
                   : 'var(--text-muted)',
               fontSize: '10px',
             }}
           >
             {!snapshot
-              ? 'Checking stored byte-length metadata…'
-              : snapshot.library.mediaIntegrityWarnings > 0
-                ? `${snapshot.library.mediaIntegrityWarnings} metadata warning(s)`
-                : 'Stored byte lengths match registry metadata'}
+              ? loading
+                ? 'Checking byte-length metadata…'
+                : 'Registry metadata unavailable'
+              : snapshot.library.mediaMetadataWarnings > 0
+                ? `${snapshot.library.mediaMetadataWarnings} metadata warning(s)`
+                : 'Byte-length metadata is present and valid'}
           </span>
         </div>
       </div>
@@ -309,7 +316,7 @@ export const StorageHealthPanel: React.FC<StorageHealthPanelProps> = ({
         Last portable backup:{' '}
         {snapshot
           ? formatBackupDate(snapshot.lastBackupExportedAt)
-          : 'Loading…'}
+          : unavailableLabel}
       </p>
     </section>
   );
