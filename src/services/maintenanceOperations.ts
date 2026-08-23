@@ -1,4 +1,8 @@
-import { importDatabase } from './backup';
+import {
+  importDatabase,
+  importPreparedDatabase,
+  type PreparedBackupImport,
+} from './backup';
 import { withExclusiveMaintenanceLock } from './maintenanceLock';
 
 /**
@@ -17,6 +21,26 @@ export async function importDatabaseExclusively(
     async ({ assertOwned }) => {
       await assertOwned();
       await importDatabase(snapshot);
+    },
+  );
+}
+
+/**
+ * Apply a backup that was fully validated before the user confirmed the
+ * destructive restore. The opaque plan is committed only after this tab
+ * acquires the same origin-wide maintenance lease as legacy callers.
+ */
+export async function importPreparedDatabaseExclusively(
+  prepared: PreparedBackupImport,
+): Promise<void> {
+  return withExclusiveMaintenanceLock(
+    {
+      operation: 'backup-restore',
+      label: 'Portable backup restore',
+    },
+    async ({ assertOwned }) => {
+      await assertOwned();
+      await importPreparedDatabase(prepared);
     },
   );
 }
