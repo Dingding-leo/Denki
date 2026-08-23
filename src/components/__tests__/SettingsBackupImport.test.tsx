@@ -65,6 +65,7 @@ const prepared = {
 function backupFile(source = '{"formatVersion":5}'): File {
   return {
     name: 'denki-backup-2026-08-21.json',
+    size: new Blob([source]).size,
     text: vi.fn(async () => source),
   } as unknown as File;
 }

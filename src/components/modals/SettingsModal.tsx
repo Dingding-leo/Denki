@@ -14,6 +14,7 @@ import {
   prepareBackupImport,
   type BackupImportSummary,
 } from '../../services/backup';
+import { readBackupJsonFile } from '../../services/backupFile';
 import { scheduleApplicationReload } from '../../services/appReload';
 import { importPreparedDatabaseExclusively } from '../../services/maintenanceOperations';
 import { celebrate } from '../../services/celebrate';
@@ -269,14 +270,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
 
     setImportPhase('inspecting');
     try {
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(await file.text());
-      } catch (error) {
-        throw new Error('Backup file is not valid JSON.', {
-          cause: error,
-        });
-      }
+      let parsed: unknown = await readBackupJsonFile(file);
 
       const prepared = await prepareBackupImport(parsed);
       // The prepared plan owns normalized copies. Release the original

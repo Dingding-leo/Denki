@@ -16,6 +16,10 @@ import {
   assertNoRuntimeRegistryReferences,
 } from './backupRegistryReferences';
 import { markBackupExported } from './dataSafety';
+import {
+  parseBackupJsonText,
+  serializeBackupJson,
+} from './backupFile';
 import { revokeAllMediaObjectUrls } from './mediaRegistry';
 import {
   exportRegistryNativeBackupMedia,
@@ -43,6 +47,22 @@ const RETIRED_NEW_CARD_LIMIT_KEY = 'denki-new-cards-per-day';
 const SEMVER_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 
 export const BACKUP_FORMAT_VERSION = 5;
+
+const MEBIBYTE = 1024 * 1024;
+export const BACKUP_RESOURCE_LIMITS = {
+  maxClasses: 10_000,
+  maxDecks: 50_000,
+  maxCards: 250_000,
+  maxReviews: 2_000_000,
+  maxMediaRows: 5_000,
+  maxClassNameCharacters: 64 * 1024,
+  maxClassDescriptionCharacters: 4 * MEBIBYTE,
+  maxDeckNameCharacters: 64 * 1024,
+  maxDeckDescriptionCharacters: 4 * MEBIBYTE,
+  maxDeckNotesCharacters: 8 * MEBIBYTE,
+  maxCardFieldCharacters: 4 * MEBIBYTE,
+  maxTotalTextCharacters: 96 * MEBIBYTE,
+} as const;
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -140,6 +160,129 @@ function optionalCanonicalIsoDate(value: unknown): string | null {
   const parsed = new Date(value);
   if (!Number.isFinite(parsed.getTime())) return null;
   return parsed.toISOString() === value ? value : null;
+}
+
+function assertBackupTableLimit(
+  rows: unknown[],
+  label: string,
+  maximum: number,
+): void {
+  if (rows.length > maximum) {
+    throw new Error(
+      `Backup contains more than ${maximum.toLocaleString('en-US')} ${label}; refusing to import.`,
+    );
+  }
+}
+
+function accountBackupText(
+  value: unknown,
+  label: string,
+  maximum: number,
+  budget: { total: number },
+): void {
+  if (typeof value !== 'string') return;
+  if (value.length > maximum) {
+    throw new Error(
+      `${label} exceeds the ${maximum.toLocaleString('en-US')} character limit; refusing to import.`,
+    );
+  }
+
+  budget.total += value.length;
+  if (budget.total > BACKUP_RESOURCE_LIMITS.maxTotalTextCharacters) {
+    throw new Error(
+      `Backup text exceeds the ${BACKUP_RESOURCE_LIMITS.maxTotalTextCharacters.toLocaleString('en-US')} character total limit; refusing to import.`,
+    );
+  }
+}
+
+function assertBackupResourceBudget(
+  data: Record<string, unknown>,
+): void {
+  const classes = data.classes as unknown[];
+  const decks = data.decks as unknown[];
+  const cards = data.cards as unknown[];
+  const reviews = data.reviews as unknown[];
+
+  assertBackupTableLimit(
+    classes,
+    'classes',
+    BACKUP_RESOURCE_LIMITS.maxClasses,
+  );
+  assertBackupTableLimit(
+    decks,
+    'decks',
+    BACKUP_RESOURCE_LIMITS.maxDecks,
+  );
+  assertBackupTableLimit(
+    cards,
+    'cards',
+    BACKUP_RESOURCE_LIMITS.maxCards,
+  );
+  assertBackupTableLimit(
+    reviews,
+    'reviews',
+    BACKUP_RESOURCE_LIMITS.maxReviews,
+  );
+  if (Array.isArray(data.media)) {
+    assertBackupTableLimit(
+      data.media,
+      'media objects',
+      BACKUP_RESOURCE_LIMITS.maxMediaRows,
+    );
+  }
+
+  const budget = { total: 0 };
+  classes.forEach((row, index) => {
+    if (!isRecord(row)) return;
+    accountBackupText(
+      row.name,
+      `Backup class ${index + 1} name`,
+      BACKUP_RESOURCE_LIMITS.maxClassNameCharacters,
+      budget,
+    );
+    accountBackupText(
+      row.description,
+      `Backup class ${index + 1} description`,
+      BACKUP_RESOURCE_LIMITS.maxClassDescriptionCharacters,
+      budget,
+    );
+  });
+  decks.forEach((row, index) => {
+    if (!isRecord(row)) return;
+    accountBackupText(
+      row.name,
+      `Backup deck ${index + 1} name`,
+      BACKUP_RESOURCE_LIMITS.maxDeckNameCharacters,
+      budget,
+    );
+    accountBackupText(
+      row.description,
+      `Backup deck ${index + 1} description`,
+      BACKUP_RESOURCE_LIMITS.maxDeckDescriptionCharacters,
+      budget,
+    );
+    accountBackupText(
+      row.notes,
+      `Backup deck ${index + 1} notes`,
+      BACKUP_RESOURCE_LIMITS.maxDeckNotesCharacters,
+      budget,
+    );
+  });
+  cards.forEach((row, index) => {
+    if (!isRecord(row)) return;
+    accountBackupText(
+      row.front,
+      `Backup card ${index + 1} front`,
+      BACKUP_RESOURCE_LIMITS.maxCardFieldCharacters,
+      budget,
+    );
+    accountBackupText(
+      row.back,
+      `Backup card ${index + 1} back`,
+      BACKUP_RESOURCE_LIMITS.maxCardFieldCharacters,
+      budget,
+    );
+  });
 }
 
 function reviveDateValue(value: unknown): unknown {
@@ -463,6 +606,8 @@ async function normalizeBackup(snapshot: unknown): Promise<NormalizedBackup> {
       );
     }
   }
+
+  assertBackupResourceBudget(data);
 
   const classes = reviveDates(data.classes as unknown[], ['createdAt']);
   const decks = reviveDates(data.decks as unknown[], ['createdAt']);
@@ -834,7 +979,7 @@ async function saveToFilesystem(): Promise<void> {
     const response = await fetch(BACKUP_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(snapshot),
+      body: serializeBackupJson(snapshot),
     });
     if (response.ok) {
       console.log(
@@ -884,7 +1029,7 @@ export async function restoreFromBackupIfNeeded(): Promise<boolean> {
       return false;
     }
 
-    const snapshot: unknown = await response.json();
+    const snapshot: unknown = parseBackupJsonText(await response.text());
     if (!isRecord(snapshot) || !isRecord(snapshot.data)) return false;
     const data = snapshot.data;
     const hasClasses =
@@ -904,7 +1049,8 @@ export async function restoreFromBackupIfNeeded(): Promise<boolean> {
 /** Download a user-initiated JSON backup. */
 export async function downloadBackup(): Promise<void> {
   const snapshot = await exportDatabase();
-  const blob = new Blob([JSON.stringify(snapshot, null, 2)], {
+  const json = serializeBackupJson(snapshot);
+  const blob = new Blob([json], {
     type: 'application/json',
   });
   const url = URL.createObjectURL(blob);
