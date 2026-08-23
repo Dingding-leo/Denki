@@ -20,6 +20,7 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           service = Path('src/services/libraryIntegrity.ts')
           text = service.read_text()
@@ -34,23 +35,18 @@ jobs:
 
           panel = Path('src/components/settings/LibraryIntegrityPanel.tsx')
           text = panel.read_text()
-          old = """      .finally(() => {
-            controllerRef.current = null;
-            onRunningChange?.(false);
-            if (!mountedRef.current) return;
-            setRunning(false);
-            setStopping(false);
-          });"""
-          new = """      .finally(() => {
-            controllerRef.current = null;
-            if (!mountedRef.current) return;
-            onRunningChange?.(false);
-            setRunning(false);
-            setStopping(false);
-          });"""
-          if old not in text:
+          pattern = re.compile(
+              r"(?P<indent>\s*)onRunningChange\?\.\(false\);\n"
+              r"(?P=indent)if \(!mountedRef\.current\) return;"
+          )
+          replacement = (
+              r"\g<indent>if (!mountedRef.current) return;\n"
+              r"\g<indent>onRunningChange?.(false);"
+          )
+          text, count = pattern.subn(replacement, text, count=1)
+          if count != 1:
               raise SystemExit('Expected integrity panel finalizer not found')
-          panel.write_text(text.replace(old, new, 1))
+          panel.write_text(text)
 
           tests = Path('src/services/__tests__/libraryIntegrity.test.ts')
           text = tests.read_text()
