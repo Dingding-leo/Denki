@@ -127,7 +127,13 @@ describe('storage health diagnostics', () => {
 
   it('surfaces corrupt media metadata without hiding the remaining counts', async () => {
     await seedLibrary();
-    await db.media.update('a'.repeat(64), { byteLength: 99 });
+    await db.media.put({
+      hash: 'a'.repeat(64),
+      mimeType: 'image/png',
+      byteLength: 99,
+      data: new Uint8Array([1, 2, 3, 4]).buffer,
+      createdAt: new Date(),
+    });
     installStorageApi({});
 
     const result = await collectStorageHealth();
