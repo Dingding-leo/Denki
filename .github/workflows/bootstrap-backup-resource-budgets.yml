@@ -11,15 +11,13 @@ permissions:
 jobs:
   apply:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: security/backup-resource-budgets
-      - name: Apply resource budgets to backup boundaries
+      - name: Patch source
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
+          import textwrap
 
           def replace_once(path: str, old: str, new: str) -> None:
               file = Path(path)
@@ -35,47 +33,51 @@ jobs:
                   raise SystemExit(f'Marker not found in {path}: {marker!r}')
               file.write_text(text.replace(marker, addition + marker, 1))
 
+          def regex_once(path: str, pattern: str, replacement: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              updated, count = re.subn(pattern, replacement, text, count=1, flags=re.S)
+              if count != 1:
+                  raise SystemExit(f'Pattern did not match exactly once in {path}: {pattern[:100]!r}')
+              file.write_text(updated)
+
           backup = 'src/services/backup.ts'
           replace_once(
               backup,
               "import { markBackupExported } from './dataSafety';\n",
-              """import { markBackupExported } from './dataSafety';
-          import {
-            parseBackupJsonText,
-            serializeBackupJson,
-          } from './backupFile';
-          """,
+              "import { markBackupExported } from './dataSafety';\n"
+              "import {\n"
+              "  parseBackupJsonText,\n"
+              "  serializeBackupJson,\n"
+              "} from './backupFile';\n",
           )
           replace_once(
               backup,
-              """export const BACKUP_FORMAT_VERSION = 5;
+              "export const BACKUP_FORMAT_VERSION = 5;\n\n",
+              textwrap.dedent("""\
+              export const BACKUP_FORMAT_VERSION = 5;
 
-          let debounceTimer""",
-              """export const BACKUP_FORMAT_VERSION = 5;
+              const MEBIBYTE = 1024 * 1024;
+              export const BACKUP_RESOURCE_LIMITS = {
+                maxClasses: 10_000,
+                maxDecks: 50_000,
+                maxCards: 250_000,
+                maxReviews: 2_000_000,
+                maxMediaRows: 5_000,
+                maxClassNameCharacters: 64 * 1024,
+                maxClassDescriptionCharacters: 4 * MEBIBYTE,
+                maxDeckNameCharacters: 64 * 1024,
+                maxDeckDescriptionCharacters: 4 * MEBIBYTE,
+                maxDeckNotesCharacters: 8 * MEBIBYTE,
+                maxCardFieldCharacters: 4 * MEBIBYTE,
+                maxTotalTextCharacters: 96 * MEBIBYTE,
+              } as const;
 
-          const MEBIBYTE = 1024 * 1024;
-          export const BACKUP_RESOURCE_LIMITS = {
-            maxClasses: 10_000,
-            maxDecks: 50_000,
-            maxCards: 250_000,
-            maxReviews: 2_000_000,
-            maxMediaRows: 5_000,
-            maxClassNameCharacters: 64 * 1024,
-            maxClassDescriptionCharacters: 4 * MEBIBYTE,
-            maxDeckNameCharacters: 64 * 1024,
-            maxDeckDescriptionCharacters: 4 * MEBIBYTE,
-            maxDeckNotesCharacters: 8 * MEBIBYTE,
-            maxCardFieldCharacters: 4 * MEBIBYTE,
-            maxTotalTextCharacters: 96 * MEBIBYTE,
-          } as const;
-
-          let debounceTimer""",
+              """),
           )
 
-          insert_before(
-              backup,
-              'function reviveDateValue',
-              """function assertBackupTableLimit(
+          helpers = textwrap.dedent("""\
+          function assertBackupTableLimit(
             rows: unknown[],
             label: string,
             maximum: number,
@@ -198,32 +200,13 @@ jobs:
             });
           }
 
-          """,
-          )
-
-          replace_once(
+          """)
+          insert_before(backup, 'function reviveDateValue', helpers)
+          insert_before(
               backup,
-              """  for (const table of requiredTables) {
-            if (!Array.isArray(data[table])) {
-              throw new Error(
-                `Backup is missing a valid ${table} table; refusing to import.`,
-              );
-            }
-          }
-
-          const classes = reviveDates(data.classes as unknown[], ['createdAt']);""",
-              """  for (const table of requiredTables) {
-            if (!Array.isArray(data[table])) {
-              throw new Error(
-                `Backup is missing a valid ${table} table; refusing to import.`,
-              );
-            }
-          }
-          assertBackupResourceBudget(data);
-
-          const classes = reviveDates(data.classes as unknown[], ['createdAt']);""",
+              "  const classes = reviveDates(data.classes as unknown[], ['createdAt']);",
+              '  assertBackupResourceBudget(data);\n\n',
           )
-
           replace_once(
               backup,
               '      body: JSON.stringify(snapshot),',
@@ -236,72 +219,50 @@ jobs:
           )
           replace_once(
               backup,
-              """  const blob = new Blob([JSON.stringify(snapshot, null, 2)], {
-            type: 'application/json',
-          });""",
-              """  const json = serializeBackupJson(snapshot);
-          const blob = new Blob([json], {
-            type: 'application/json',
-          });""",
+              "  const blob = new Blob([JSON.stringify(snapshot, null, 2)], {\n"
+              "    type: 'application/json',\n"
+              "  });",
+              "  const json = serializeBackupJson(snapshot);\n"
+              "  const blob = new Blob([json], {\n"
+              "    type: 'application/json',\n"
+              "  });",
           )
 
           settings = 'src/components/modals/SettingsModal.tsx'
           replace_once(
               settings,
-              """} from '../../services/backup';
-          import { scheduleApplicationReload }""",
-              """} from '../../services/backup';
-          import { readBackupJsonFile } from '../../services/backupFile';
-          import { scheduleApplicationReload }""",
+              "} from '../../services/backup';\n"
+              "import { scheduleApplicationReload }",
+              "} from '../../services/backup';\n"
+              "import { readBackupJsonFile } from '../../services/backupFile';\n"
+              "import { scheduleApplicationReload }",
           )
-          replace_once(
+          regex_once(
               settings,
-              """      let parsed: unknown;
-              try {
-                parsed = JSON.parse(await file.text());
-              } catch (error) {
-                throw new Error('Backup file is not valid JSON.', {
-                  cause: error,
-                });
-              }
-
-              const prepared = await prepareBackupImport(parsed);""",
-              """      let parsed: unknown = await readBackupJsonFile(file);
-
-              const prepared = await prepareBackupImport(parsed);""",
+              r"      let parsed: unknown;\n"
+              r"      try \{\n"
+              r"        parsed = JSON\.parse\(await file\.text\(\)\);\n"
+              r"      \} catch \(error\) \{\n"
+              r"        throw new Error\('Backup file is not valid JSON\.', \{\n"
+              r"          cause: error,\n"
+              r"        \}\);\n"
+              r"      \}\n\n"
+              r"      const prepared = await prepareBackupImport\(parsed\);",
+              "      let parsed: unknown = await readBackupJsonFile(file);\n\n"
+              "      const prepared = await prepareBackupImport(parsed);",
           )
 
           settings_test = 'src/components/__tests__/SettingsBackupImport.test.tsx'
           replace_once(
               settings_test,
-              """  return {
-            name: 'denki-backup-2026-08-21.json',
-            text: vi.fn(async () => source),
-          } as unknown as File;""",
-              """  return {
-            name: 'denki-backup-2026-08-21.json',
-            size: new Blob([source]).size,
-            text: vi.fn(async () => source),
-          } as unknown as File;""",
+              "  return {\n"
+              "    name: 'denki-backup-2026-08-21.json',\n"
+              "    text: vi.fn(async () => source),\n"
+              "  } as unknown as File;",
+              "  return {\n"
+              "    name: 'denki-backup-2026-08-21.json',\n"
+              "    size: new Blob([source]).size,\n"
+              "    text: vi.fn(async () => source),\n"
+              "  } as unknown as File;",
           )
           PY
-      - name: Remove one-time bootstrap workflow
-        run: rm .github/workflows/bootstrap-backup-resource-budgets.yml
-      - name: Validate focused hardening
-        run: |
-          git diff --check
-          npm ci
-          npx tsc --noEmit
-          npm run lint
-          npx vitest run \
-            src/services/__tests__/backupFile.test.ts \
-            src/services/__tests__/backupResourceLimits.test.ts \
-            src/services/__tests__/backup.test.ts \
-            src/components/__tests__/SettingsBackupImport.test.tsx
-      - name: Commit hardening
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src .github/workflows/bootstrap-backup-resource-budgets.yml
-          git commit -m "security: bound portable backup resource usage"
-          git push origin HEAD:security/backup-resource-budgets
