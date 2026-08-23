@@ -24,7 +24,7 @@
   },
   "dependencies": {
     "canvas-confetti": "^1.9.4",
-    "dexie": "^4.4.3",
+    "dexie": "^4.4.5",
     "dompurify": "^3.4.7",
     "jszip": "3.10.1",
     "lucide-react": "^1.17.0",
