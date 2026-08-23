@@ -168,8 +168,19 @@ function throwIfAborted(signal: AbortSignal): void {
   if (signal.aborted) throw abortReason(signal);
 }
 
-function isUserAbort(error: unknown): boolean {
-  return error instanceof DOMException && error.name === 'AbortError';
+function hasAbortName(value: unknown): boolean {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    'name' in value &&
+    value.name === 'AbortError'
+  );
+}
+
+function isUserAbort(error: unknown, signal: AbortSignal): boolean {
+  // IndexedDB and fake-indexeddb may surface a DOMException from a
+  // different realm, where `instanceof DOMException` is false.
+  return hasAbortName(error) || hasAbortName(signal.reason);
 }
 
 function emitProgress(
@@ -726,7 +737,7 @@ async function runAudit(
     emitProgress(state, options, 'complete', 1, 1, true);
     return finishResult(state, true, false);
   } catch (error) {
-    if (isUserAbort(error)) {
+    if (isUserAbort(error, signal)) {
       return finishResult(state, false, true);
     }
     throw error;
