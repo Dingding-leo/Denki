@@ -8,6 +8,8 @@ The audit never runs during application startup, review, import, export, or ordi
 
 The learner can stop the audit. Cancellation takes effect at the next safe cursor boundary, returns a partial result, and releases the origin-wide maintenance lease. Closing the Settings panel also aborts the active check.
 
+An error is classified as cancellation only when the audit's own `AbortSignal` is aborted. Cross-realm IndexedDB `AbortError` values are recognised by name, but an unrelated failure merely named `AbortError` remains a visible audit failure rather than being reported as though the learner pressed Stop.
+
 ## Stable read boundary
 
 A complete audit spans several IndexedDB tables and cryptographic media reads. It therefore uses the same exclusive cross-tab maintenance lease as destructive maintenance:
