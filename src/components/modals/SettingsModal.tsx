@@ -9,6 +9,7 @@ import {
   Volume2,
   X,
 } from 'lucide-react';
+import { StorageHealthPanel } from '../settings/StorageHealthPanel';
 import {
   downloadBackup,
   prepareBackupImport,
@@ -662,6 +663,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
             boundary. Denki reloads after the run.
           </p>
         </section>
+
+        <StorageHealthPanel
+          disabled={importing || exporting || optimizingMedia}
+        />
 
         <section style={sectionStyle}>
           <h4 style={sectionHeadingStyle}>Portable backup</h4>
