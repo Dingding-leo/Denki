@@ -16,44 +16,30 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: feat/backup-import-preflight
-      - name: Finalize resource handling and test formatting
+      - name: Finalize resource handling
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
-          def replace_once(path: str, old: str, new: str) -> None:
-              file = Path(path)
-              text = file.read_text()
-              if old not in text:
-                  raise SystemExit(f'Expected text not found in {path}: {old!r}')
-              file.write_text(text.replace(old, new, 1))
-
-          replace_once(
-              'src/components/modals/SettingsModal.tsx',
-              """      const prepared = await prepareBackupImport(parsed);
-              const summary = prepared.summary;""",
-              """      const prepared = await prepareBackupImport(parsed);
-              // The prepared plan owns normalized copies. Release the original
-              // parsed JSON while the user reviews media-heavy backups.
-              parsed = undefined;
-              const summary = prepared.summary;""",
+          path = Path('src/components/modals/SettingsModal.tsx')
+          text = path.read_text()
+          pattern = re.compile(
+              r'(?P<indent>^[ \t]*)const prepared = await prepareBackupImport\(parsed\);\n'
+              r'(?P=indent)const summary = prepared\.summary;',
+              re.MULTILINE,
           )
-          replace_once(
-              'src/services/__tests__/backup.test.ts',
-              """  });
-            it('restores target retention and speech speed while clearing retired overrides'""",
-              """  });
-
-            it('restores target retention and speech speed while clearing retired overrides'""",
+          replacement = (
+              r'\g<indent>const prepared = await prepareBackupImport(parsed);\n'
+              r'\g<indent>// The prepared plan owns normalized copies. Release the original\n'
+              r'\g<indent>// parsed JSON while the user reviews media-heavy backups.\n'
+              r'\g<indent>parsed = undefined;\n'
+              r'\g<indent>const summary = prepared.summary;'
           )
-          replace_once(
-              'src/services/__tests__/maintenanceOperations.test.ts',
-              """  });
-            it('does not enter the restore callback when another maintenance operation owns the lease'""",
-              """  });
-
-            it('does not enter the restore callback when another maintenance operation owns the lease'""",
-          )
+          text, count = pattern.subn(replacement, text, count=1)
+          if count != 1:
+              raise SystemExit('Could not locate the prepared-backup summary assignment.')
+          path.write_text(text)
           PY
       - name: Remove one-time finalization workflow
         run: rm .github/workflows/bootstrap-backup-preflight-finalize.yml
