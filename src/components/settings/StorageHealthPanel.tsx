@@ -273,7 +273,7 @@ export const StorageHealthPanel: React.FC<StorageHealthPanelProps> = ({
               letterSpacing: '0.5px',
             }}
           >
-            Verified media
+            Media registry
           </span>
           <strong style={{ color: 'var(--text-primary)', fontSize: '13px' }}>
             {snapshot
@@ -290,10 +290,10 @@ export const StorageHealthPanel: React.FC<StorageHealthPanelProps> = ({
             }}
           >
             {!snapshot
-              ? 'Checking registry metadata…'
+              ? 'Checking stored byte-length metadata…'
               : snapshot.library.mediaIntegrityWarnings > 0
                 ? `${snapshot.library.mediaIntegrityWarnings} metadata warning(s)`
-                : 'Registry metadata matches stored bytes'}
+                : 'Stored byte lengths match registry metadata'}
           </span>
         </div>
       </div>
