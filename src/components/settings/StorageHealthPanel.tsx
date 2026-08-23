@@ -1,13 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Database, RefreshCw, ShieldCheck } from 'lucide-react';
-import {
-  requestPersistentStorageFromUserGesture,
-} from '../../services/dataSafety';
+import { requestPersistentStorageFromUserGesture } from '../../services/dataSafety';
 import {
   collectStorageHealth,
   type StorageHealthSnapshot,
 } from '../../services/storageHealth';
 import { toast } from '../../store/uiStore';
+import { LibraryIntegrityPanel } from './LibraryIntegrityPanel';
 
 interface StorageHealthPanelProps {
   disabled?: boolean;
@@ -58,6 +57,7 @@ export const StorageHealthPanel: React.FC<StorageHealthPanelProps> = ({
   const [snapshot, setSnapshot] = useState<StorageHealthSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [requestingPersistence, setRequestingPersistence] = useState(false);
+  const [integrityRunning, setIntegrityRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestId = useRef(0);
 
@@ -105,7 +105,7 @@ export const StorageHealthPanel: React.FC<StorageHealthPanelProps> = ({
   }, []);
 
   const requestProtection = useCallback(() => {
-    if (disabled || loading || requestingPersistence) return;
+    if (disabled || loading || requestingPersistence || integrityRunning) return;
     setRequestingPersistence(true);
 
     void requestPersistentStorageFromUserGesture()
@@ -135,7 +135,7 @@ export const StorageHealthPanel: React.FC<StorageHealthPanelProps> = ({
         );
       })
       .finally(() => setRequestingPersistence(false));
-  }, [disabled, loading, requestingPersistence]);
+  }, [disabled, integrityRunning, loading, requestingPersistence]);
 
   const unavailableLabel = loading ? 'Loading…' : 'Unavailable';
   const browserUsage = snapshot
@@ -192,7 +192,9 @@ export const StorageHealthPanel: React.FC<StorageHealthPanelProps> = ({
         <button
           type="button"
           onClick={refresh}
-          disabled={disabled || loading || requestingPersistence}
+          disabled={
+            disabled || loading || requestingPersistence || integrityRunning
+          }
           className="btn-premium-secondary"
           aria-label="Refresh storage health"
           style={{ flex: '0 0 auto' }}
@@ -285,7 +287,12 @@ export const StorageHealthPanel: React.FC<StorageHealthPanelProps> = ({
             <button
               type="button"
               onClick={requestProtection}
-              disabled={disabled || loading || requestingPersistence}
+              disabled={
+                disabled ||
+                loading ||
+                requestingPersistence ||
+                integrityRunning
+              }
               className="btn-premium-secondary"
               style={{
                 justifySelf: 'start',
@@ -376,6 +383,11 @@ export const StorageHealthPanel: React.FC<StorageHealthPanelProps> = ({
           ? formatBackupDate(snapshot.lastBackupExportedAt)
           : unavailableLabel}
       </p>
+
+      <LibraryIntegrityPanel
+        disabled={disabled || loading || requestingPersistence}
+        onRunningChange={setIntegrityRunning}
+      />
     </section>
   );
 };
