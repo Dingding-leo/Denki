@@ -42,40 +42,62 @@ function metricStyle(): React.CSSProperties {
   };
 }
 
+function errorMessage(reason: unknown): string {
+  return reason instanceof Error
+    ? reason.message
+    : 'Storage diagnostics could not be loaded.';
+}
+
 export const StorageHealthPanel: React.FC<StorageHealthPanelProps> = ({
   disabled = false,
 }) => {
   const [snapshot, setSnapshot] = useState<StorageHealthSnapshot | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const requestId = useRef(0);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(() => {
     const currentRequest = ++requestId.current;
     setLoading(true);
     setError(null);
-    try {
-      const next = await collectStorageHealth();
-      if (requestId.current === currentRequest) setSnapshot(next);
-    } catch (reason) {
-      if (requestId.current === currentRequest) {
-        setError(
-          reason instanceof Error
-            ? reason.message
-            : 'Storage diagnostics could not be loaded.',
-        );
-      }
-    } finally {
-      if (requestId.current === currentRequest) setLoading(false);
-    }
+
+    void collectStorageHealth()
+      .then((next) => {
+        if (requestId.current === currentRequest) setSnapshot(next);
+      })
+      .catch((reason: unknown) => {
+        if (requestId.current === currentRequest) {
+          setError(errorMessage(reason));
+        }
+      })
+      .finally(() => {
+        if (requestId.current === currentRequest) setLoading(false);
+      });
   }, []);
 
   useEffect(() => {
-    void refresh();
+    const currentRequest = ++requestId.current;
+
+    void collectStorageHealth()
+      .then((next) => {
+        if (requestId.current === currentRequest) {
+          setSnapshot(next);
+          setError(null);
+        }
+      })
+      .catch((reason: unknown) => {
+        if (requestId.current === currentRequest) {
+          setError(errorMessage(reason));
+        }
+      })
+      .finally(() => {
+        if (requestId.current === currentRequest) setLoading(false);
+      });
+
     return () => {
       requestId.current += 1;
     };
-  }, [refresh]);
+  }, []);
 
   const browserUsage = snapshot
     ? `${formatBytes(snapshot.browser.usageBytes)} of ${formatBytes(snapshot.browser.quotaBytes)}`
@@ -127,7 +149,7 @@ export const StorageHealthPanel: React.FC<StorageHealthPanelProps> = ({
         </div>
         <button
           type="button"
-          onClick={() => void refresh()}
+          onClick={refresh}
           disabled={disabled || loading}
           className="btn-premium-secondary"
           aria-label="Refresh storage health"
@@ -163,7 +185,7 @@ export const StorageHealthPanel: React.FC<StorageHealthPanelProps> = ({
         aria-live="polite"
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
           gap: '8px',
         }}
       >
@@ -267,9 +289,11 @@ export const StorageHealthPanel: React.FC<StorageHealthPanelProps> = ({
               fontSize: '10px',
             }}
           >
-            {snapshot && snapshot.library.mediaIntegrityWarnings > 0
-              ? `${snapshot.library.mediaIntegrityWarnings} metadata warning(s)`
-              : 'Registry metadata matches stored bytes'}
+            {!snapshot
+              ? 'Checking registry metadata…'
+              : snapshot.library.mediaIntegrityWarnings > 0
+                ? `${snapshot.library.mediaIntegrityWarnings} metadata warning(s)`
+                : 'Registry metadata matches stored bytes'}
           </span>
         </div>
       </div>
@@ -282,7 +306,10 @@ export const StorageHealthPanel: React.FC<StorageHealthPanelProps> = ({
           lineHeight: 1.45,
         }}
       >
-        Last portable backup: {snapshot ? formatBackupDate(snapshot.lastBackupExportedAt) : 'Loading…'}
+        Last portable backup:{' '}
+        {snapshot
+          ? formatBackupDate(snapshot.lastBackupExportedAt)
+          : 'Loading…'}
       </p>
     </section>
   );
