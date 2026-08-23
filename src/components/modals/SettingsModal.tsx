@@ -279,6 +279,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
       }
 
       const prepared = await prepareBackupImport(parsed);
+      // The prepared plan owns normalized copies. Release the original
+      // parsed JSON while the user reviews media-heavy backups.
+      parsed = undefined;
       const summary = prepared.summary;
       const confirmed = await confirmDialog({
         title: 'Restore this validated backup?',
