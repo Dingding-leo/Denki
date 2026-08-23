@@ -124,8 +124,8 @@ export const LibraryIntegrityPanel: React.FC<
       })
       .finally(() => {
         controllerRef.current = null;
-        onRunningChange?.(false);
         if (!mountedRef.current) return;
+        onRunningChange?.(false);
         setRunning(false);
         setStopping(false);
       });

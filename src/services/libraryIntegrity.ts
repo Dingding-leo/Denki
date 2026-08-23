@@ -180,7 +180,10 @@ function hasAbortName(value: unknown): boolean {
 function isUserAbort(error: unknown, signal: AbortSignal): boolean {
   // IndexedDB and fake-indexeddb may surface a DOMException from a
   // different realm, where `instanceof DOMException` is false.
-  return hasAbortName(error) || hasAbortName(signal.reason);
+  return (
+    signal.aborted &&
+    (hasAbortName(error) || hasAbortName(signal.reason))
+  );
 }
 
 function emitProgress(
