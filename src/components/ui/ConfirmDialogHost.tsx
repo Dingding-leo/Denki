@@ -8,8 +8,8 @@ import { useUIStore } from '../../store/uiStore';
  * promise with the user's choice.
  */
 export const ConfirmDialogHost: React.FC = () => {
-  const pending = useUIStore(s => s.pendingConfirm);
-  const resolveConfirm = useUIStore(s => s.resolveConfirm);
+  const pending = useUIStore((state) => state.pendingConfirm);
+  const resolveConfirm = useUIStore((state) => state.resolveConfirm);
   const confirmBtnRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -21,34 +21,30 @@ export const ConfirmDialogHost: React.FC = () => {
     // Capture phase + stopPropagation: while the dialog is open it owns
     // Escape/Enter, so an underlying modal's own Escape handler doesn't also
     // fire and close itself.
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        e.preventDefault();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        event.preventDefault();
         resolveConfirm(false);
-      } else if (e.key === 'Enter') {
+      } else if (event.key === 'Enter') {
         // Native buttons must retain their own Enter semantics: Enter on Cancel
         // cancels, while Enter on Confirm confirms through the button click.
         // A bare Enter elsewhere in the dialog remains a confirm shortcut.
-        const target = e.target as HTMLElement | null;
+        const target = event.target as HTMLElement | null;
         if (
           target instanceof HTMLButtonElement ||
-          (
-            target &&
-            (
-              target.tagName === 'INPUT' ||
+          (target &&
+            (target.tagName === 'INPUT' ||
               target.tagName === 'TEXTAREA' ||
               target.tagName === 'SELECT' ||
-              target.isContentEditable
-            )
-          )
+              target.isContentEditable))
         ) {
           return;
         }
-        e.stopPropagation();
-        e.preventDefault();
+        event.stopPropagation();
+        event.preventDefault();
         resolveConfirm(true);
-      } else if (e.key === 'Tab') {
+      } else if (event.key === 'Tab') {
         // Keep Tab cycling within the dialog's two buttons.
         const dialog = dialogRef.current;
         if (!dialog) return;
@@ -56,11 +52,11 @@ export const ConfirmDialogHost: React.FC = () => {
         if (focusable.length === 0) return;
         const first = focusable[0];
         const last = focusable[focusable.length - 1];
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault();
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
           last.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
           first.focus();
         }
       }
@@ -101,7 +97,7 @@ export const ConfirmDialogHost: React.FC = () => {
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
         aria-describedby={descriptionIds}
-        onClick={e => e.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
         className="glass-panel"
         style={{
           width: '100%',
@@ -116,16 +112,36 @@ export const ConfirmDialogHost: React.FC = () => {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           {danger ? (
-            <AlertTriangle size={20} style={{ color: 'var(--danger)', flexShrink: 0 }} />
+            <AlertTriangle
+              size={20}
+              style={{ color: 'var(--danger)', flexShrink: 0 }}
+            />
           ) : (
-            <HelpCircle size={20} style={{ color: 'var(--accent-color)', flexShrink: 0 }} />
+            <HelpCircle
+              size={20}
+              style={{ color: 'var(--accent-color)', flexShrink: 0 }}
+            />
           )}
-          <h3 id="confirm-dialog-title" style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)' }}>
+          <h3
+            id="confirm-dialog-title"
+            style={{
+              fontSize: '16px',
+              fontWeight: 700,
+              color: 'var(--text-primary)',
+            }}
+          >
             {pending.title}
           </h3>
         </div>
 
-        <p id="confirm-dialog-message" style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.55 }}>
+        <p
+          id="confirm-dialog-message"
+          style={{
+            fontSize: '13px',
+            color: 'var(--text-secondary)',
+            lineHeight: 1.55,
+          }}
+        >
           {pending.message}
         </p>
 
@@ -146,7 +162,8 @@ export const ConfirmDialogHost: React.FC = () => {
                 key={`${detail.label}-${index}`}
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: 'minmax(92px, 0.7fr) minmax(0, 1.3fr)',
+                  gridTemplateColumns:
+                    'minmax(92px, 0.7fr) minmax(0, 1.3fr)',
                   gap: '12px',
                   alignItems: 'start',
                 }}
@@ -176,8 +193,16 @@ export const ConfirmDialogHost: React.FC = () => {
           </dl>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '4px' }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: '10px',
+            marginTop: '4px',
+          }}
+        >
           <button
+            type="button"
             onClick={() => resolveConfirm(false)}
             className="btn-premium-secondary"
             style={{ height: '36px', padding: '0 16px', fontSize: '13px' }}
@@ -186,6 +211,7 @@ export const ConfirmDialogHost: React.FC = () => {
           </button>
           <button
             ref={confirmBtnRef}
+            type="button"
             onClick={() => resolveConfirm(true)}
             className={danger ? 'btn-premium-danger' : 'btn-premium-primary'}
             style={{ height: '36px', padding: '0 18px', fontSize: '13px' }}
