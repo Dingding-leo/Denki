@@ -68,25 +68,26 @@ async function readBrowserStorage(): Promise<StorageHealthSnapshot['browser']> {
 
 /**
  * Read one consistent library snapshot, then query browser-origin storage.
- * Browser usage includes IndexedDB, Cache Storage, and other same-origin data;
- * verified media bytes are reported separately from Denki's media registry.
+ * Browser usage includes IndexedDB, Cache Storage, and other same-origin data.
+ * Registry byte totals are scanned by cursor so diagnostics never retain every
+ * binary object in one JavaScript array.
  */
 export async function collectStorageHealth(): Promise<StorageHealthSnapshot> {
   const library = await db.transaction(
     'r',
     [db.classes, db.decks, db.cards, db.reviews, db.media],
     async () => {
-      const [classes, decks, cards, reviews, media] = await Promise.all([
+      const [classes, decks, cards, reviews, mediaObjects] = await Promise.all([
         db.classes.count(),
         db.decks.count(),
         db.cards.count(),
         db.reviews.count(),
-        db.media.toArray(),
+        db.media.count(),
       ]);
 
       let mediaBytes = 0;
       let mediaIntegrityWarnings = 0;
-      for (const asset of media) {
+      await db.media.toCollection().each((asset) => {
         const actualBytes = arrayBufferByteLength(asset.data);
         if (
           actualBytes === null ||
@@ -97,24 +98,22 @@ export async function collectStorageHealth(): Promise<StorageHealthSnapshot> {
           mediaIntegrityWarnings += 1;
         }
         if (actualBytes !== null) mediaBytes += actualBytes;
-      }
+      });
 
       return {
         classes,
         decks,
         cards,
         reviews,
-        mediaObjects: media.length,
+        mediaObjects,
         mediaBytes,
         mediaIntegrityWarnings,
       };
     },
   );
 
-  const [browser, lastBackup] = await Promise.all([
-    readBrowserStorage(),
-    Promise.resolve(getLastBackupExportedAt()),
-  ]);
+  const browser = await readBrowserStorage();
+  const lastBackup = getLastBackupExportedAt();
 
   return {
     capturedAt: new Date().toISOString(),
