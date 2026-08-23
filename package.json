@@ -27,7 +27,7 @@
     "dexie": "^4.4.3",
     "dompurify": "^3.4.7",
     "jszip": "3.10.1",
-    "lucide-react": "^1.17.0",
+    "lucide-react": "^1.33.0",
     "marked": "^18.0.4",
     "prismjs": "^1.30.0",
     "react": "^19.2.6",
