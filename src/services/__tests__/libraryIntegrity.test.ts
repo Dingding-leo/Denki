@@ -141,11 +141,6 @@ describe('library integrity audit', () => {
 
     expect(result.complete).toBe(true);
     expect(result.healthy).toBe(false);
-    expect(codes).toEqual(
-      expect.objectContaining({
-        has: expect.any(Function),
-      }),
-    );
     expect(codes.has('orphan-deck')).toBe(true);
     expect(codes.has('card-owner-mismatch')).toBe(true);
     expect(codes.has('invalid-card-provenance')).toBe(true);
