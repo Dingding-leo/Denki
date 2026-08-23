@@ -23,12 +23,11 @@ export function assertBackupFileByteLength(byteLength: number): void {
   }
 }
 
-/** Read and parse a user-selected backup only after its byte size is bounded. */
-export async function readBackupJsonFile(file: File): Promise<unknown> {
-  assertBackupFileByteLength(file.size);
+/** Parse JSON text from either a user-selected file or the development endpoint. */
+export function parseBackupJsonText(source: string): unknown {
+  assertBackupFileByteLength(new Blob([source]).size);
 
-  let text = await file.text();
-  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+  const text = source.charCodeAt(0) === 0xfeff ? source.slice(1) : source;
   if (!text.trim()) throw new Error('Backup file is empty.');
 
   try {
@@ -38,6 +37,12 @@ export async function readBackupJsonFile(file: File): Promise<unknown> {
   }
 }
 
+/** Read and parse a user-selected backup only after its byte size is bounded. */
+export async function readBackupJsonFile(file: File): Promise<unknown> {
+  assertBackupFileByteLength(file.size);
+  return parseBackupJsonText(await file.text());
+}
+
 /** Serialize a download only when Denki can accept the resulting file again. */
 export function serializeBackupJson(snapshot: unknown): string {
   const json = JSON.stringify(snapshot, null, 2);
@@ -45,7 +50,6 @@ export function serializeBackupJson(snapshot: unknown): string {
     throw new Error('Backup snapshot could not be serialized.');
   }
 
-  const byteLength = new Blob([json]).size;
-  assertBackupFileByteLength(byteLength);
+  assertBackupFileByteLength(new Blob([json]).size);
   return json;
 }
