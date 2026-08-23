@@ -17,6 +17,7 @@ export interface StorageHealthSnapshot {
     quotaBytes: number | null;
     usagePercent: number | null;
     persisted: boolean | null;
+    canRequestPersistence: boolean;
   };
   lastBackupExportedAt: string | null;
 }
@@ -38,6 +39,7 @@ async function readBrowserStorage(): Promise<StorageHealthSnapshot['browser']> {
   let usageBytes: number | null = null;
   let quotaBytes: number | null = null;
   let persisted: boolean | null = null;
+  const canRequestPersistence = typeof storage?.persist === 'function';
 
   if (typeof storage?.estimate === 'function') {
     try {
@@ -52,7 +54,8 @@ async function readBrowserStorage(): Promise<StorageHealthSnapshot['browser']> {
 
   if (typeof storage?.persisted === 'function') {
     try {
-      persisted = await storage.persisted();
+      const result = await storage.persisted();
+      persisted = typeof result === 'boolean' ? result : null;
     } catch {
       // Unsupported or denied persistence queries are represented as unknown.
     }
@@ -63,7 +66,13 @@ async function readBrowserStorage(): Promise<StorageHealthSnapshot['browser']> {
       ? Math.max(0, Math.min(100, (usageBytes / quotaBytes) * 100))
       : null;
 
-  return { usageBytes, quotaBytes, usagePercent, persisted };
+  return {
+    usageBytes,
+    quotaBytes,
+    usagePercent,
+    persisted,
+    canRequestPersistence,
+  };
 }
 
 /**
