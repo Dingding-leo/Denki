@@ -20,7 +20,7 @@ const snapshot = {
     reviews: 2941,
     mediaObjects: 12,
     mediaBytes: 8 * 1024 * 1024,
-    mediaIntegrityWarnings: 0,
+    mediaMetadataWarnings: 0,
   },
   browser: {
     usageBytes: 128 * 1024 * 1024,
@@ -43,12 +43,17 @@ describe('StorageHealthPanel', () => {
     expect(
       screen.getByRole('button', { name: 'Refresh storage health' }),
     ).toBeDisabled();
-    expect(await screen.findByText(/824 cards · 2,941 reviews/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/824 cards · 2,941 reviews/i),
+    ).toBeInTheDocument();
     expect(screen.getByText(/12 objects · 8.0 MiB/i)).toBeInTheDocument();
     expect(screen.getByText(/128.0 MiB of 1.00 GiB/i)).toBeInTheDocument();
     expect(screen.getByText(/12.5% of reported quota/i)).toBeInTheDocument();
     expect(
       screen.getByText(/Protected from routine eviction/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Hosted deployments may share that origin/i),
     ).toBeInTheDocument();
     expect(screen.getByText(/Last portable backup:/i)).toBeInTheDocument();
   });
@@ -71,6 +76,22 @@ describe('StorageHealthPanel', () => {
         screen.getByRole('button', { name: 'Refresh storage health' }),
       ).toBeEnabled(),
     );
+  });
+
+  it('shows unavailable values when the first snapshot cannot be read', async () => {
+    mocks.collect.mockRejectedValueOnce(new Error('database unavailable'));
+    render(<StorageHealthPanel />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'database unavailable',
+    );
+    expect(screen.getAllByText('Unavailable').length).toBeGreaterThanOrEqual(4);
+    expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
+    expect(screen.getByText('Database snapshot unavailable')).toBeInTheDocument();
+    expect(screen.getByText('Registry metadata unavailable')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Refresh storage health' }),
+    ).toBeEnabled();
   });
 
   it('respects a parent maintenance lock', async () => {
